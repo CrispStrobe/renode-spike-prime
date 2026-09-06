@@ -1,0 +1,64 @@
+name: Private STM32 model tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - 'feat/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: private-model-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  stm32-dma:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Require private Infrastructure access
+        env:
+          INFRASTRUCTURE_TOKEN: ${{ secrets.RENODE_INFRASTRUCTURE_TOKEN }}
+        run: |
+          if [ -z "$INFRASTRUCTURE_TOKEN" ]; then
+            echo '::error::Set repository secret RENODE_INFRASTRUCTURE_TOKEN to a fine-grained token with read-only Contents access to CrispStrobe/renode-infrastructure-spike-prime.'
+            exit 1
+          fi
+
+      - name: Check out pinned source and submodules
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          submodules: recursive
+          token: ${{ secrets.RENODE_INFRASTRUCTURE_TOKEN }}
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Verify the private submodule revision
+        shell: bash
+        run: |
+          expected=$(git ls-tree HEAD src/Infrastructure | awk '{print $3}')
+          actual=$(git -C src/Infrastructure rev-parse HEAD)
+          if [ "$actual" != "$expected" ]; then
+            echo "::error::Infrastructure checkout mismatch: expected $expected, got $actual"
+            exit 1
+          fi
+
+      - name: Build Renode without fetching
+        run: ./build.sh --net --no-gui --skip-fetch
+
+      - name: Run focused STM32 DMA model tests
+        run: >-
+          dotnet test
+          src/Infrastructure/src/Emulator/Peripherals/Test/PeripheralsTests/PeripheralsTests_NET.csproj
+          --configuration Release
+          --no-build
+          --filter 'FullyQualifiedName~STM32DMATests'
+          --logger 'console;verbosity=normal'

@@ -19,7 +19,7 @@ input and is never uploaded as an artifact.
   the release's infrastructure commit.
 - [x] R0.3 Isolate implementation on `feat/spike-prime-stm32-dma` and prohibit
   accidental pushes to either upstream remote.
-- [ ] R0.4 Add private CI with immutable actions, read-only permissions, model
+- [x] R0.4 Add private CI with immutable actions, read-only permissions, model
   unit tests, and no firmware artifacts.
 
 ## R1 — Reproduce and specify the controller gaps
@@ -67,3 +67,4 @@ input and is never uploaded as an artifact.
 |---|---|---|---|
 | 2026-09-06 | R0.1–R0.3 | Complete | Created both private mirrors, retained fetch-only upstream remotes, pinned the exact Renode 1.16.1 parent and infrastructure commits, and created the isolated feature branch/worktree. |
 | 2026-09-06 | R1.1, R2.1–R2.2 | Complete | Infrastructure commit `780d78774` adds focused DMA tests and corrects short FIFO requests, normal-mode disable, transfer-complete IRQs, and circular NDTR/address reload. Both focused tests pass on .NET 8 Release. |
+| 2026-09-06 | R0.4 | Complete locally | Added source-only private CI with SHA-pinned actions, read-only permissions, an exact private-submodule revision check, and the focused `STM32DMATests` filter. Remote execution requires the narrowly scoped `RENODE_INFRASTRUCTURE_TOKEN` documented in `.github/PRIVATE_CI.md`. |
