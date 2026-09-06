@@ -15,16 +15,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  stm32-dma:
+  stm32-models:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - name: Require private Infrastructure access
         env:
-          INFRASTRUCTURE_TOKEN: ${{ secrets.RENODE_INFRASTRUCTURE_TOKEN }}
+          INFRASTRUCTURE_DEPLOY_KEY: ${{ secrets.RENODE_INFRASTRUCTURE_DEPLOY_KEY }}
         run: |
-          if [ -z "$INFRASTRUCTURE_TOKEN" ]; then
-            echo '::error::Set repository secret RENODE_INFRASTRUCTURE_TOKEN to a fine-grained token with read-only Contents access to CrispStrobe/renode-infrastructure-spike-prime.'
+          if [ -z "$INFRASTRUCTURE_DEPLOY_KEY" ]; then
+            echo '::error::Set repository secret RENODE_INFRASTRUCTURE_DEPLOY_KEY to the read-only deploy key for CrispStrobe/renode-infrastructure-spike-prime.'
             exit 1
           fi
 
@@ -34,7 +34,7 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
           submodules: recursive
-          token: ${{ secrets.RENODE_INFRASTRUCTURE_TOKEN }}
+          ssh-key: ${{ secrets.RENODE_INFRASTRUCTURE_DEPLOY_KEY }}
 
       - name: Set up .NET 8
         uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
@@ -51,14 +51,16 @@ jobs:
             exit 1
           fi
 
-      - name: Build Renode without fetching
-        run: ./build.sh --net --no-gui --skip-fetch
+      - name: Build native translator libraries
+        run: ./build.sh --net --no-gui --external-lib-only
 
-      - name: Run focused STM32 DMA model tests
-        run: >-
-          dotnet test
-          src/Infrastructure/src/Emulator/Peripherals/Test/PeripheralsTests/PeripheralsTests_NET.csproj
-          --configuration Release
-          --no-build
-          --filter 'FullyQualifiedName~STM32DMATests'
-          --logger 'console;verbosity=normal'
+      - name: Run focused STM32 model tests
+        shell: bash
+        run: |
+          project=src/Infrastructure/src/Emulator/Peripherals/Test/PeripheralsTests/PeripheralsTests_NET.csproj
+          common=(-p:TargetFrameworks=net8.0 -p:GUI_DISABLED=true -p:CurrentPlatform=Linux)
+          dotnet restore "$project" "${common[@]}"
+          dotnet test "$project" --configuration Release --no-restore \
+            "${common[@]}" \
+            --filter 'FullyQualifiedName~STM32DMATests|FullyQualifiedName~STM32SPITests|FullyQualifiedName~STM32_UARTTests' \
+            --logger 'console;verbosity=normal'

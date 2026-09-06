@@ -37,9 +37,9 @@ input and is never uploaded as an artifact.
   never underflow NDTR or invent padding.
 - [x] R2.2 Implement circular-mode reload of NDTR and memory position while
   preserving transfer-complete flags and interrupts.
-- [ ] R2.3 Expose and drive SPI TX DMA requests alongside RX requests, honoring
+- [x] R2.3 Expose and drive SPI TX DMA requests alongside RX requests, honoring
   CR2 enable bits and byte/word accesses.
-- [ ] R2.4 Verify UART DMA/IDLE behavior and correct it only where the generic
+- [x] R2.4 Verify UART DMA/IDLE behavior and correct it only where the generic
   model violates documented STM32 semantics.
 
 ## R3 — SPIKE integration gates
@@ -55,7 +55,7 @@ input and is never uploaded as an artifact.
 
 ## R4 — Upstream readiness
 
-- [ ] R4.1 Keep every model change MIT, generic, documented, and covered by
+- [x] R4.1 Keep every model change MIT, generic, documented, and covered by
   tests that require no LEGO or TI material.
 - [ ] R4.2 Rebase onto current upstream Renode and infrastructure after the
   pinned 1.16.1 behavior is proven.
@@ -67,4 +67,5 @@ input and is never uploaded as an artifact.
 |---|---|---|---|
 | 2026-09-06 | R0.1–R0.3 | Complete | Created both private mirrors, retained fetch-only upstream remotes, pinned the exact Renode 1.16.1 parent and infrastructure commits, and created the isolated feature branch/worktree. |
 | 2026-09-06 | R1.1, R2.1–R2.2 | Complete | Infrastructure commit `780d78774` adds focused DMA tests and corrects short FIFO requests, normal-mode disable, transfer-complete IRQs, and circular NDTR/address reload. Both focused tests pass on .NET 8 Release. |
-| 2026-09-06 | R0.4 | Complete locally | Added source-only private CI with SHA-pinned actions, read-only permissions, an exact private-submodule revision check, and the focused `STM32DMATests` filter. Remote execution requires the narrowly scoped `RENODE_INFRASTRUCTURE_TOKEN` documented in `.github/PRIVATE_CI.md`. |
+| 2026-09-06 | R0.4 | Complete | Added source-only private CI with SHA-pinned actions, read-only permissions, an exact private-submodule revision check, and focused STM32 model tests. Installed a repository-scoped, read-only Infrastructure deploy key; no personal token or firmware artifact is used. |
+| 2026-09-06 | R2.3–R2.4, R4.1 | Complete | Infrastructure commits through `7acded2e5` add paced SPI TX DMA requests, request-paced peripheral DMA, correct UART enable/IDLE semantics, and MIT-licensed generic tests. All 12 focused DMA/SPI/UART tests pass on .NET 8 Release. |
