@@ -24,7 +24,7 @@ input and is never uploaded as an artifact.
 
 ## R1 — Reproduce and specify the controller gaps
 
-- [ ] R1.1 Add STM32DMA unit coverage for request-driven peripheral transfers,
+- [x] R1.1 Add STM32DMA unit coverage for request-driven peripheral transfers,
   exact NDTR decrement, completion flags/IRQs, and circular reload.
 - [ ] R1.2 Add STM32SPI unit coverage for independent RX and TX DMA request
   signals and paired full-duplex transfer completion.
@@ -33,9 +33,9 @@ input and is never uploaded as an artifact.
 
 ## R2 — Correct generic STM32 models
 
-- [ ] R2.1 Make peripheral DMA requests transfer only the configured data unit;
+- [x] R2.1 Make peripheral DMA requests transfer only the configured data unit;
   never underflow NDTR or invent padding.
-- [ ] R2.2 Implement circular-mode reload of NDTR and memory position while
+- [x] R2.2 Implement circular-mode reload of NDTR and memory position while
   preserving transfer-complete flags and interrupts.
 - [ ] R2.3 Expose and drive SPI TX DMA requests alongside RX requests, honoring
   CR2 enable bits and byte/word accesses.
@@ -66,4 +66,4 @@ input and is never uploaded as an artifact.
 | UTC date | Checkpoint | Result | Evidence |
 |---|---|---|---|
 | 2026-09-06 | R0.1–R0.3 | Complete | Created both private mirrors, retained fetch-only upstream remotes, pinned the exact Renode 1.16.1 parent and infrastructure commits, and created the isolated feature branch/worktree. |
-
+| 2026-09-06 | R1.1, R2.1–R2.2 | Complete | Infrastructure commit `780d78774` adds focused DMA tests and corrects short FIFO requests, normal-mode disable, transfer-complete IRQs, and circular NDTR/address reload. Both focused tests pass on .NET 8 Release. |
