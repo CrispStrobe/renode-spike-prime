@@ -1,0 +1,69 @@
+# SPIKE Prime Renode extension plan
+
+This private upstream-tracking mirror starts at Renode `v1.16.1`
+(`d66b0c2aa3d420408eccecfd1d3bab0fd702a6db`). Its infrastructure submodule
+starts at the exact pinned commit used by that release
+(`add012af003a0f620d3da52828262676f374d121`). Both codebases are MIT-licensed.
+
+The objective is to model STM32F413 SPI and USART DMA behavior accurately
+enough to execute unchanged SPIKE Prime firmware. Tests must exercise generic
+STM32 behavior; SPIKE-specific firmware remains an ignored, private integration
+input and is never uploaded as an artifact.
+
+## R0 — Repository and provenance
+
+- [x] R0.1 Create private `CrispStrobe/renode-spike-prime` with `upstream`
+  pointing to `renode/renode` and `main` pinned to Renode 1.16.1.
+- [x] R0.2 Create private `CrispStrobe/renode-infrastructure-spike-prime` with
+  `upstream` pointing to `renode/renode-infrastructure` and `main` pinned to
+  the release's infrastructure commit.
+- [x] R0.3 Isolate implementation on `feat/spike-prime-stm32-dma` and prohibit
+  accidental pushes to either upstream remote.
+- [ ] R0.4 Add private CI with immutable actions, read-only permissions, model
+  unit tests, and no firmware artifacts.
+
+## R1 — Reproduce and specify the controller gaps
+
+- [ ] R1.1 Add STM32DMA unit coverage for request-driven peripheral transfers,
+  exact NDTR decrement, completion flags/IRQs, and circular reload.
+- [ ] R1.2 Add STM32SPI unit coverage for independent RX and TX DMA request
+  signals and paired full-duplex transfer completion.
+- [ ] R1.3 Add STM32 UART coverage for RX DMA requests, IDLE flag/IRQ clearing,
+  and sustained circular reception.
+
+## R2 — Correct generic STM32 models
+
+- [ ] R2.1 Make peripheral DMA requests transfer only the configured data unit;
+  never underflow NDTR or invent padding.
+- [ ] R2.2 Implement circular-mode reload of NDTR and memory position while
+  preserving transfer-complete flags and interrupts.
+- [ ] R2.3 Expose and drive SPI TX DMA requests alongside RX requests, honoring
+  CR2 enable bits and byte/word accesses.
+- [ ] R2.4 Verify UART DMA/IDLE behavior and correct it only where the generic
+  model violates documented STM32 semantics.
+
+## R3 — SPIKE integration gates
+
+- [ ] R3.1 Point the Brickwright SPIKE platform at the custom Renode build.
+- [ ] R3.2 Run the unchanged protected image through TLC5955 initialization to
+  `nsh_main` and `btsensor_main` without board-function hooks.
+- [ ] R3.3 Connect USART2 RX to DMA1 stream 7 and run the opaque TI HCI command
+  stream against the lawful external H4 responder through
+  `physical_start_host` and `bt_enable` completion.
+- [ ] R3.4 Repeat bounded vector/progress gates for official LEGO v2/v3,
+  original spike-nx, Brickwright firmware, and Pybricks.
+
+## R4 — Upstream readiness
+
+- [ ] R4.1 Keep every model change MIT, generic, documented, and covered by
+  tests that require no LEGO or TI material.
+- [ ] R4.2 Rebase onto current upstream Renode and infrastructure after the
+  pinned 1.16.1 behavior is proven.
+- [ ] R4.3 Split reviewable upstream pull requests by DMA, SPI, and UART concern.
+
+## Checkpoints
+
+| UTC date | Checkpoint | Result | Evidence |
+|---|---|---|---|
+| 2026-09-06 | R0.1–R0.3 | Complete | Created both private mirrors, retained fetch-only upstream remotes, pinned the exact Renode 1.16.1 parent and infrastructure commits, and created the isolated feature branch/worktree. |
+
