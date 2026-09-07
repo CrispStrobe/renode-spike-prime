@@ -1,0 +1,23 @@
+// SPDX-License-Identifier: MIT
+// Board-level observations layered on the verified Essential map.
+
+using "spike-essential.repl"
+
+centerButton: Miscellaneous.Button @ gpioPortB 2
+    invert: true
+    -> gpioPortB@2
+
+power: Miscellaneous.BrickPowerController @ none
+
+gpioPortB:
+    1 -> power@0
+
+gpioPortA:
+    10 -> power@1
+
+power:
+    1 -> gpioPortC@6
+
+imu:
+    0 -> gpioPortC@13
+

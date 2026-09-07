@@ -1,0 +1,24 @@
+// SPDX-License-Identifier: MIT
+// Evidence-bounded SPIKE Prime brick-device overlay. This is not yet a full
+// Prime platform: port, radio and external-flash wiring live in other layers.
+
+using "../cpus/stm32f4.repl"
+
+imu: Sensors.LSM6DS3TRC @ i2c2 0x6a
+    0 -> gpioPortB@4
+
+display: SPI.TLC5955 @ spi1
+
+gpioPortA:
+    15 -> display@0
+
+power: Miscellaneous.BrickPowerController @ none
+
+gpioPortA:
+    13 -> power@0
+
+speaker: Sound.PCMAudioSink @ sysbus 0x40007408
+
+gpioPortC:
+    10 -> speaker@0
+
