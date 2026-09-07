@@ -72,7 +72,9 @@ class LiveStateTests(unittest.TestCase):
         self.session.connect(); self.assertEqual(self.session.sample(1)["seq"], 0)
         self.session.disconnect()
         with self.assertRaisesRegex(ProtocolError, "disconnected"): self.session.sample(2)
-        self.session.connect(); self.assertEqual(self.session.sample(3)["seq"], 1)
+        self.session.connect(); snapshot = self.session.sample(3)
+        self.assertEqual(snapshot["seq"], 1)
+        self.assertEqual(snapshot["lifecycle"]["connectionGeneration"], 2)
 
 
 if __name__ == "__main__": unittest.main()

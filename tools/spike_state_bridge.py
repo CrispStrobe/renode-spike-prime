@@ -273,10 +273,14 @@ class LiveStateSession:
         self.queue = SnapshotQueue(queue_capacity)
         self.gate = CommandGate()
         self.connected = False
+        self.connection_generation = 0
         self.next_seq = 0
         self.clock_ns = 0
 
     def connect(self):
+        if self.connected:
+            raise ProtocolError("session is already connected")
+        self.connection_generation += 1
         self.connected = True
 
     def disconnect(self):
@@ -289,6 +293,7 @@ class LiveStateSession:
             raise ProtocolError("emulated clock moved backwards")
         self.clock_ns = clock_ns
         snapshot = self.observer.observe(self.next_seq, clock_ns)
+        snapshot["lifecycle"]["connectionGeneration"] = self.connection_generation
         self.queue.publish(snapshot)
         self.next_seq += 1
         return snapshot
