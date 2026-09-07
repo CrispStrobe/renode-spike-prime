@@ -42,7 +42,8 @@ explicit `Compile` entries were discarded during replay.
 - Review commit messages and authorship, then submit one topic at a time. Do not
   open upstream pull requests from automation.
 
-The replay worktrees passed `git diff --check`. A native test attempt is not a
-valid pass: the standalone Infrastructure checkout resolved its relative
-`lib/bc-csharp` dependency to an incompatible legacy checkout. The native gate
-therefore remains pending until tested through a current Renode superproject.
+The replay worktrees passed `git diff --check`. A fully initialized current
+Renode superproject generated its build targets and compiled native x86 and ARM
+cores plus several managed dependencies. Its focused .NET 8 test build did not
+reach the test runner before the bounded audit ended, so this is not a native
+pass and the native gate remains pending.
