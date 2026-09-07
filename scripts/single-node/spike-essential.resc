@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: MIT
+# SPIKE Essential machine plus deterministic Powered Up UART endpoints.
+
+mach create
+machine LoadPlatformDescription @platforms/boards/spike-essential.repl
+
+emulation CreateUARTHub "essentialPortAHub"
+emulation CreateLegoLpf2Port "essentialPortA" "medium-motor"
+connector Connect uart5 essentialPortAHub
+connector Connect essentialPortA essentialPortAHub
+
+emulation CreateUARTHub "essentialPortBHub"
+emulation CreateLegoLpf2Port "essentialPortB" "ultrasonic"
+connector Connect usart3 essentialPortBHub
+connector Connect essentialPortB essentialPortBHub

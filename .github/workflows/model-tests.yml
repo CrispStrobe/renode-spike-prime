@@ -49,6 +49,8 @@ jobs:
           tests/platforms/spike-essential-loader-test.sh
           grep -Fq 'imu: Sensors.LSM6DS3TRC @ i2c3 0x6a' platforms/boards/spike-essential.repl
           grep -Fq 'essentialStorage: SPI.GenericSpiFlash' platforms/boards/spike-essential.repl
+          grep -Fq 'connector Connect uart5 essentialPortAHub' scripts/single-node/spike-essential.resc
+          grep -Fq 'connector Connect usart3 essentialPortBHub' scripts/single-node/spike-essential.resc
           ! grep -Fq 'spike-prime.repl' platforms/boards/spike-essential.repl
 
       - name: Run source-only Bluetooth controller gates
@@ -72,5 +74,5 @@ jobs:
           dotnet restore "$project" "${common[@]}"
           dotnet test "$project" --configuration Release --no-restore \
             "${common[@]}" \
-            --filter 'FullyQualifiedName~STM32DMATests|FullyQualifiedName~STM32SPITests|FullyQualifiedName~STM32_UARTTests|FullyQualifiedName~TLC5955Tests|FullyQualifiedName~LSM6DS3TRCTests|FullyQualifiedName~GenericSpiFlashW25Q256Tests' \
+            --filter 'FullyQualifiedName~STM32DMATests|FullyQualifiedName~STM32SPITests|FullyQualifiedName~STM32_UARTTests|FullyQualifiedName~TLC5955Tests|FullyQualifiedName~LSM6DS3TRCTests|FullyQualifiedName~GenericSpiFlashW25Q256Tests|FullyQualifiedName~LegoLpf2PortTests' \
             --logger 'console;verbosity=normal'

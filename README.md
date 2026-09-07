@@ -34,6 +34,11 @@ require an ignored SHA-256 manifest as documented by the platform guide.
 
 ## Upstream Renode
 
+Essential also includes deterministic LPF2 endpoints on UART5 (medium motor)
+and USART3 (ultrasonic sensor), covering discovery, mode/data exchange,
+encoder motion, load and stall state. Analog identification, complete motor
+physics and the full Powered Up catalog remain unmodeled.
+
 Copyright (c) 2010-2026 [Antmicro](https://www.antmicro.com)
 
 [![View on Antmicro Open Source Portal](https://img.shields.io/badge/View%20on-Antmicro%20Open%20Source%20Portal-332d37?style=flat-square)](https://opensource.antmicro.com/projects/renode)
