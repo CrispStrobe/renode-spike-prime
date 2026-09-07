@@ -66,6 +66,7 @@ jobs:
           for test in tests/tools/bluetooth_controller_*_test.py; do
             python3 "$test"
           done
+          python3 tests/tools/spike_fault_soak_test.py
           python3 -m py_compile \
             tools/bluetooth_controller/*.py \
             tools/spike-bluetooth-controller.py \
@@ -88,5 +89,5 @@ jobs:
           dotnet restore "$project" "${common[@]}"
           dotnet test "$project" --configuration Release --no-restore \
             "${common[@]}" \
-            --filter 'FullyQualifiedName~STM32DMATests|FullyQualifiedName~STM32SPITests|FullyQualifiedName~STM32_UARTTests|FullyQualifiedName~STM32F7I2CTests|FullyQualifiedName~TLC5955Tests|FullyQualifiedName~LSM6DS3TRCTests|FullyQualifiedName~LP50XXTests|FullyQualifiedName~GenericSpiFlashW25Q256Tests|FullyQualifiedName~LegoLpf2PortTests|FullyQualifiedName~BrickPowerControllerTests|FullyQualifiedName~PCMAudioSinkTests' \
+            --filter 'FullyQualifiedName~STM32DMATests|FullyQualifiedName~STM32SPITests|FullyQualifiedName~STM32_UARTTests|FullyQualifiedName~STM32F7I2CTests|FullyQualifiedName~TLC5955Tests|FullyQualifiedName~LSM6DS3TRCTests|FullyQualifiedName~LP50XXTests|FullyQualifiedName~GenericSpiFlashW25Q256Tests|FullyQualifiedName~LegoLpf2PortTests|FullyQualifiedName~BrickPowerControllerTests|FullyQualifiedName~PCMAudioSinkTests|FullyQualifiedName~SpikeFaultSoakTests' \
             --logger 'console;verbosity=normal'

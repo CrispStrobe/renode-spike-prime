@@ -43,5 +43,9 @@
   disconnect and malformed-input recovery observable and deterministic. Large
   time jumps cap emitted reports and expose the coalesced count; zero cadences
   are rejected.
+- Deterministic source-only fault gates run 256 seeded malformed-H4 recoveries,
+  512 Bluetooth connect/disconnect/reset cycles, and 256 LPF2, power, charger,
+  stalled-motor, and denied-flash-write reset cycles. Protocol byte queues and
+  reports have explicit ceilings; large advances use emulated microseconds.
 
 Commit history and CI retain detailed evidence.
