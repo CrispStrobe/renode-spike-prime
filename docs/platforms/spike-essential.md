@@ -17,7 +17,15 @@ MIT-licensed:
 | IMU | LSM6DS3TR-C at I2C3; SCL PA8, SDA PC9, INT1 PC13 | Deterministic I2C register model at address `0x6a`; interrupt routing and timing are not yet modeled. |
 | External store | W25Q32-class device on SPI2; PB12 active-low CS; DMA1 streams 3 RX and 4 TX | Generic 4 MiB SPI NOR with JEDEC `ef 40 16`; SPI2 RX/TX DMA requests connect to streams 3/4. |
 | Bluetooth | CC256x H4 on USART2; DMA1 streams 6 TX and 7 RX; enable PC8 | Controller and lawful external responder are not part of this source-only checkpoint. |
-| User ports | Two ports: UART5 for A and USART3 for B, with the GPIO map in the cited platform file | MCU UARTs exist, but Powered Up electrical devices and motor loads are not modeled. |
+| User ports | Two ports: UART5 for A and USART3 for B, with the GPIO map in the cited platform file | The wrapper connects a deterministic medium motor on A and ultrasonic sensor on B. Electrical identification GPIOs are not modeled. |
+
+Load `scripts/single-node/spike-essential.resc` to connect both endpoints.
+They implement checked discovery and mode/data exchange. The motor
+has deterministic power, speed-percent, angular-velocity, encoder, load and
+stall state. Call `essentialPortA StartNegotiation` or
+`essentialPortB StartNegotiation` only after the guest enables that UART. The
+model does not reproduce analog attachment detection, real-time physics,
+protocol jitter or the complete LEGO device catalog.
 | LEDs | LP50xx on FMPI2C1, enable PB13 | Not modeled because this Renode baseline lacks an evidenced FMPI2C1/LP50xx pair. |
 | Button/power/charger | Center button PB2 active-low; power hold PB1; MP2639A mode PA10 and CHG PC6 | GPIOs exist; board-level behavior is not modeled. |
 
