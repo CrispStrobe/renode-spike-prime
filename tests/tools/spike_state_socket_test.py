@@ -113,6 +113,8 @@ class SocketTest(unittest.TestCase):
         ast.parse(source)
         self.assertIn('monitor.Machine[', source)
         self.assertIn('MasterTimeSource.ElapsedVirtualTime.Ticks', source)
+        self.assertIn('finally:\n                self.stream = None', source)
+        self.assertIn('split_frames(pending, chunk', source)
         self.assertNotIn('_Server(str(host)', source.split('def mc_spike_state_start')[0])
 
 
