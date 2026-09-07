@@ -25,9 +25,9 @@ fetched, committed, logged, cached, or uploaded by public CI.
    truncation, checksum, and recovery tests.
 4. Complete deterministic brick fidelity gaps.
    Depends on: existing brick-device overlays.
-   Acceptance: Prime ADC button ladders, decoded 5x5 display state, LED phase,
-   charger transitions, DAC sample width/pacing, and IMU ODR/FIFO interrupts
-   have source-cited wiring, emulated-clock behavior, and bounded tests.
+   Acceptance: Prime ADC button ladders connect to the STM32 ADC; TLC5955 GSCLK
+   connects to TIM12; DAC sample pacing connects to TIM6/DMA. Each connection
+   must have source-cited wiring, emulated-clock behavior, and bounded tests.
 5. Export one versioned, transport-neutral brick snapshot/control contract.
    Depends on: stable observable states from tasks 2 and 4.
    Acceptance: Brickwright consumes the same port, motor, sensor, display,
