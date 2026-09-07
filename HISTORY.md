@@ -66,5 +66,7 @@ Commit history and CI retain detailed evidence.
 - Published current-upstream review branches for the clean DMA completion patch
   and separate TLC5955, LSM6DS3TR-C, generic NOR/W25Q256, and LP50xx commits.
   The LP50xx model was separated from its STM32F7 I2C DMA change. Replay diffs
-  pass whitespace validation; native validation remains an explicit roadmap
-  gate because the standalone checkout found an incompatible legacy dependency.
+  pass whitespace validation. A current, recursively initialized Renode
+  superproject compiled native x86 and ARM cores and managed dependencies, but
+  the bounded run ended before the focused test runner; native validation
+  therefore remains an explicit roadmap gate.
