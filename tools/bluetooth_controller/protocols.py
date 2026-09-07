@@ -12,7 +12,7 @@ from typing import Protocol
 class AclProtocol(Protocol):
     """Consumes one complete L2CAP payload and optionally returns responses."""
 
-    def receive(self, payload: bytes) -> list[bytes]:
+    def receive(self, payload: bytes) -> list[bytes | "L2capReply"]:
         """Return zero or more complete response payloads."""
 
 
@@ -22,6 +22,14 @@ class L2capChannel:
 
     cid: int
     protocol: AclProtocol
+
+
+@dataclass(frozen=True)
+class L2capReply:
+    """A response directed to a CID other than the receiving local CID."""
+
+    cid: int
+    payload: bytes
 
 
 class L2capRouter:
@@ -37,6 +45,9 @@ class L2capRouter:
             raise ValueError(f"L2CAP CID 0x{channel.cid:04x} is already bound")
         self._channels[channel.cid] = channel.protocol
 
+    def unbind(self, cid: int) -> None:
+        self._channels.pop(cid, None)
+
     def receive(self, packet: bytes) -> list[bytes]:
         if len(packet) < 4:
             raise ValueError("truncated L2CAP header")
@@ -47,7 +58,12 @@ class L2capRouter:
         protocol = self._channels.get(cid)
         if protocol is None:
             return []
-        return [self.frame(cid, payload) for payload in protocol.receive(packet[4:])]
+        responses = []
+        for response in protocol.receive(packet[4:]):
+            responses.append(self.frame(response.cid, response.payload)
+                             if isinstance(response, L2capReply)
+                             else self.frame(cid, response))
+        return responses
 
     @staticmethod
     def frame(cid: int, payload: bytes) -> bytes:
