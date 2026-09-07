@@ -26,9 +26,9 @@ input and is never uploaded as an artifact.
 
 - [x] R1.1 Add STM32DMA unit coverage for request-driven peripheral transfers,
   exact NDTR decrement, completion flags/IRQs, and circular reload.
-- [ ] R1.2 Add STM32SPI unit coverage for independent RX and TX DMA request
+- [x] R1.2 Add STM32SPI unit coverage for independent RX and TX DMA request
   signals and paired full-duplex transfer completion.
-- [ ] R1.3 Add STM32 UART coverage for RX DMA requests, IDLE flag/IRQ clearing,
+- [x] R1.3 Add STM32 UART coverage for RX DMA requests, IDLE flag/IRQ clearing,
   and sustained circular reception.
 
 ## R2 — Correct generic STM32 models
@@ -44,13 +44,13 @@ input and is never uploaded as an artifact.
 
 ## R3 — SPIKE integration gates
 
-- [ ] R3.1 Point the Brickwright SPIKE platform at the custom Renode build.
+- [x] R3.1 Point the Brickwright SPIKE platform at the custom Renode build.
 - [ ] R3.2 Run the unchanged protected image through TLC5955 initialization to
   `nsh_main` and `btsensor_main` without board-function hooks.
 - [ ] R3.3 Connect USART2 RX to DMA1 stream 7 and run the opaque TI HCI command
   stream against the lawful external H4 responder through
   `physical_start_host` and `bt_enable` completion.
-- [ ] R3.4 Repeat bounded vector/progress gates for official LEGO v2/v3,
+- [x] R3.4 Repeat bounded vector/progress gates for official LEGO v2/v3,
   original spike-nx, Brickwright firmware, and Pybricks.
 
 ## R4 — Upstream readiness
@@ -69,3 +69,5 @@ input and is never uploaded as an artifact.
 | 2026-09-06 | R1.1, R2.1–R2.2 | Complete | Infrastructure commit `780d78774` adds focused DMA tests and corrects short FIFO requests, normal-mode disable, transfer-complete IRQs, and circular NDTR/address reload. Both focused tests pass on .NET 8 Release. |
 | 2026-09-06 | R0.4 | Complete | Added source-only private CI with SHA-pinned actions, read-only permissions, an exact private-submodule revision check, and focused STM32 model tests. Installed a repository-scoped, read-only Infrastructure deploy key; no personal token or firmware artifact is used. |
 | 2026-09-06 | R2.3–R2.4, R4.1 | Complete | Infrastructure commits through `7acded2e5` add paced SPI TX DMA requests, request-paced peripheral DMA, correct UART enable/IDLE semantics, and MIT-licensed generic tests. All 12 focused DMA/SPI/UART tests pass on .NET 8 Release. |
+| 2026-09-07 | R1.2–R1.3, R3.1, R3.4 | Complete | Infrastructure commit `4037da909` preserves level-like requests across DMA setup, drains buffered UART RX, and adds UART TX DMA. Fifteen focused model tests pass. The custom Renode build passes official LEGO v2/v3 and Pybricks vector/progress gates plus original spike-nx and Brickwright protected boot gates. |
+| 2026-09-07 | R3.2–R3.3 | Partial | The unchanged Brickwright image now completes SPI2 flash DMA and reaches TLC5955 initialization without board-function hooks. Its real USART2 DMA path consumes the opaque service pack through the lawful H4 responder and reaches `physical_start_host`; immediately afterward the current image enters NuttX `_assert` before `bt_enable` returns, so that final completion claim remains open. |
