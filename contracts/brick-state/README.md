@@ -36,6 +36,21 @@ connection state, monotonic emulated time, sequence continuity, bounded
 backpressure, replay rejection, and the small command allowlist. An embedding
 monitor or socket must frame input with `parse_line()` and output with
 `canonical_bytes()`; arbitrary monitor or host commands are never dispatched.
-The repository does not yet bind this seam to Renode's Python monitor or a
-listening socket. A scenario must supply the actual `machine[path]` binding,
-identity, model paths, sampling schedule, and framed transport.
+`scripts/spike-state-server.py` is an opt-in Renode monitor include. Its start
+command binds `monitor.Machine`, Renode's external registry, and the master
+`ElapsedVirtualTime` clock to its bounded IronPython TCP service. The reusable
+CPython service in `tools/spike_state_socket.py` enforces the same boundary for
+source-only integration tests. Paths use `machine:name` or `external:name`;
+unprefixed paths mean machine peripherals. The example config is intentionally
+not auto-started and contains no firmware. A scenario must select the identity,
+paths, and port explicitly. Non-loopback binds require an explicit source-level
+opt-in in the reusable service; the monitor command always refuses it. Input
+lines, clients, queues, reads, command replay memory, and socket
+timeouts are bounded; arbitrary monitor and host commands are never exposed.
+The monitor implementation intentionally accepts one active client; the
+reusable source-test service has a validated maximum of four.
+The monitor service obtains Renode's paused-state guard around every model read
+and mutation. `spike_state_sample` emits a snapshot at the current virtual time,
+so Robot scenarios can sample after deterministic emulated-time milestones.
+There is no wall-clock telemetry loop; periodic virtual-time sampling remains
+a scenario responsibility.

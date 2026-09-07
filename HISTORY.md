@@ -46,5 +46,12 @@
   disconnect and malformed-input recovery observable and deterministic. Large
   time jumps cap emitted reports and expose the coalesced count; zero cadences
   are rejected.
+- An opt-in, loopback-only-by-default TCP service now binds explicit
+  `monitor.Machine` and external model paths to Renode's master virtual clock.
+  Bounded clients, lines, reads, queues, timeouts, command dispatch, and a
+  fragmented-stream/reconnect test close the concrete transport seam without
+  exposing arbitrary monitor commands. Model access is guarded by Renode's
+  paused-state API, and scenarios can request snapshots at deterministic
+  virtual-time milestones.
 
 Commit history and CI retain detailed evidence.

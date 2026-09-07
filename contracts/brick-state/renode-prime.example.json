@@ -1,0 +1,17 @@
+{
+  "identity": {
+    "board": "spike-prime",
+    "firmware": "brickwright-nuttx",
+    "transport": "none",
+    "imageSha256": null
+  },
+  "paths": {
+    "power": "machine:power",
+    "imu": "machine:imu",
+    "display": "machine:display",
+    "audio": "machine:speaker"
+  },
+  "maxClients": 1,
+  "maxLineBytes": 262144,
+  "socketTimeoutSeconds": 5
+}
