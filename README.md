@@ -18,6 +18,7 @@ provides:
   ATT/GATT, L2CAP, SDP, and RFCOMM test coverage;
 - deterministic LPF2 motor and ultrasonic endpoints with source-mapped logical
   attachment state, emulated-time negotiation/reporting and bounded queues;
+- an exact permissively sourced Technic Large Linear Motor discovery fixture;
 - observable display, LED, IMU, power, button, and bounded PCM state.
 - a versioned, bounded NDJSON snapshot/control boundary for Brickwright.
 
@@ -30,6 +31,8 @@ the full Powered Up device catalog. Pending work and acceptance gates are in
 [Bluetooth controller](docs/bluetooth-controller.md) guides. Local image setup
 and the exact evidence limits are in the
 [unchanged-firmware scenario guide](docs/platforms/unchanged-firmware-scenarios.md).
+LPF2 evidence and deliberately omitted contracts are in the
+[device catalog](docs/platforms/lpf2-device-catalog.md).
 The wire contract and canonical fixtures are in
 [contracts/brick-state](contracts/brick-state/README.md).
 

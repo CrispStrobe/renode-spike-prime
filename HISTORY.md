@@ -57,6 +57,10 @@
   512 Bluetooth connect/disconnect/reset cycles, and 256 LPF2, power, charger,
   stalled-motor, and denied-flash-write reset cycles. Protocol byte queues and
   reports have explicit ceilings; large advances use emulated microseconds.
+- Added the Technic Large Linear Motor (LPF2 type 46) from an SPDX-MIT
+  Pybricks logic-analyzer fixture. Its 530-byte discovery transcript is exact;
+  deterministic mechanics reuse the bounded endpoint's fault recovery. The
+  evidence audit kept incompletely sourced color, force, and type-49 motors out.
 
 Commit history and CI retain detailed evidence.
 
