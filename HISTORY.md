@@ -15,5 +15,8 @@
   discovery frames, checksums, mode/output traffic, encoder movement, load,
   stall, malformed input and parser recovery. The Essential wrapper wires
   UART5 to the motor and USART3 to the sensor through UART hubs.
+- Brick-device checkpoint: bounded power-policy and PCM observers plus explicit
+  IMU sampling, FIFO, watermark and interrupt behavior passed 12 focused tests.
+  Source-only overlays expose verified Prime and Essential connections.
 
 Detailed evidence remains in Git history and CI results for each checkpoint.

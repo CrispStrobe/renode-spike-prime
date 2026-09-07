@@ -14,11 +14,13 @@ provides:
 - TLC5955 display, LSM6DS3TR-C IMU, and W25Q-series flash models;
 - hash-manifested local image loaders that never fetch or publish firmware;
 - a transport-neutral dual-mode Bluetooth controller model with H4/HCI,
-  ATT/GATT, L2CAP, SDP, and RFCOMM test coverage.
+  ATT/GATT, L2CAP, SDP, and RFCOMM test coverage;
+- LPF2 motor/sensor endpoints, bounded PCM capture, deterministic power policy,
+  display snapshots, and explicit IMU sampling/FIFO/interrupt state.
 
-The simulation is not yet a complete electrical or physical model. Powered Up
-ports, motor loads, some LED paths, audio, power/charger behavior, and detailed
-sensor timing are tracked in [PLAN.md](PLAN.md). Start with the
+The simulation is not yet a complete electrical or physical model. Prime ADC
+buttons, optical display timing, analog audio, charger electronics, IMU physics
+and the complete Powered Up catalog are tracked in [PLAN.md](PLAN.md). Start with the
 [SPIKE Essential platform guide](docs/platforms/spike-essential.md) and the
 [Bluetooth controller guide](docs/bluetooth-controller.md).
 
@@ -32,12 +34,15 @@ python3 -m unittest discover -s tests/tools -p 'bluetooth_controller*_test.py'
 Official LEGO and Pybricks images are not included. Local opt-in image tests
 require an ignored SHA-256 manifest as documented by the platform guide.
 
-## Upstream Renode
-
 Essential also includes deterministic LPF2 endpoints on UART5 (medium motor)
 and USART3 (ultrasonic sensor), covering discovery, mode/data exchange,
 encoder motion, load and stall state. Analog identification, complete motor
 physics and the full Powered Up catalog remain unmodeled.
+
+Optional Prime and Essential brick-device overlays and their exact limitations
+are documented in [the brick-device guide](docs/platforms/spike-brick-devices.md).
+
+## Upstream Renode
 
 Copyright (c) 2010-2026 [Antmicro](https://www.antmicro.com)
 
