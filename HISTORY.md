@@ -1,7 +1,7 @@
 # Completed simulation work
 
-- Added deterministic live snapshot production from public SPIKE model
-  properties and a bounded power, IMU, and LPF2 command allowlist.
+- Added a deterministic snapshot adapter seam for public SPIKE model properties
+  and a bounded power, IMU, and LPF2 command allowlist.
 
 - Schema version 1, canonical fixtures, a bounded Python codec and queue,
   overflow gaps, command sequencing, and process tests establish the neutral

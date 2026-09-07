@@ -196,23 +196,25 @@ class RenodeModelObserver:
         for port_id in "ABCDEF":
             port = self._get("port" + port_id)
             device = getattr(port, "Device", None) if port else None
-            kind = None if device is None else device.__class__.__name__
+            kind = self._device_kind(device)
             generation = int(getattr(port, "TopologyGeneration", 0)) if port else 0
             topology.append(generation)
             ports.append({"id": port_id, "attached": device is not None, "kind": kind})
-            if device is not None and hasattr(device, "SpeedPercent"):
+            if kind == "motor":
                 motors.append({"port": port_id, "speed": float(device.SpeedPercent),
-                               "position": float(getattr(device, "PositionDegrees", 0))})
-            elif device is not None:
+                               "position": float(device.EncoderDegrees)})
+            elif kind == "distance":
+                sensors.append({"port": port_id, "kind": kind,
+                                "values": {"distanceMillimeters": int(device.DistanceMillimeters)}})
+            elif kind is not None:
                 sensors.append({"port": port_id, "kind": kind, "values": {}})
         self.generation = max(topology, default=self.generation)
         registers = list(getattr(imu, "RegisterSnapshot", bytes(0)))
         def i16(offset):
             return int.from_bytes(bytes(registers[offset:offset + 2]), "little", signed=True) if len(registers) > offset + 1 else 0
-        raw_display = list(getattr(display, "LatchedRegister", bytes(0)))
-        pixels = list(getattr(display, "OutputColorSnapshot", raw_display))
+        display_state = self._display_state(display)
         capabilities = ["model-observation", "bounded-command-dispatch"]
-        limitations = ["display values are raw model bytes, not optical brightness"]
+        limitations = ["display values are deterministic model output, not optical light physics"]
         if not any(self._get("port" + p) for p in "ABCDEF"):
             limitations.append("LPF2 ports are not present in this platform overlay")
         target = dict(self.identity)
@@ -224,7 +226,7 @@ class RenodeModelObserver:
                 "clockNs": clock_ns, "target": target,
                 "lifecycle": {"phase": "ready", "generation": self.generation},
                 "ports": ports, "motors": motors, "sensors": sensors,
-                "display": {"width": 0, "height": 0, "pixels": pixels[:4096]},
+                "display": display_state,
                 "buttons": {}, "battery": {"percent": percent, "millivolts": millivolts},
                 "power": {"state": "on" if getattr(power, "PowerHold", False) else "off",
                           "chargerConnected": bool(getattr(power, "ChargerConnected", False))},
@@ -250,7 +252,7 @@ class RenodeModelObserver:
             device = arguments.get("device")
             if device not in {"none", "ultrasonic", "medium-motor", "motor"}:
                 raise ProtocolError("unsupported LPF2 device")
-            self._require_port(arguments).Attach(device)
+            self._require_port(arguments).Attach("motor" if device == "medium-motor" else device)
         elif command == "lpf2.detach":
             self._require_port(arguments).Detach()
         elif command == "lpf2.advance-microseconds":
@@ -270,6 +272,32 @@ class RenodeModelObserver:
         if port not in "ABCDEF" or len(port) != 1:
             raise ProtocolError("invalid LPF2 port")
         return self._require("port" + port)
+
+    @staticmethod
+    def _device_kind(device):
+        if device is None:
+            return None
+        if hasattr(device, "SpeedPercent") and hasattr(device, "EncoderDegrees"):
+            return "motor"
+        if hasattr(device, "DistanceMillimeters"):
+            return "distance"
+        get_type = getattr(device, "GetType", None)
+        name = str(get_type().Name if get_type else device.__class__.__name__)
+        return "unknown:" + name[:48]
+
+    @staticmethod
+    def _display_state(display):
+        if display is None:
+            return {"width": 0, "height": 0, "pixels": [], "semantics": "unavailable"}
+        if hasattr(display, "Matrix"):
+            return {"width": 5, "height": 5, "pixels": list(display.Matrix),
+                    "semantics": "grayscale-16bit"}
+        if hasattr(display, "RenderedModuleSnapshot"):
+            modules = [list(module) for module in display.RenderedModuleSnapshot]
+            return {"width": 3, "height": len(modules),
+                    "pixels": [component for module in modules for component in module],
+                    "semantics": "rgb-components-8bit"}
+        return {"width": 0, "height": 0, "pixels": [], "semantics": "unsupported-model"}
 
     @staticmethod
     def _bounded_int(arguments, name, minimum, maximum):

@@ -10,7 +10,19 @@ from spike_state_bridge import LiveStateSession, ProtocolError, RenodeModelObser
 
 class Device:
     SpeedPercent = 25
-    PositionDegrees = 90
+    EncoderDegrees = 90
+
+
+class DistanceDevice:
+    DistanceMillimeters = 321
+
+
+class PrimeDisplay:
+    Matrix = tuple(range(25))
+
+
+class EssentialDisplay:
+    RenderedModuleSnapshot = ((1, 2, 3), (4, 5, 6), (7, 8, 9), (10, 11, 12))
 
 
 class Port:
@@ -39,11 +51,11 @@ def command(request_id, name, arguments=None, expected=0):
 class LiveStateTests(unittest.TestCase):
     def setUp(self):
         self.port = Port()
-        self.machine = {"power": Power(), "portA": self.port}
+        self.machine = {"power": Power(), "portA": self.port, "display": PrimeDisplay()}
         identity = {"board": "spike-prime", "firmware": "brickwright-nuttx",
                     "transport": "none", "imageSha256": None}
         self.observer = RenodeModelObserver(self.machine, identity,
-            {"power": "power", "portA": "portA"})
+            {"power": "power", "portA": "portA", "display": "display"})
         self.session = LiveStateSession(self.observer, queue_capacity=2)
 
     def test_observes_real_public_model_properties(self):
@@ -52,6 +64,19 @@ class LiveStateTests(unittest.TestCase):
         self.assertEqual(snapshot["battery"]["millivolts"], 7200)
         self.assertEqual(snapshot["motors"][0], {"port": "A", "speed": 25.0, "position": 90.0})
         self.assertEqual(snapshot["lifecycle"]["generation"], 3)
+        self.assertEqual(snapshot["ports"][0]["kind"], "motor")
+        self.assertEqual(snapshot["display"], {"width": 5, "height": 5,
+            "pixels": list(range(25)), "semantics": "grayscale-16bit"})
+
+    def test_normalizes_distance_and_essential_rgb_shape(self):
+        self.port.Device = DistanceDevice()
+        self.machine["display"] = EssentialDisplay()
+        snapshot = self.observer.observe(0, 0)
+        self.assertEqual(snapshot["sensors"][0]["kind"], "distance")
+        self.assertEqual(snapshot["sensors"][0]["values"]["distanceMillimeters"], 321)
+        self.assertEqual(snapshot["display"]["width"], 3)
+        self.assertEqual(snapshot["display"]["height"], 4)
+        self.assertEqual(snapshot["display"]["pixels"], list(range(1, 13)))
 
     def test_backpressure_and_clock(self):
         self.session.connect()
@@ -71,6 +96,10 @@ class LiveStateTests(unittest.TestCase):
                                                   {"port": "A", "microseconds": 60_000_001}))
         self.assertFalse(too_large["accepted"])
         self.assertIn("supported range", too_large["error"])
+        attached = self.session.command(command("d", "lpf2.attach",
+                                                {"port": "A", "device": "medium-motor"}))
+        self.assertTrue(attached["accepted"])
+        self.assertEqual(self.port.calls[-1], ("attach", "motor"))
 
     def test_disconnect_reconnect_preserves_sequence(self):
         self.session.connect(); self.assertEqual(self.session.sample(1)["seq"], 0)
