@@ -12,6 +12,8 @@ assembled by the external firmware harness. This repository provides:
 - a SPIKE Essential machine and optional Prime/Essential device overlays;
 - TLC5955 display, LSM6DS3TR-C IMU, and W25Q-series flash models;
 - hash-manifested local image loaders that never fetch or publish firmware;
+- one versioned unchanged-firmware scenario catalog for seven Prime and
+  Essential firmware families;
 - a transport-neutral dual-mode Bluetooth controller model with H4/HCI,
   ATT/GATT, L2CAP, SDP, and RFCOMM test coverage;
 - deterministic LPF2 motor and ultrasonic endpoints;
@@ -23,13 +25,16 @@ the full Powered Up device catalog. Pending work and acceptance gates are in
 [HISTORY.md](HISTORY.md). Hardware contracts and use instructions are in the
 [Essential platform](docs/platforms/spike-essential.md),
 [brick-device](docs/platforms/spike-brick-devices.md), and
-[Bluetooth controller](docs/bluetooth-controller.md) guides.
+[Bluetooth controller](docs/bluetooth-controller.md) guides. Local image setup
+and the exact evidence limits are in the
+[unchanged-firmware scenario guide](docs/platforms/unchanged-firmware-scenarios.md).
 
 Run the source-only LEGO checks with:
 
 ```bash
 tests/platforms/spike-essential-loader-test.sh
 tests/platforms/spike-brick-devices-source-test.sh
+python3 tests/platforms/spike-firmware-scenario-manifest-test.py
 python3 -m unittest discover -s tests/tools -p 'bluetooth_controller*_test.py'
 ```
 

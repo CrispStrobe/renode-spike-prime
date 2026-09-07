@@ -1,0 +1,47 @@
+{
+  "schema": "brickwright.renode.scenarios/v1",
+  "targets": {
+    "lego-prime-v2": {
+      "board": "prime",
+      "firmware": "LEGO SPIKE Prime v2",
+      "artifacts": ["firmware"],
+      "milestones": ["vectors-valid", "cpu-progress"]
+    },
+    "lego-prime-v3": {
+      "board": "prime",
+      "firmware": "LEGO SPIKE Prime v3",
+      "artifacts": ["firmware"],
+      "milestones": ["vectors-valid", "cpu-progress"]
+    },
+    "pybricks-prime": {
+      "board": "prime",
+      "firmware": "Pybricks SPIKE Prime",
+      "artifacts": ["firmware"],
+      "milestones": ["vectors-valid", "cpu-progress"]
+    },
+    "spike-nx": {
+      "board": "prime",
+      "firmware": "spike-nx",
+      "artifacts": ["kernel", "userspace"],
+      "milestones": ["vectors-valid", "nx-start", "board-late-initialize", "board-bringup"]
+    },
+    "brickwright-nuttx": {
+      "board": "prime",
+      "firmware": "Brickwright NuttX",
+      "artifacts": ["kernel", "userspace"],
+      "milestones": ["vectors-valid", "nx-start", "board-late-initialize", "board-bringup", "imu-init", "storage-init", "display-init", "bluetooth-bootstrap", "daemon-ready"]
+    },
+    "lego-essential": {
+      "board": "essential",
+      "firmware": "LEGO SPIKE Essential",
+      "artifacts": ["firmware"],
+      "milestones": ["vectors-valid", "cpu-progress"]
+    },
+    "pybricks-essential": {
+      "board": "essential",
+      "firmware": "Pybricks SPIKE Essential",
+      "artifacts": ["firmware"],
+      "milestones": ["vectors-valid", "cpu-progress"]
+    }
+  }
+}
