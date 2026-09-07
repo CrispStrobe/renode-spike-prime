@@ -1,6 +1,6 @@
 # SPIKE Prime Renode extension plan
 
-This private upstream-tracking mirror starts at Renode `v1.16.1`
+This public upstream-tracking fork starts at Renode `v1.16.1`
 (`d66b0c2aa3d420408eccecfd1d3bab0fd702a6db`). Its infrastructure submodule
 starts at the exact pinned commit used by that release
 (`add012af003a0f620d3da52828262676f374d121`). Both codebases are MIT-licensed.
@@ -12,14 +12,14 @@ input and is never uploaded as an artifact.
 
 ## R0 — Repository and provenance
 
-- [x] R0.1 Create private `CrispStrobe/renode-spike-prime` with `upstream`
+- [x] R0.1 Create `CrispStrobe/renode-spike-prime` with `upstream`
   pointing to `renode/renode` and `main` pinned to Renode 1.16.1.
-- [x] R0.2 Create private `CrispStrobe/renode-infrastructure-spike-prime` with
+- [x] R0.2 Create public `CrispStrobe/renode-infrastructure-spike-prime` with
   `upstream` pointing to `renode/renode-infrastructure` and `main` pinned to
   the release's infrastructure commit.
 - [x] R0.3 Isolate implementation on `feat/spike-prime-stm32-dma` and prohibit
   accidental pushes to either upstream remote.
-- [x] R0.4 Add private CI with immutable actions, read-only permissions, model
+- [x] R0.4 Add CI with immutable actions, read-only permissions, model
   unit tests, and no firmware artifacts.
 
 ## R1 — Reproduce and specify the controller gaps
@@ -45,9 +45,9 @@ input and is never uploaded as an artifact.
 ## R3 — SPIKE integration gates
 
 - [x] R3.1 Point the Brickwright SPIKE platform at the custom Renode build.
-- [ ] R3.2 Run the unchanged protected image through TLC5955 initialization to
+- [x] R3.2 Run the unchanged protected image through TLC5955 initialization to
   `nsh_main` and `btsensor_main` without board-function hooks.
-- [ ] R3.3 Connect USART2 RX to DMA1 stream 7 and run the opaque TI HCI command
+- [x] R3.3 Connect USART2 RX to DMA1 stream 7 and run the opaque TI HCI command
   stream against the lawful external H4 responder through
   `physical_start_host` and `bt_enable` completion.
 - [x] R3.4 Repeat bounded vector/progress gates for official LEGO v2/v3,
@@ -70,4 +70,5 @@ input and is never uploaded as an artifact.
 | 2026-09-06 | R0.4 | Complete | Added source-only private CI with SHA-pinned actions, read-only permissions, an exact private-submodule revision check, and focused STM32 model tests. Installed a repository-scoped, read-only Infrastructure deploy key; no personal token or firmware artifact is used. |
 | 2026-09-06 | R2.3–R2.4, R4.1 | Complete | Infrastructure commits through `7acded2e5` add paced SPI TX DMA requests, request-paced peripheral DMA, correct UART enable/IDLE semantics, and MIT-licensed generic tests. All 12 focused DMA/SPI/UART tests pass on .NET 8 Release. |
 | 2026-09-07 | R1.2–R1.3, R3.1, R3.4 | Complete | Infrastructure commit `4037da909` preserves level-like requests across DMA setup, drains buffered UART RX, and adds UART TX DMA. Fifteen focused model tests pass. The custom Renode build passes official LEGO v2/v3 and Pybricks vector/progress gates plus original spike-nx and Brickwright protected boot gates. |
-| 2026-09-07 | R3.2–R3.3 | Partial | The unchanged Brickwright image now completes SPI2 flash DMA and reaches TLC5955 initialization without board-function hooks. Its real USART2 DMA path consumes the opaque service pack through the lawful H4 responder and reaches `physical_start_host`; immediately afterward the current image enters NuttX `_assert` before `bt_enable` returns, so that final completion claim remains open. |
+| 2026-09-07 | R3.2–R3.3 | Complete | The unchanged Brickwright image completes SPI2 flash DMA, reaches protected userspace, consumes the opaque service pack through the lawful H4 responder, returns from `bt_enable`, registers its transport, and reaches the daemon-ready boundary. The firmware-side `net_buf_pool` linker correction fixed the post-HCI protected-userspace fault. |
+| 2026-09-07 | Public release | Complete | Published the Infrastructure fork first, changed its consumer to anonymous HTTPS, removed the deploy-key workflow dependency, retained read-only/no-artifact CI, and prepared anonymous recursive-clone validation before publishing the top fork. |
