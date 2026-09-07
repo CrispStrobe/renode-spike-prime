@@ -238,17 +238,24 @@ class RenodeModelObserver:
 
     def dispatch(self, command: str, arguments: dict) -> None:
         if command == "power.set-battery-millivolts":
-            self._require("power").SetBatteryMillivolts(int(arguments["value"]))
+            value = self._bounded_int(arguments, "value", 0, 20000)
+            self._require("power").SetBatteryMillivolts(value)
         elif command == "power.set-charger-connected":
-            self._require("power").SetChargerConnected(bool(arguments["connected"]))
+            if not isinstance(arguments.get("connected"), bool):
+                raise ProtocolError("connected must be boolean")
+            self._require("power").SetChargerConnected(arguments["connected"])
         elif command == "imu.advance-sample":
             self._require("imu").AdvanceSample()
         elif command == "lpf2.attach":
-            self._require_port(arguments).Attach(str(arguments["device"]))
+            device = arguments.get("device")
+            if device not in {"none", "ultrasonic", "medium-motor", "motor"}:
+                raise ProtocolError("unsupported LPF2 device")
+            self._require_port(arguments).Attach(device)
         elif command == "lpf2.detach":
             self._require_port(arguments).Detach()
         elif command == "lpf2.advance-microseconds":
-            self._require_port(arguments).AdvanceEmulatedTime(int(arguments["microseconds"]))
+            elapsed = self._bounded_int(arguments, "microseconds", 0, 60_000_000)
+            self._require_port(arguments).AdvanceEmulatedTime(elapsed)
         else:
             raise ProtocolError("unknown command")
 
@@ -263,6 +270,13 @@ class RenodeModelObserver:
         if port not in "ABCDEF" or len(port) != 1:
             raise ProtocolError("invalid LPF2 port")
         return self._require("port" + port)
+
+    @staticmethod
+    def _bounded_int(arguments, name, minimum, maximum):
+        value = arguments.get(name)
+        if not isinstance(value, int) or isinstance(value, bool) or not minimum <= value <= maximum:
+            raise ProtocolError(f"{name} is outside the supported range")
+        return value
 
 
 class LiveStateSession:

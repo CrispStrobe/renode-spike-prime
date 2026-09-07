@@ -67,6 +67,10 @@ class LiveStateTests(unittest.TestCase):
         unknown = self.session.command(command("b", "host.shell"))
         self.assertFalse(unknown["accepted"])
         self.assertEqual(unknown["error"], "unknown command")
+        too_large = self.session.command(command("c", "lpf2.advance-microseconds",
+                                                  {"port": "A", "microseconds": 60_000_001}))
+        self.assertFalse(too_large["accepted"])
+        self.assertIn("supported range", too_large["error"])
 
     def test_disconnect_reconnect_preserves_sequence(self):
         self.session.connect(); self.assertEqual(self.session.sample(1)["seq"], 0)
