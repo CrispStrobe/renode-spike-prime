@@ -1,0 +1,34 @@
+// SPDX-License-Identifier: MIT
+// Verified SPIKE Essential Hub subset. This is deliberately not an alias of
+// the SPIKE Prime machine: Essential has two ports, I2C3 IMU, LP50xx LEDs and
+// a W25Q32-class SPI2 store on the cited Pybricks platform revision.
+
+using "../cpus/stm32f4.repl"
+
+// STM32F413 SRAM1 (256 KiB) + SRAM2 (64 KiB) are contiguous.
+sramUpper: Memory.MappedMemory @ sysbus 0x20040000
+    size: 0x10000
+
+imu: Sensors.LSM6DS3TRC @ i2c3 0x6a
+
+essentialStorageMemory: Memory.MappedMemory @ none
+    size: 0x400000
+
+essentialStorageMux: SPI.SPIMultiplexer @ spi2
+    init:
+        SetActiveLow 0
+
+essentialStorage: SPI.GenericSpiFlash @ essentialStorageMux 0
+    underlyingMemory: essentialStorageMemory
+    manufacturerId: 0xef
+    memoryType: 0x40
+    capacityCode: 0x16
+    writeStatusCanSetWriteEnable: false
+    sectorSizeKB: 64
+    secondaryStatusRegisterReadCommand: 0x35
+
+gpioPortB:
+    12 -> essentialStorageMux@0
+
+spi2:
+    DMATransmit -> dma1@4

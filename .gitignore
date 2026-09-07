@@ -26,3 +26,5 @@ packages
 perf.data
 perf.script
 .venv
+# User-supplied simulation images and their generated manifests.
+.local/

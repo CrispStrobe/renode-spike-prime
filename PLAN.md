@@ -77,6 +77,19 @@ input and is never uploaded as an artifact.
   deterministic and immediately complete, while exposing BUSY=0 and accurate
   WEL/NOR bit semantics. No device-specific model is required.
 
+## R6 — SPIKE Essential simulation
+
+- [x] R6.1 Add a distinct, source-cited Essential machine subset from pinned
+  Pybricks commit `101c6babb592148bda9a8fd912b7953c7d561c0a`. Model the
+  verified STM32F413 memory extension, I2C3 IMU, SPI2 W25Q32-class store and
+  RX/TX DMA wiring; do not borrow Prime-only devices.
+- [x] R6.2 Add ignored, hash-manifested local loaders and opt-in Robot gates
+  for user-supplied official and Pybricks Essential images. Limit the initial
+  claim to vector validity and bounded instruction progress.
+- [ ] R6.3 Model or bridge the Essential-specific FMPI2C1/LP50xx LED path.
+- [ ] R6.4 Add lawful external H4 controller response and two-port Powered Up
+  device integration gates without bundling controller firmware.
+
 ## Checkpoints
 
 | UTC date | Checkpoint | Result | Evidence |
@@ -91,3 +104,4 @@ input and is never uploaded as an artifact.
 | 2026-09-07 | R5.1 | Complete | Added a generic TLC5955 SPI/LAT model and three MIT-licensed unit tests covering edge-triggered latching, shift-register overflow, reset, counters, and defensive state snapshots. Public model CI includes the new fixture and remains source-only. |
 | 2026-09-07 | R5.2 | Complete | Added a generic LSM6DS3TR-C I2C/register model and five MIT-licensed tests covering identity, immediate reset, control and auto-increment behavior, little-endian accel/gyro/temperature injection, data-ready lifetime, and defensive register snapshots. Timing, FIFO, interrupts, sensor conversion, and physical noise remain explicitly outside this deterministic checkpoint. |
 | 2026-09-07 | R5.3 | Complete | Six configuration-level tests prove the generic SPI NOR model against the unchanged board driver's W25Q256JV opcodes and a high 32-bit address. Narrow generic fixes add the 4-byte fast-read dummy cycle, physical NOR bit clearing, WEL-gated chip erase, and an optional second-status opcode. Program/erase complete synchronously, so BUSY intentionally remains zero. |
+| 2026-09-07 | R6.1–R6.2 | Complete | Added the distinct `spike-essential.repl`, a source-cited hardware map, safe local-only SHA-256 manifests, loader self-tests, and opt-in image vector/progress gates. Platform parsing and device identity pass; a synthetic user-image fixture proves the executable gate while absent real images skip honestly. No image is fetched, tracked, logged, or uploaded. |

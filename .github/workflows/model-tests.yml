@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: private-model-tests-${{ github.ref }}
+  group: model-tests-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -43,6 +43,13 @@ jobs:
             echo "::error::Infrastructure checkout mismatch: expected $expected, got $actual"
             exit 1
           fi
+
+      - name: Run source-only SPIKE Essential gates
+        run: |
+          tests/platforms/spike-essential-loader-test.sh
+          grep -Fq 'imu: Sensors.LSM6DS3TRC @ i2c3 0x6a' platforms/boards/spike-essential.repl
+          grep -Fq 'essentialStorage: SPI.GenericSpiFlash' platforms/boards/spike-essential.repl
+          ! grep -Fq 'spike-prime.repl' platforms/boards/spike-essential.repl
 
       - name: Build native translator libraries
         run: ./build.sh --net --no-gui --external-lib-only
