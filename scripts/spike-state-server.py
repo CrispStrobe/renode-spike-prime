@@ -122,7 +122,7 @@ class _Server(object):
         self.limit, self.timeout = int(config.get("maxLineBytes", _MAX_LINE)), int(float(config.get("socketTimeoutSeconds", 5)) * 1000)
         if not IPAddress.IsLoopback(address):
             raise ValueError("the monitor service binds loopback only")
-        if port < 1 or port > 65535 or clients != 1 or self.limit < 256 or self.limit > _MAX_LINE or self.timeout < 50 or self.timeout > 60000:
+        if port < 0 or port > 65535 or clients != 1 or self.limit < 256 or self.limit > _MAX_LINE or self.timeout < 50 or self.timeout > 60000:
             raise ValueError("endpoint or resource limit is outside the supported range")
         self.config, self.running, self.generation = config, True, 0
         self.stream, self.seq, self.write_lock, self.state_lock = None, 0, Lock(), RLock()
@@ -202,7 +202,7 @@ def mc_spike_state_start(host, port, config_path):
     if _state_server is not None: raise RuntimeError("SPIKE state server is already running")
     with open(str(config_path).lstrip("@"), "r") as stream: config = json.load(stream)
     _state_server = _Server(str(host), int(port), config)
-    print("SPIKE state server listening on {0}:{1}".format(host, port))
+    print("SPIKE state server listening on {0}".format(_state_server.listener.LocalEndpoint))
 
 
 def mc_spike_state_stop():
