@@ -14,3 +14,12 @@ grep -Fq '15 -> display@0' "$prime"
 grep -Fq 'speaker: Sound.PCMAudioSink @ sysbus 0x40007408' "$prime"
 grep -Fq '10 -> speaker@0' "$prime"
 
+tlc=src/Infrastructure/src/Emulator/Peripherals/Peripherals/SPI/TLC5955.cs
+imu=src/Infrastructure/src/Emulator/Peripherals/Peripherals/Sensors/LSM6DS3TRC.cs
+audio=src/Infrastructure/src/Emulator/Peripherals/Peripherals/Sound/PCMAudioSink.cs
+power=src/Infrastructure/src/Emulator/Peripherals/Peripherals/Miscellaneous/BrickPowerController.cs
+grep -Fq 'public ushort[] Matrix' "$tlc"
+grep -Fq 'GrayscaleClockEdges' "$tlc"
+grep -Fq 'AdvanceTimeMicroseconds' "$imu"
+grep -Fq 'AdvanceSampleClock' "$audio"
+grep -Fq 'ChargeStates' "$power"

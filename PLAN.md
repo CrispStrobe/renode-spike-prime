@@ -21,9 +21,9 @@ fetched, committed, logged, cached, or uploaded by public CI.
    stall, truncation, checksum failure, queue exhaustion, and recovery.
 3. Complete deterministic brick fidelity gaps.
    Depends on: existing brick-device overlays.
-   Acceptance: Prime ADC button ladders, decoded 5x5 display state, LED phase,
-   charger transitions, DAC sample width/pacing, and IMU ODR/FIFO interrupts
-   have source-cited wiring, emulated-clock behavior, and bounded tests.
+   Acceptance: Prime ADC button ladders connect to the STM32 ADC; TLC5955 GSCLK
+   connects to TIM12; DAC sample pacing connects to TIM6/DMA. Each connection
+   must have source-cited wiring, emulated-clock behavior, and bounded tests.
 4. Add deterministic fault, resource and soak gates.
    Depends on: task 3, the unchanged-firmware scenario contract, and the
    completed neutral state contract.
