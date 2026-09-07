@@ -71,6 +71,12 @@ jobs:
             tools/spike-bluetooth-controller.py \
             tests/tools/bluetooth_controller_*_test.py
 
+      - name: Run neutral brick-state contract gates
+        run: |
+          python3 -m unittest discover -s tests/tools -p 'spike_state_bridge_test.py'
+          python3 -m json.tool contracts/brick-state/v1/schema.json >/dev/null
+          python3 -m py_compile tools/spike_state_bridge.py tools/spike-state-bridge.py
+
       - name: Build native translator libraries
         run: ./build.sh --net --no-gui --external-lib-only
 
