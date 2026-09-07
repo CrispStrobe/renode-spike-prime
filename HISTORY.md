@@ -23,5 +23,12 @@
   PB13 enable/reset and defensive four-module RGB snapshots in eight tests.
 - Steering documents separate pending gates, completed evidence, and normative
   contracts; CI rejects completion logs in the live roadmap and README repeats.
+- Essential LPF2 ports gained source-mapped logical attachment indicators for
+  PC1/PC0 and PA5/PA4. Attach settling, negotiation timeout, reconnect, motor
+  integration, and sensor reporting advance only through explicit emulated
+  microseconds. Topology generations and bounded transmit/parser state make
+  disconnect and malformed-input recovery observable and deterministic. Large
+  time jumps cap emitted reports and expose the coalesced count; zero cadences
+  are rejected.
 
 Commit history and CI retain detailed evidence.

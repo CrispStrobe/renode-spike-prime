@@ -5,11 +5,11 @@ mach create
 machine LoadPlatformDescription @platforms/boards/spike-essential.repl
 
 emulation CreateUARTHub "essentialPortAHub"
-emulation CreateLegoLpf2Port "essentialPortA" "medium-motor"
+emulation CreateLegoLpf2Port "essentialPortA" "medium-motor" "PC1" "PC0"
 connector Connect uart5 essentialPortAHub
 connector Connect essentialPortA essentialPortAHub
 
 emulation CreateUARTHub "essentialPortBHub"
-emulation CreateLegoLpf2Port "essentialPortB" "ultrasonic"
+emulation CreateLegoLpf2Port "essentialPortB" "ultrasonic" "PA5" "PA4"
 connector Connect usart3 essentialPortBHub
 connector Connect essentialPortB essentialPortBHub

@@ -14,7 +14,8 @@ assembled by the external firmware harness. This repository provides:
 - hash-manifested local image loaders that never fetch or publish firmware;
 - a transport-neutral dual-mode Bluetooth controller model with H4/HCI,
   ATT/GATT, L2CAP, SDP, and RFCOMM test coverage;
-- deterministic LPF2 motor and ultrasonic endpoints;
+- deterministic LPF2 motor and ultrasonic endpoints with source-mapped logical
+  attachment state, emulated-time negotiation/reporting and bounded queues;
 - observable display, LED, IMU, power, button, and bounded PCM state.
 
 It does not model RF, electrical behavior, complete motor or sensor physics, or
