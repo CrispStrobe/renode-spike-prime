@@ -99,7 +99,7 @@ input and is never uploaded as an artifact.
   dual-mode HCI initialization, advertising, connection, and lifecycle events.
 - [x] R7.3 Add minimal extensible BLE ATT/GATT and Classic L2CAP/RFCOMM peers,
   with byte-exact tests and no RF-fidelity claim.
-- [ ] R7.4 Provide TCP and in-memory adapters and source-only CI gates suitable
+- [x] R7.4 Provide TCP and in-memory adapters and source-only CI gates suitable
   for Renode's raw UART terminal.
 
 ## Checkpoints
@@ -120,3 +120,4 @@ input and is never uploaded as an artifact.
 | 2026-09-07 | R7.1 | Complete | Inventoried the earlier firmware-local TCP/H4 responder and defined a reusable MIT protocol core with transport-independent input/output, validated configuration, and tested L2CAP channel routing. No firmware or vendor material is present. |
 | 2026-09-07 | R7.2 | Complete | Added fragmented/coalesced H4 framing, deterministic dual-mode initialization commands, explicit opaque-vendor acknowledgement, advertising, LE and Classic connection lifecycle events, ACL reassembly/routing, flow-control completion, and byte-exact tests. |
 | 2026-09-07 | R7.3 | Complete | Added replaceable fixed-channel peers: an ATT/GATT attribute database supporting MTU exchange, primary-service and type discovery, reads, writes, and ATT errors; plus an RFCOMM DLCI session supporting SABM, UA, DISC, UIH data, and standards-derived FCS generation. |
+| 2026-09-07 | R7.4 | Complete | Added in-memory and raw TCP adapters, a command-line process compatible with Renode's raw UART terminal, fragmented loopback integration coverage, Python compile gates, and source-only CI. The workflow remains read-only and uploads no artifacts. |

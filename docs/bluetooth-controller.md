@@ -25,3 +25,14 @@ stream.
 The implementation is MIT-licensed and contains no LEGO, Pybricks, or TI
 firmware. Its deterministic behavior is a software test model, not evidence of
 RF, timing, electrical, or physical-controller fidelity.
+
+For Renode's raw `ServerSocketTerminal`, run:
+
+```sh
+python3 tools/spike-bluetooth-controller.py \
+  --acknowledge-vendor-commands 127.0.0.1 3456
+```
+
+The opt-in switch is needed only when a local, separately licensed bootstrap
+stream must receive opaque command-complete events. Ordinary HCI commands,
+ATT/GATT, and RFCOMM do not require it.

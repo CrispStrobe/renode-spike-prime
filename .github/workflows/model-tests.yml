@@ -51,6 +51,16 @@ jobs:
           grep -Fq 'essentialStorage: SPI.GenericSpiFlash' platforms/boards/spike-essential.repl
           ! grep -Fq 'spike-prime.repl' platforms/boards/spike-essential.repl
 
+      - name: Run source-only Bluetooth controller gates
+        run: |
+          for test in tests/tools/bluetooth_controller_*_test.py; do
+            python3 "$test"
+          done
+          python3 -m py_compile \
+            tools/bluetooth_controller/*.py \
+            tools/spike-bluetooth-controller.py \
+            tests/tools/bluetooth_controller_*_test.py
+
       - name: Build native translator libraries
         run: ./build.sh --net --no-gui --external-lib-only
 
