@@ -34,8 +34,10 @@ fetched, committed, logged, cached, or uploaded by public CI.
    process-memory ceiling around full-machine runs. Keep fixed emulated-time
    budgets and reproducible seeds. Synthetic protocol and peripheral soak
    coverage is complete and recorded in `HISTORY.md`.
-5. Rebase generic Renode changes and split upstream submissions.
-   Depends on: stable focused tests for each generic change.
-   Acceptance: current upstream builds and DMA, SPI, UART and device changes are
-   independently reviewable; each patch has a focused regression test and no
-   LEGO firmware, TI binary, or Brickwright-specific interface dependency.
+5. Finish generic Renode replay validation.
+   Depends on: the replay branches and manifest in
+   `docs/upstream-review.md`, plus a fully initialized current Renode checkout.
+   Acceptance: port the remaining UART, SPI-DMA, and STM32F7-I2C changes; build
+   each independent topic on current upstream; run its focused fixture and the
+   complete peripheral suite. Keep product history unchanged and do not open
+   upstream pull requests automatically.
