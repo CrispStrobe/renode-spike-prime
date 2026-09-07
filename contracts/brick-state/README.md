@@ -28,3 +28,11 @@ arrays, and replay memory.
 Python boundary in `tools/spike_state_bridge.py` is the Renode-side reference
 codec and command gate. It exposes plain data only; emulator objects stay
 behind that boundary.
+
+`RenodeModelObserver` reads only public properties already exposed by the
+power, IMU, display, audio, storage, Bluetooth, and LPF2 models. Its explicit
+path map makes absent models a reported limitation. `LiveStateSession` owns
+connection state, monotonic emulated time, sequence continuity, bounded
+backpressure, replay rejection, and the small command allowlist. An embedding
+monitor or socket must frame input with `parse_line()` and output with
+`canonical_bytes()`; arbitrary monitor or host commands are never dispatched.
