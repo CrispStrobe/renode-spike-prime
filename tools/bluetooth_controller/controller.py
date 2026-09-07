@@ -54,6 +54,16 @@ class BluetoothController:
         self.peer_address = bytes(6)
         self._acl_fragments = bytearray()
 
+    @property
+    def pending_h4_bytes(self) -> int:
+        """Bytes retained while waiting for a complete host packet."""
+        return len(self._input)
+
+    @property
+    def pending_acl_bytes(self) -> int:
+        """Bytes retained while reassembling one L2CAP packet."""
+        return len(self._acl_fragments)
+
     def feed(self, data: bytes) -> None:
         """Incrementally consume any number of H4 commands or ACL frames."""
         self._input.extend(data)

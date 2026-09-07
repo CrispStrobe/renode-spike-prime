@@ -29,10 +29,11 @@ fetched, committed, logged, cached, or uploaded by public CI.
 4. Add deterministic fault, resource and soak gates.
    Depends on: task 3, the unchanged-firmware scenario contract, and the
    completed neutral state contract.
-   Acceptance: reset, disconnect, corrupt frames, exhausted buffers, stalled
-   motors, low battery, storage failures and repeated boot/connect cycles pass
-   with fixed emulated-time budgets, bounded queues, stable memory ceilings,
-   reproducible seeds, and no wall-clock-dependent assertions.
+   Acceptance: add model-supported storage fault injection; run repeated boot
+   cycles for each locally available hash-verified image; enforce a measured
+   process-memory ceiling around full-machine runs. Keep fixed emulated-time
+   budgets and reproducible seeds. Synthetic protocol and peripheral soak
+   coverage is complete and recorded in `HISTORY.md`.
 5. Rebase generic Renode changes and split upstream submissions.
    Depends on: stable focused tests for each generic change.
    Acceptance: current upstream builds and DMA, SPI, UART and device changes are
