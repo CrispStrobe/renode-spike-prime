@@ -44,6 +44,27 @@ are documented in [the brick-device guide](docs/platforms/spike-brick-devices.md
 
 ## Upstream Renode
 
+## Brickwright SPIKE simulation fork
+
+This fork adds source-only LEGO SPIKE platform models. The SPIKE Essential
+machine now includes its STM32F413 FMPI2C1 bus and an MIT-licensed LP50xx
+register/color model at address `0x28`, including active-high PB13 enable,
+DMA1 streams 0/1, and defensive rendered RGB-module snapshots. It does not
+model analogue LED current, emitted light, or PWM phase, and it does not bundle
+LEGO firmware or TI controller binaries. See
+[`docs/platforms/spike-essential.md`](docs/platforms/spike-essential.md) for the
+evidence boundary and local image gates.
+
+After initializing submodules and building Renode's native translator
+libraries, run the focused source-only checks with:
+
+```sh
+tests/platforms/spike-essential-loader-test.sh
+python3 tests/run_tests.py tests/platforms/SPIKE_Essential.robot
+dotnet test src/Infrastructure/src/Emulator/Peripherals/Test/PeripheralsTests/PeripheralsTests_NET.csproj \
+  -c Release --filter FullyQualifiedName~LP50XXTests
+```
+
 Copyright (c) 2010-2026 [Antmicro](https://www.antmicro.com)
 
 [![View on Antmicro Open Source Portal](https://img.shields.io/badge/View%20on-Antmicro%20Open%20Source%20Portal-332d37?style=flat-square)](https://opensource.antmicro.com/projects/renode)

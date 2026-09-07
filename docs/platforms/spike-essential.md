@@ -26,7 +26,7 @@ stall state. Call `essentialPortA StartNegotiation` or
 `essentialPortB StartNegotiation` only after the guest enables that UART. The
 model does not reproduce analog attachment detection, real-time physics,
 protocol jitter or the complete LEGO device catalog.
-| LEDs | LP50xx on FMPI2C1, enable PB13 | Not modeled because this Renode baseline lacks an evidenced FMPI2C1/LP50xx pair. |
+| LEDs | LP50xx at `0x28` on FMPI2C1; SDA PB14, SCL PB15, enable PB13; DMA1 streams 0 RX and 1 TX | Deterministic LP50xx register/color model behind the STM32 newer-layout I2C controller at `0x40006000`, IRQs 95/96, with enable/reset and DMA request wiring. Analogue current, PWM phase and emitted-light physics are not modeled. |
 | Button/power/charger | Center button PB2 active-low; power hold PB1; MP2639A mode PA10 and CHG PC6 | GPIOs exist; board-level behavior is not modeled. |
 
 `platforms/boards/spike-essential.repl` contains only the verified executable

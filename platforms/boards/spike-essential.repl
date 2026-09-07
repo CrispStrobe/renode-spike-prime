@@ -11,6 +11,19 @@ sramUpper: Memory.MappedMemory @ sysbus 0x20040000
 
 imu: Sensors.LSM6DS3TRC @ i2c3 0x6a
 
+// STM32F413 FMPI2C1 uses the newer STM32 I2C register layout represented by
+// the generic STM32F7_I2C model. The instance is separate from I2C1.
+fmpi2c1: I2C.STM32F7_I2C @ sysbus 0x40006000
+    EventInterrupt -> nvic@95
+    ErrorInterrupt -> nvic@96
+    DMAReceive -> dma1@0
+    DMATransmit -> dma1@1
+
+essentialLeds: I2C.LP50XX @ fmpi2c1 0x28
+
+gpioPortB:
+    13 -> essentialLeds@0
+
 essentialStorageMemory: Memory.MappedMemory @ none
     size: 0x400000
 

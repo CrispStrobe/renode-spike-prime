@@ -51,6 +51,8 @@ jobs:
           grep -Fq 'essentialStorage: SPI.GenericSpiFlash' platforms/boards/spike-essential.repl
           grep -Fq 'connector Connect uart5 essentialPortAHub' scripts/single-node/spike-essential.resc
           grep -Fq 'connector Connect usart3 essentialPortBHub' scripts/single-node/spike-essential.resc
+          grep -Fq 'fmpi2c1: I2C.STM32F7_I2C @ sysbus 0x40006000' platforms/boards/spike-essential.repl
+          grep -Fq 'essentialLeds: I2C.LP50XX @ fmpi2c1 0x28' platforms/boards/spike-essential.repl
           ! grep -Fq 'spike-prime.repl' platforms/boards/spike-essential.repl
           tests/platforms/spike-brick-devices-source-test.sh
 
@@ -75,5 +77,5 @@ jobs:
           dotnet restore "$project" "${common[@]}"
           dotnet test "$project" --configuration Release --no-restore \
             "${common[@]}" \
-            --filter 'FullyQualifiedName~STM32DMATests|FullyQualifiedName~STM32SPITests|FullyQualifiedName~STM32_UARTTests|FullyQualifiedName~TLC5955Tests|FullyQualifiedName~LSM6DS3TRCTests|FullyQualifiedName~GenericSpiFlashW25Q256Tests|FullyQualifiedName~LegoLpf2PortTests|FullyQualifiedName~BrickPowerControllerTests|FullyQualifiedName~PCMAudioSinkTests' \
+            --filter 'FullyQualifiedName~STM32DMATests|FullyQualifiedName~STM32SPITests|FullyQualifiedName~STM32_UARTTests|FullyQualifiedName~STM32F7I2CTests|FullyQualifiedName~TLC5955Tests|FullyQualifiedName~LSM6DS3TRCTests|FullyQualifiedName~LP50XXTests|FullyQualifiedName~GenericSpiFlashW25Q256Tests|FullyQualifiedName~LegoLpf2PortTests|FullyQualifiedName~BrickPowerControllerTests|FullyQualifiedName~PCMAudioSinkTests' \
             --logger 'console;verbosity=normal'

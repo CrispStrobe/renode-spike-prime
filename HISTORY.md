@@ -18,5 +18,8 @@
 - Brick-device checkpoint: bounded power-policy and PCM observers plus explicit
   IMU sampling, FIFO, watermark and interrupt behavior passed 12 focused tests.
   Source-only overlays expose verified Prime and Essential connections.
+- Essential LED checkpoint: an LP50xx register/color model and STM32 FMPI2C
+  DMA requests cover the firmware-shaped initialization sequence, active-high
+  PB13 enable/reset and defensive four-module RGB snapshots in eight tests.
 
 Detailed evidence remains in Git history and CI results for each checkpoint.
