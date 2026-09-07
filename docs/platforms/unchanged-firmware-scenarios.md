@@ -40,6 +40,14 @@ storage, or Bluetooth model is not evidence that firmware exercised it. Those
 milestones remain pending until observable counters or an equivalent public
 contract exists.
 
+The Prime machine currently has display, IMU, storage, power, speaker, and H4
+building blocks but no source-cited LPF2 port wiring overlay. Prime port traffic
+is therefore not claimed. The source contract passes. A standalone Robot dry
+run parsed the suite and then reported the expected absence of Renode's injected
+keywords; it is not a passing Renode test. Runtime dictionary expansion,
+monitor numeric conversion, two-ELF symbol lookup, and USART2/H4 execution
+remain a live-image gate recorded in `PLAN.md`.
+
 Public CI tests only the catalog, loader, skip behavior, and tamper rejection
 with synthetic bytes. It never obtains or uploads firmware, manifests, hashes,
 test logs derived from private images, or TI controller data.

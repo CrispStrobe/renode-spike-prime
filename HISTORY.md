@@ -9,9 +9,9 @@
   bounded official/Pybricks execution gates were added.
 - A versioned unchanged-firmware matrix now covers seven Prime and Essential
   targets. It verifies every local artifact before machine creation, skips
-  absent inputs explicitly, and runs target-specific vector, progress, symbol,
-  device-initialization, and H4 boundaries where the available image and model
-  expose them. Public CI exercises only synthetic loader contracts.
+  absent inputs explicitly, and declares target-specific vector, progress,
+  symbol, device-initialization, and H4 boundaries. Public CI exercises only
+  synthetic loader contracts; live scenario validation remains pending.
 - A bounded transport-neutral Bluetooth controller now covers incremental H4,
   dual-mode HCI, ACL/L2CAP, ATT/GATT notifications, Classic signaling, SDP,
   RFCOMM and raw TCP/in-memory adapters in source-only tests.
