@@ -16,6 +16,7 @@ assembled by the external firmware harness. This repository provides:
   ATT/GATT, L2CAP, SDP, and RFCOMM test coverage;
 - deterministic LPF2 motor and ultrasonic endpoints;
 - observable display, LED, IMU, power, button, and bounded PCM state.
+- a versioned, bounded NDJSON snapshot/control boundary for Brickwright.
 
 It does not model RF, electrical behavior, complete motor or sensor physics, or
 the full Powered Up device catalog. Pending work and acceptance gates are in
@@ -24,6 +25,8 @@ the full Powered Up device catalog. Pending work and acceptance gates are in
 [Essential platform](docs/platforms/spike-essential.md),
 [brick-device](docs/platforms/spike-brick-devices.md), and
 [Bluetooth controller](docs/bluetooth-controller.md) guides.
+The wire contract and canonical fixtures are in
+[contracts/brick-state](contracts/brick-state/README.md).
 
 Run the source-only LEGO checks with:
 

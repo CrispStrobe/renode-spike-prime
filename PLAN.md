@@ -27,19 +27,13 @@ fetched, committed, logged, cached, or uploaded by public CI.
    Brickwright images cross versioned target-specific milestones and exercise
    port, display, storage, and Bluetooth traffic without patches. Missing local
    images produce explicit skips; hash mismatches fail before execution.
-5. Export one versioned, transport-neutral brick snapshot/control contract.
-   Depends on: stable observable states from tasks 1 and 3.
-   Acceptance: Brickwright consumes the same port, motor, sensor, display,
-   button, battery and IMU state used by Renode tests, with generation IDs and
-   bounded malformed-input handling; schema compatibility and round-trip tests
-   cover every field and reject unsupported versions.
-6. Add deterministic fault, resource and soak gates.
-   Depends on: tasks 4 and 5.
+5. Add deterministic fault, resource and soak gates.
+   Depends on: task 4 and the completed neutral state contract.
    Acceptance: reset, disconnect, corrupt frames, exhausted buffers, stalled
    motors, low battery, storage failures and repeated boot/connect cycles pass
    with fixed emulated-time budgets, bounded queues, stable memory ceilings,
    reproducible seeds, and no wall-clock-dependent assertions.
-7. Rebase generic Renode changes and split upstream submissions.
+6. Rebase generic Renode changes and split upstream submissions.
    Depends on: stable focused tests for each generic change.
    Acceptance: current upstream builds and DMA, SPI, UART and device changes are
    independently reviewable; each patch has a focused regression test and no

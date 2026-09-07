@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://brickwright.dev/contracts/brick-state/v1/schema.json",
+  "title": "Brickwright neutral brick-state NDJSON",
+  "oneOf": [
+    {"$ref": "#/$defs/snapshot"},
+    {"$ref": "#/$defs/command"},
+    {"$ref": "#/$defs/result"},
+    {"$ref": "#/$defs/gap"}
+  ],
+  "$defs": {
+    "header": {
+      "type": "object",
+      "required": ["schemaVersion", "type"],
+      "properties": {
+        "schemaVersion": {"const": 1},
+        "type": {"enum": ["snapshot", "command", "result", "gap"]}
+      }
+    },
+    "vector3": {"type": "object", "required": ["x", "y", "z"], "properties": {"x": {"type": "number"}, "y": {"type": "number"}, "z": {"type": "number"}}, "additionalProperties": true},
+    "target": {
+      "type": "object", "required": ["board", "firmware", "transport", "imageSha256", "capabilities", "limitations"],
+      "properties": {
+        "board": {"enum": ["spike-prime", "spike-essential"]},
+        "firmware": {"enum": ["lego-prime-v2", "lego-prime-v3", "pybricks-prime", "spike-nx", "brickwright-nuttx", "lego-essential", "pybricks-essential"]},
+        "transport": {"type": "string", "minLength": 1, "maxLength": 32},
+        "imageSha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+        "capabilities": {"type": "array", "maxItems": 128, "items": {"type": "string", "maxLength": 64}, "uniqueItems": true},
+        "limitations": {"type": "array", "maxItems": 128, "items": {"type": "string", "maxLength": 256}}
+      }, "additionalProperties": true
+    },
+    "snapshot": {
+      "allOf": [{"$ref": "#/$defs/header"}, {"type": "object",
+        "required": ["seq", "clockNs", "target", "lifecycle", "ports", "motors", "sensors", "display", "buttons", "battery", "power", "imu", "audio", "storage", "bluetooth"],
+        "properties": {
+          "type": {"const": "snapshot"}, "seq": {"type": "integer", "minimum": 0}, "clockNs": {"type": "integer", "minimum": 0},
+          "target": {"$ref": "#/$defs/target"},
+          "lifecycle": {"type": "object", "required": ["phase", "generation"], "properties": {"phase": {"enum": ["off", "booting", "ready", "stopped", "fault"]}, "generation": {"type": "integer", "minimum": 0}}, "additionalProperties": true},
+          "ports": {"type": "array", "maxItems": 16, "items": {"type": "object", "required": ["id", "attached", "kind"], "properties": {"id": {"type": "string", "maxLength": 8}, "attached": {"type": "boolean"}, "kind": {"type": ["string", "null"]}}, "additionalProperties": true}},
+          "motors": {"type": "array", "maxItems": 16, "items": {"type": "object", "required": ["port", "speed", "position"], "properties": {"port": {"type": "string"}, "speed": {"type": "number"}, "position": {"type": "number"}}, "additionalProperties": true}},
+          "sensors": {"type": "array", "maxItems": 16, "items": {"type": "object", "required": ["port", "kind", "values"], "properties": {"port": {"type": "string"}, "kind": {"type": "string"}, "values": {"type": "object"}}, "additionalProperties": true}},
+          "display": {"type": "object", "required": ["width", "height", "pixels"], "properties": {"width": {"type": "integer", "minimum": 0, "maximum": 64}, "height": {"type": "integer", "minimum": 0, "maximum": 64}, "pixels": {"type": "array", "maxItems": 4096, "items": {"type": "number"}}}, "additionalProperties": true},
+          "buttons": {"type": "object", "additionalProperties": {"type": "boolean"}},
+          "battery": {"type": "object", "required": ["percent"], "properties": {"percent": {"type": "number", "minimum": 0, "maximum": 100}}, "additionalProperties": true},
+          "power": {"type": "object", "required": ["state"], "properties": {"state": {"type": "string"}}, "additionalProperties": true},
+          "imu": {"type": "object", "required": ["acceleration", "angularVelocity"], "properties": {"acceleration": {"$ref": "#/$defs/vector3"}, "angularVelocity": {"$ref": "#/$defs/vector3"}}, "additionalProperties": true},
+          "audio": {"type": "object", "required": ["active"], "properties": {"active": {"type": "boolean"}}, "additionalProperties": true},
+          "storage": {"type": "object", "required": ["ready"], "properties": {"ready": {"type": "boolean"}}, "additionalProperties": true},
+          "bluetooth": {"type": "object", "required": ["state", "transport"], "properties": {"state": {"type": "string"}, "transport": {"type": "string"}}, "additionalProperties": true}
+        }, "additionalProperties": true}]
+    },
+    "command": {"allOf": [{"$ref": "#/$defs/header"}, {"type": "object", "required": ["requestId", "command", "arguments"], "properties": {"type": {"const": "command"}, "requestId": {"type": "string", "minLength": 1, "maxLength": 128}, "expectedSeq": {"type": "integer", "minimum": 0}, "command": {"type": "string", "minLength": 1, "maxLength": 64}, "arguments": {"type": "object"}}, "additionalProperties": true}]},
+    "result": {"allOf": [{"$ref": "#/$defs/header"}, {"type": "object", "required": ["requestId", "accepted"], "properties": {"type": {"const": "result"}, "requestId": {"type": "string"}, "accepted": {"type": "boolean"}, "seq": {"type": "integer", "minimum": 0}, "error": {"type": "string"}}, "additionalProperties": true}]},
+    "gap": {"allOf": [{"$ref": "#/$defs/header"}, {"type": "object", "required": ["firstDroppedSeq", "nextSeq", "dropped"], "properties": {"type": {"const": "gap"}, "firstDroppedSeq": {"type": "integer", "minimum": 0}, "nextSeq": {"type": "integer", "minimum": 1}, "dropped": {"type": "integer", "minimum": 1}}, "additionalProperties": true}]}
+  }
+}
