@@ -59,3 +59,12 @@
   reports have explicit ceilings; large advances use emulated microseconds.
 
 Commit history and CI retain detailed evidence.
+
+- Audited the product forks against Renode `ab721d88` and Infrastructure
+  `066a7f13c`. Current upstream is too far ahead for a reviewable product-branch
+  rebase, so generic work was replayed without rewriting product history.
+- Published current-upstream review branches for the clean DMA completion patch
+  and separate TLC5955, LSM6DS3TR-C, generic NOR/W25Q256, and LP50xx commits.
+  The LP50xx model was separated from its STM32F7 I2C DMA change. Replay diffs
+  pass whitespace validation; native validation remains an explicit roadmap
+  gate because the standalone checkout found an incompatible legacy dependency.
