@@ -57,6 +57,18 @@ class AttGattServer:
             return [self._primary_services(request)]
         return [self._error(opcode, 0, 0x06)]
 
+    def notification(self, handle: int, value: bytes | None = None) -> bytes:
+        """Create an ATT Handle Value Notification for simulated telemetry."""
+        attribute = self._find(handle)
+        if attribute is None:
+            raise ValueError("notification handle is not present")
+        payload = attribute.value if value is None else value
+        return b"\x1b" + handle.to_bytes(2, "little") + payload[: self.negotiated_mtu - 3]
+
+    def indication(self, handle: int, value: bytes | None = None) -> bytes:
+        """Create an indication; the host confirms it with opcode 0x1e."""
+        return b"\x1d" + self.notification(handle, value)[1:]
+
     def _find(self, handle: int) -> Attribute | None:
         return next((attribute for attribute in self.attributes if attribute.handle == handle), None)
 

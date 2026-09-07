@@ -17,6 +17,16 @@ The initial contract deliberately separates these layers:
 4. Fixed or dynamically allocated L2CAP channels own ATT/GATT or RFCOMM
    protocol state.
 
+The Classic signaling endpoint accepts basic-mode SDP PSM 1 and RFCOMM PSM 3
+connections, configures dynamic CIDs, and removes them on disconnection. The
+generic SDP responder carries an application-supplied encoded attribute list;
+it does not bake LEGO UUIDs into the controller. ATT telemetry helpers create
+bounded Handle Value Notifications and Indications for an embedding simulator.
+
+All byte-stream and ACL reassembly buffers have configurable hard limits.
+Malformed H4 type bytes are consumed before an error is reported, so a caller
+may log the fault and continue with the next valid frame.
+
 Vendor-specific commands are rejected unless the caller explicitly enables an
 opaque acknowledgement policy. When enabled, parameters remain uninterpreted
 and unretained; this only models completion of a separately supplied bootstrap

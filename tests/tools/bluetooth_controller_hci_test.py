@@ -68,8 +68,35 @@ class HciTests(unittest.TestCase):
     def test_rejects_bad_h4_and_inactive_acl(self):
         with self.assertRaisesRegex(ValueError, "H4"):
             self.controller.feed(b"\x03")
+        self.controller.feed(command(0x0C03))
+        self.assertEqual(self.frames[-1], bytes.fromhex("040e0401030c00"))
         with self.assertRaisesRegex(ValueError, "inactive"):
             BluetoothController(list().append).feed(bytes.fromhex("0201200000"))
+
+    def test_acl_completion_is_reported_per_host_fragment(self):
+        self.controller.feed(command(0x200A, b"\x01"))
+        self.controller.connect_le(bytes(6))
+        self.controller.l2cap.bind(L2capChannel(4, Echo()))
+        packet = L2capRouter.frame(4, b"fragment")
+        first, second = packet[:6], packet[6:]
+        self.controller.feed(b"\x02\x01\x20" + len(first).to_bytes(2, "little") + first)
+        self.assertEqual(self.frames[-1], bytes.fromhex("0413050101000100"))
+        self.controller.feed(b"\x02\x01\x10" + len(second).to_bytes(2, "little") + second)
+        self.assertEqual(self.frames[-2][0], 2)
+        self.assertEqual(self.frames[-1], bytes.fromhex("0413050101000100"))
+
+    def test_resource_limits_clear_partial_state(self):
+        limited = BluetoothController(list().append, ControllerConfig(h4_input_limit=8))
+        with self.assertRaisesRegex(ValueError, "resource limit"):
+            limited.feed(command(0x0C13, b"too large"))
+        limited.feed(command(0x0C03))
+        acl_limited = BluetoothController(list().append, ControllerConfig(l2cap_reassembly_limit=5))
+        acl_limited.advertising = True
+        acl_limited.connect_le(bytes(6))
+        l2cap = L2capRouter.frame(4, b"ab")
+        with self.assertRaisesRegex(ValueError, "reassembly"):
+            acl_limited.feed(b"\x02\x01\x20" + len(l2cap).to_bytes(2, "little") + l2cap)
+        self.assertEqual(acl_limited._acl_fragments, b"")
 
 
 if __name__ == "__main__":

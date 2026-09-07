@@ -21,12 +21,16 @@ class ControllerConfig:
     acknowledge_vendor_commands: bool = False
     acl_payload_size: int = 1021
     acl_packets: int = 8
+    h4_input_limit: int = 65540
+    l2cap_reassembly_limit: int = 65539
 
     def __post_init__(self) -> None:
         if len(self.address) != 6:
             raise ValueError("Bluetooth address must contain exactly six bytes")
         if not 1 <= self.acl_payload_size <= 0xFFFF or not 1 <= self.acl_packets <= 0xFFFF:
             raise ValueError("ACL capacity must be nonzero and fit the HCI response")
+        if self.h4_input_limit < 5 or self.l2cap_reassembly_limit < 4:
+            raise ValueError("stream limits are too small for protocol headers")
 
 
 class BluetoothController:
@@ -53,6 +57,9 @@ class BluetoothController:
     def feed(self, data: bytes) -> None:
         """Incrementally consume any number of H4 commands or ACL frames."""
         self._input.extend(data)
+        if len(self._input) > self.config.h4_input_limit:
+            self._input.clear()
+            raise ValueError("H4 input exceeds configured resource limit")
         while self._input:
             packet_type = self._input[0]
             if packet_type == H4_COMMAND:
@@ -64,6 +71,7 @@ class BluetoothController:
                     return
                 frame_length = 5 + int.from_bytes(self._input[3:5], "little")
             else:
+                del self._input[0]
                 raise ValueError(f"unsupported host H4 packet type 0x{packet_type:02x}")
             if len(self._input) < frame_length:
                 return
@@ -151,6 +159,9 @@ class BluetoothController:
             self._acl_fragments.extend(payload)
         else:
             raise ValueError("reserved ACL packet-boundary flag")
+        if len(self._acl_fragments) > self.config.l2cap_reassembly_limit:
+            self._acl_fragments.clear()
+            raise ValueError("L2CAP reassembly exceeds configured resource limit")
         if len(self._acl_fragments) >= 4:
             expected = int.from_bytes(self._acl_fragments[:2], "little") + 4
             if len(self._acl_fragments) > expected:
