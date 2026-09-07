@@ -1,4 +1,4 @@
-# Completed simulation checkpoints
+# Completed simulation work
 
 - Repository provenance and source-only CI were established on pinned Renode
   1.16.1 and public MIT Infrastructure revisions.
@@ -10,16 +10,18 @@
 - A bounded transport-neutral Bluetooth controller now covers incremental H4,
   dual-mode HCI, ACL/L2CAP, ATT/GATT notifications, Classic signaling, SDP,
   RFCOMM and raw TCP/in-memory adapters in source-only tests.
-- LPF2 checkpoint: the transport-neutral `ILpf2Device` contract, byte-oriented
+- The transport-neutral `ILpf2Device` contract, byte-oriented
   UART adapter, type-62 ultrasonic sensor and type-48 medium motor cover exact
   discovery frames, checksums, mode/output traffic, encoder movement, load,
   stall, malformed input and parser recovery. The Essential wrapper wires
   UART5 to the motor and USART3 to the sensor through UART hubs.
-- Brick-device checkpoint: bounded power-policy and PCM observers plus explicit
+- Bounded power-policy and PCM observers plus explicit
   IMU sampling, FIFO, watermark and interrupt behavior passed 12 focused tests.
   Source-only overlays expose verified Prime and Essential connections.
-- Essential LED checkpoint: an LP50xx register/color model and STM32 FMPI2C
+- An LP50xx register/color model and STM32 FMPI2C
   DMA requests cover the firmware-shaped initialization sequence, active-high
   PB13 enable/reset and defensive four-module RGB snapshots in eight tests.
+- Steering documents separate pending gates, completed evidence, and normative
+  contracts; CI rejects completion logs in the live roadmap and README repeats.
 
-Detailed evidence remains in Git history and CI results for each checkpoint.
+Commit history and CI retain detailed evidence.

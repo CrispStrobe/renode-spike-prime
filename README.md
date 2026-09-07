@@ -1,69 +1,43 @@
-# Renode — Brickwright LEGO hub simulation fork
+# Renode: Brickwright LEGO hub simulation fork
 
-> **Project status:** active simulation work. This fork runs unmodified LEGO
-> SPIKE, Pybricks, spike-nx, and Brickwright firmware as local, user-supplied
-> images. Passing a simulation gate is not evidence that an image is safe to
-> flash to physical hardware.
+> **Status:** simulation work in progress. Do not use simulation results as
+> evidence that any image is safe to flash to physical hardware.
 
 This public MIT-licensed fork extends Renode with deterministic LEGO hub
-models while retaining the upstream Renode history. The current feature branch
-provides:
+models while retaining upstream Renode history. Its Essential machine can
+execute unmodified, locally supplied firmware. Prime integration is still
+assembled by the external firmware harness. This repository provides:
 
 - STM32F4 DMA, SPI, and UART behavior required by SPIKE firmware;
-- separate SPIKE Prime and SPIKE Essential platform descriptions;
+- a SPIKE Essential machine and optional Prime/Essential device overlays;
 - TLC5955 display, LSM6DS3TR-C IMU, and W25Q-series flash models;
 - hash-manifested local image loaders that never fetch or publish firmware;
 - a transport-neutral dual-mode Bluetooth controller model with H4/HCI,
   ATT/GATT, L2CAP, SDP, and RFCOMM test coverage;
-- LPF2 motor/sensor endpoints, bounded PCM capture, deterministic power policy,
-  display snapshots, and explicit IMU sampling/FIFO/interrupt state.
+- deterministic LPF2 motor and ultrasonic endpoints;
+- observable display, LED, IMU, power, button, and bounded PCM state.
 
-The simulation is not yet a complete electrical or physical model. Prime ADC
-buttons, optical display timing, analog audio, charger electronics, IMU physics
-and the complete Powered Up catalog are tracked in [PLAN.md](PLAN.md). Start with the
-[SPIKE Essential platform guide](docs/platforms/spike-essential.md) and the
-[Bluetooth controller guide](docs/bluetooth-controller.md).
+It does not model RF, electrical behavior, complete motor or sensor physics, or
+the full Powered Up device catalog. Pending work and acceptance gates are in
+[PLAN.md](PLAN.md). Completed evidence is summarized in
+[HISTORY.md](HISTORY.md). Hardware contracts and use instructions are in the
+[Essential platform](docs/platforms/spike-essential.md),
+[brick-device](docs/platforms/spike-brick-devices.md), and
+[Bluetooth controller](docs/bluetooth-controller.md) guides.
 
 Run the source-only LEGO checks with:
 
 ```bash
 tests/platforms/spike-essential-loader-test.sh
+tests/platforms/spike-brick-devices-source-test.sh
 python3 -m unittest discover -s tests/tools -p 'bluetooth_controller*_test.py'
 ```
 
-Official LEGO and Pybricks images are not included. Local opt-in image tests
-require an ignored SHA-256 manifest as documented by the platform guide.
-
-Essential also includes deterministic LPF2 endpoints on UART5 (medium motor)
-and USART3 (ultrasonic sensor), covering discovery, mode/data exchange,
-encoder motion, load and stall state. Analog identification, complete motor
-physics and the full Powered Up catalog remain unmodeled.
-
-Optional Prime and Essential brick-device overlays and their exact limitations
-are documented in [the brick-device guide](docs/platforms/spike-brick-devices.md).
+Official LEGO, Pybricks, and TI binaries are neither included nor downloaded.
+Local firmware tests require an ignored SHA-256 manifest documented in the
+Essential platform guide. Public CI remains source-only.
 
 ## Upstream Renode
-
-## Brickwright SPIKE simulation fork
-
-This fork adds source-only LEGO SPIKE platform models. The SPIKE Essential
-machine now includes its STM32F413 FMPI2C1 bus and an MIT-licensed LP50xx
-register/color model at address `0x28`, including active-high PB13 enable,
-DMA1 streams 0/1, and defensive rendered RGB-module snapshots. It does not
-model analogue LED current, emitted light, or PWM phase, and it does not bundle
-LEGO firmware or TI controller binaries. See
-[`docs/platforms/spike-essential.md`](docs/platforms/spike-essential.md) for the
-evidence boundary and local image gates.
-
-After initializing submodules and building Renode's native translator
-libraries, run the focused source-only checks with:
-
-```sh
-tests/platforms/spike-essential-loader-test.sh
-python3 tests/run_tests.py tests/platforms/SPIKE_Essential.robot
-dotnet test src/Infrastructure/src/Emulator/Peripherals/Test/PeripheralsTests/PeripheralsTests_NET.csproj \
-  -c Release --filter FullyQualifiedName~LP50XXTests
-```
 
 Copyright (c) 2010-2026 [Antmicro](https://www.antmicro.com)
 

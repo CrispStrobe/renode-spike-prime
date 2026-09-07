@@ -46,6 +46,7 @@ jobs:
 
       - name: Run source-only SPIKE Essential gates
         run: |
+          python3 tests/tools/steering_docs_test.py
           tests/platforms/spike-essential-loader-test.sh
           grep -Fq 'imu: Sensors.LSM6DS3TRC @ i2c3 0x6a' platforms/boards/spike-essential.repl
           grep -Fq 'essentialStorage: SPI.GenericSpiFlash' platforms/boards/spike-essential.repl

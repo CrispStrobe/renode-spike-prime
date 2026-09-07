@@ -9,7 +9,9 @@ one output callback. It has no socket, Renode, UART, or wall-clock dependency.
 Adapters may connect it to Renode's raw UART TCP terminal, an in-memory test, or
 another byte stream without changing controller behavior.
 
-The initial contract deliberately separates these layers:
+## Contract
+
+The implementation separates these layers:
 
 1. H4 incrementally frames commands and ACL packets.
 2. The controller owns deterministic HCI state and events.
@@ -32,9 +34,15 @@ opaque acknowledgement policy. When enabled, parameters remain uninterpreted
 and unretained; this only models completion of a separately supplied bootstrap
 stream.
 
+Reset clears protocol and connection state without changing configured limits.
+Adapters must preserve byte order and may not inject controller policy. Tests
+must use deterministic inputs and may not depend on RF or wall-clock timing.
+
 The implementation is MIT-licensed and contains no LEGO, Pybricks, or TI
 firmware. Its deterministic behavior is a software test model, not evidence of
 RF, timing, electrical, or physical-controller fidelity.
+
+## Raw TCP adapter
 
 For Renode's raw `ServerSocketTerminal`, run:
 
