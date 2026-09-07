@@ -1,4 +1,38 @@
-# Renode
+# Renode — Brickwright LEGO hub simulation fork
+
+> **Project status:** active simulation work. This fork runs unmodified LEGO
+> SPIKE, Pybricks, spike-nx, and Brickwright firmware as local, user-supplied
+> images. Passing a simulation gate is not evidence that an image is safe to
+> flash to physical hardware.
+
+This public MIT-licensed fork extends Renode with deterministic LEGO hub
+models while retaining the upstream Renode history. The current feature branch
+provides:
+
+- STM32F4 DMA, SPI, and UART behavior required by SPIKE firmware;
+- separate SPIKE Prime and SPIKE Essential platform descriptions;
+- TLC5955 display, LSM6DS3TR-C IMU, and W25Q-series flash models;
+- hash-manifested local image loaders that never fetch or publish firmware;
+- a transport-neutral dual-mode Bluetooth controller model with H4/HCI,
+  ATT/GATT, L2CAP, SDP, and RFCOMM test coverage.
+
+The simulation is not yet a complete electrical or physical model. Powered Up
+ports, motor loads, some LED paths, audio, power/charger behavior, and detailed
+sensor timing are tracked in [PLAN.md](PLAN.md). Start with the
+[SPIKE Essential platform guide](docs/platforms/spike-essential.md) and the
+[Bluetooth controller guide](docs/bluetooth-controller.md).
+
+Run the source-only LEGO checks with:
+
+```bash
+tests/platforms/spike-essential-loader-test.sh
+python3 -m unittest discover -s tests/tools -p 'bluetooth_controller*_test.py'
+```
+
+Official LEGO and Pybricks images are not included. Local opt-in image tests
+require an ignored SHA-256 manifest as documented by the platform guide.
+
+## Upstream Renode
 
 Copyright (c) 2010-2026 [Antmicro](https://www.antmicro.com)
 
