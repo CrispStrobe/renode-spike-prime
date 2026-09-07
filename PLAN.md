@@ -86,7 +86,6 @@ input and is never uploaded as an artifact.
 - [x] R6.2 Add ignored, hash-manifested local loaders and opt-in Robot gates
   for user-supplied official and Pybricks Essential images. Limit the initial
   claim to vector validity and bounded instruction progress.
-- [ ] R6.3 Model or bridge the Essential-specific FMPI2C1/LP50xx LED path.
 - [ ] R6.4 Add lawful external H4 controller response and two-port Powered Up
   device integration gates without bundling controller firmware.
 

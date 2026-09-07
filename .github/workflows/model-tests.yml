@@ -49,6 +49,8 @@ jobs:
           tests/platforms/spike-essential-loader-test.sh
           grep -Fq 'imu: Sensors.LSM6DS3TRC @ i2c3 0x6a' platforms/boards/spike-essential.repl
           grep -Fq 'essentialStorage: SPI.GenericSpiFlash' platforms/boards/spike-essential.repl
+          grep -Fq 'fmpi2c1: I2C.STM32F7_I2C @ sysbus 0x40006000' platforms/boards/spike-essential.repl
+          grep -Fq 'essentialLeds: I2C.LP50XX @ fmpi2c1 0x28' platforms/boards/spike-essential.repl
           ! grep -Fq 'spike-prime.repl' platforms/boards/spike-essential.repl
 
       - name: Build native translator libraries
@@ -62,5 +64,5 @@ jobs:
           dotnet restore "$project" "${common[@]}"
           dotnet test "$project" --configuration Release --no-restore \
             "${common[@]}" \
-            --filter 'FullyQualifiedName~STM32DMATests|FullyQualifiedName~STM32SPITests|FullyQualifiedName~STM32_UARTTests|FullyQualifiedName~TLC5955Tests|FullyQualifiedName~LSM6DS3TRCTests|FullyQualifiedName~GenericSpiFlashW25Q256Tests' \
+            --filter 'FullyQualifiedName~STM32DMATests|FullyQualifiedName~STM32SPITests|FullyQualifiedName~STM32_UARTTests|FullyQualifiedName~STM32F7I2CTests|FullyQualifiedName~TLC5955Tests|FullyQualifiedName~LSM6DS3TRCTests|FullyQualifiedName~LP50XXTests|FullyQualifiedName~GenericSpiFlashW25Q256Tests' \
             --logger 'console;verbosity=normal'

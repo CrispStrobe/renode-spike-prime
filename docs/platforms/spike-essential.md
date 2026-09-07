@@ -18,7 +18,7 @@ MIT-licensed:
 | External store | W25Q32-class device on SPI2; PB12 active-low CS; DMA1 streams 3 RX and 4 TX | Generic 4 MiB SPI NOR with JEDEC `ef 40 16`; SPI2 RX/TX DMA requests connect to streams 3/4. |
 | Bluetooth | CC256x H4 on USART2; DMA1 streams 6 TX and 7 RX; enable PC8 | Controller and lawful external responder are not part of this source-only checkpoint. |
 | User ports | Two ports: UART5 for A and USART3 for B, with the GPIO map in the cited platform file | MCU UARTs exist, but Powered Up electrical devices and motor loads are not modeled. |
-| LEDs | LP50xx on FMPI2C1, enable PB13 | Not modeled because this Renode baseline lacks an evidenced FMPI2C1/LP50xx pair. |
+| LEDs | LP50xx at `0x28` on FMPI2C1; SDA PB14, SCL PB15, enable PB13; DMA1 streams 0 RX and 1 TX | Deterministic LP50xx register/color model behind the STM32 newer-layout I2C controller at `0x40006000`, IRQs 95/96, with enable/reset and DMA request wiring. Analogue current, PWM phase and emitted-light physics are not modeled. |
 | Button/power/charger | Center button PB2 active-low; power hold PB1; MP2639A mode PA10 and CHG PC6 | GPIOs exist; board-level behavior is not modeled. |
 
 `platforms/boards/spike-essential.repl` contains only the verified executable
@@ -41,5 +41,14 @@ its SHA-256, size, format and vector address. Raw images that exceed the
 verified 1 MiB internal-flash window are rejected. `SPIKE_Essential_images.robot` rechecks
 the hash before loading. Its present milestone is deliberately narrow: a valid
 vector table, reset PC inside internal flash, and bounded instruction progress.
-It does not claim successful board initialization, BLE, LEDs, ports, or an
+It does not claim successful board initialization, BLE, ports, or an
 application prompt.
+
+## LED observability
+
+`essentialLeds` exposes defensive raw register and twelve-channel color
+snapshots. The two Essential RGB indicators use outputs 0–2 and 3–5. Hardware
+enable on PB13 resets the model when deasserted, and the I2C path honors the
+device's auto-increment and software-reset behavior. This gives simulator and
+GUI tests deterministic LED state without pretending to reproduce analogue
+brightness, current calibration, or PWM timing.
