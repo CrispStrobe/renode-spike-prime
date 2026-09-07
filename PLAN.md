@@ -1,33 +1,46 @@
-# Pending simulation work
+# Simulation roadmap
 
-Complete these tasks in order. All committed code and fixtures must be
-MIT-compatible and source-only; proprietary firmware remains a local input.
+Execute the numbered tasks in dependency order. Each task is complete only
+when every stated gate passes. Committed implementation, fixtures, and derived
+data must be MIT-compatible and source-only. Proprietary firmware and
+controller binaries are local inputs identified by SHA-256 and must never be
+fetched, committed, logged, cached, or uploaded by public CI.
 
-1. Exercise both LPF2 ports with unchanged locally supplied Essential firmware.
-   Acceptance: the guest completes discovery, selects modes, reads distance,
-   commands the motor and observes a changing encoder without firmware patches.
-2. Model LPF2 electrical attachment and deterministic scheduling.
-   Acceptance: attach/detach GPIO transitions, reconnect, timeout and reporting
-   cadence are covered without wall-clock-dependent tests.
-3. Expand the lawful device catalog and fault cases.
-   Acceptance: each device has a cited type/mode contract, exact wire fixtures,
-   bounded parsers and deterministic disconnect/stall/corruption tests.
-4. Complete deterministic brick fidelity gaps.
-   Acceptance: buttons, display/LED snapshots, battery/power/charger state,
-   bounded audio capture and timed IMU/FIFO/interrupt behavior have focused
-   tests and source-cited Prime/Essential wiring.
-5. Run unchanged firmware scenarios.
+1. Model LPF2 attachment and scheduling.
+   Depends on: existing UART endpoint contract.
+   Acceptance: both Essential ports expose source-cited attachment GPIO state;
+   attach, detach, reconnect, timeout, and report cadence use the emulated clock
+   and pass deterministic focused tests.
+2. Expand the lawful device catalog and fault cases.
+   Depends on: task 1.
+   Acceptance: each added device has a cited public type/mode contract, exact
+   byte fixtures, bounded parser state, and deterministic disconnect, stall,
+   truncation, checksum, and recovery tests.
+3. Complete deterministic brick fidelity gaps.
+   Depends on: existing brick-device overlays.
+   Acceptance: Prime ADC button ladders, decoded 5x5 display state, LED phase,
+   charger transitions, DAC sample width/pacing, and IMU ODR/FIFO interrupts
+   have source-cited wiring, emulated-clock behavior, and bounded tests.
+4. Run unchanged firmware scenarios.
+   Depends on: tasks 1 and 3.
    Acceptance: locally supplied LEGO v2, LEGO v3, Pybricks, spike-nx and
-   Brickwright images cross target-specific boot milestones and exercise motor,
-   sensor, display and Bluetooth traffic; absent images skip explicitly.
-6. Export one versioned, transport-neutral brick snapshot/control contract.
+   Brickwright images cross versioned target-specific milestones and exercise
+   port, display, storage, and Bluetooth traffic without patches. Missing local
+   images produce explicit skips; hash mismatches fail before execution.
+5. Export one versioned, transport-neutral brick snapshot/control contract.
+   Depends on: stable observable states from tasks 1 and 3.
    Acceptance: Brickwright consumes the same port, motor, sensor, display,
    button, battery and IMU state used by Renode tests, with generation IDs and
-   bounded malformed-input handling.
-7. Add deterministic fault, resource and soak gates.
+   bounded malformed-input handling; schema compatibility and round-trip tests
+   cover every field and reject unsupported versions.
+6. Add deterministic fault, resource and soak gates.
+   Depends on: tasks 4 and 5.
    Acceptance: reset, disconnect, corrupt frames, exhausted buffers, stalled
    motors, low battery, storage failures and repeated boot/connect cycles pass
-   without wall-clock-dependent assertions or unbounded growth.
-8. Rebase generic Renode changes and split upstream submissions.
+   with fixed emulated-time budgets, bounded queues, stable memory ceilings,
+   reproducible seeds, and no wall-clock-dependent assertions.
+7. Rebase generic Renode changes and split upstream submissions.
+   Depends on: stable focused tests for each generic change.
    Acceptance: current upstream builds and DMA, SPI, UART and device changes are
-   independently reviewable with no LEGO or TI binary dependency.
+   independently reviewable; each patch has a focused regression test and no
+   LEGO firmware, TI binary, or Brickwright-specific interface dependency.
