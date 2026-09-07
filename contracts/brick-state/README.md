@@ -49,6 +49,11 @@ lines, clients, queues, reads, command replay memory, and socket
 timeouts are bounded; arbitrary monitor and host commands are never exposed.
 The monitor implementation intentionally accepts one active client; the
 reusable source-test service has a validated maximum of four.
+Before listening, the monitor validates the exact seven board/firmware pairs,
+required transport, and a null or lowercase SHA-256 image identity. Commands
+bound request IDs to 128 characters and names to 64, require object arguments,
+and reject negative or non-integer expected sequences. Framing applies the
+256-KiB limit per record and separately caps each read and records per batch.
 The monitor service obtains Renode's paused-state guard around every model read
 and mutation. `spike_state_sample` emits a snapshot at the current virtual time,
 so Robot scenarios can sample after deterministic emulated-time milestones.

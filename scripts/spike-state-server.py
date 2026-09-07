@@ -5,12 +5,19 @@ Including it never opens a listener, and no general monitor command is exposed.
 """
 
 import json
+import os
+import sys
 from System import Array, Byte
 from System.Net import IPAddress
 from System.Net.Sockets import TcpListener
 from System.Text import Encoding
 from System.Threading import Thread
 from threading import Lock, RLock
+
+_tools = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "tools"))
+if _tools not in sys.path:
+    sys.path.insert(0, _tools)
+from spike_state_monitor_protocol import split_frames, validate_command, validate_config
 
 _state_server = None
 _MAX_LINE, _READ_SIZE = 256 * 1024, 16 * 1024
@@ -124,7 +131,7 @@ class _Server(object):
             raise ValueError("the monitor service binds loopback only")
         if port < 0 or port > 65535 or clients != 1 or self.limit < 256 or self.limit > _MAX_LINE or self.timeout < 50 or self.timeout > 60000:
             raise ValueError("endpoint or resource limit is outside the supported range")
-        self.config, self.running, self.generation = config, True, 0
+        self.config, self.running, self.generation = validate_config(config), True, 0
         self.stream, self.seq, self.write_lock, self.state_lock = None, 0, Lock(), RLock()
         self.listener = TcpListener(address, port)
         self.listener.Start(clients)
@@ -164,10 +171,13 @@ class _Server(object):
                 if self.running: continue
                 break
             self.generation += 1
-            try: self._client(client, self.generation)
-            except: pass
-            self.stream = None
-            client.Close()
+            try:
+                self._client(client, self.generation)
+            except:
+                pass
+            finally:
+                self.stream = None
+                client.Close()
 
     def _client(self, client, generation):
         stream, pending, seen = client.GetStream(), "", []
@@ -178,20 +188,25 @@ class _Server(object):
         while self.running:
             count = stream.Read(buffer, 0, buffer.Length)
             if count == 0: return
-            pending += Encoding.UTF8.GetString(buffer, 0, count)
-            if Encoding.UTF8.GetByteCount(pending) > self.limit: return
-            while "\n" in pending:
-                line, pending = pending.split("\n", 1)
-                if not line or "\r" in line or Encoding.UTF8.GetByteCount(line) > self.limit: return
-                command, accepted, error = json.loads(line), True, None
-                request = command.get("requestId", "invalid")
-                if command.get("schemaVersion") != 1 or command.get("type") != "command": accepted, error = False, "invalid command envelope"
-                elif request in seen or command.get("expectedSeq", self.seq - 1) != self.seq - 1: accepted, error = False, "duplicate requestId or expectedSeq mismatch"
+            chunk = Encoding.UTF8.GetString(buffer, 0, count)
+            try:
+                lines, pending = split_frames(pending, chunk, self.limit, _READ_SIZE)
+            except ValueError:
+                return
+            for line in lines:
+                accepted, error = True, None
+                try:
+                    command = validate_command(json.loads(line))
+                    request = command["requestId"]
+                except Exception as exception:
+                    command, request, accepted, error = None, "invalid", False, str(exception)
+                if accepted and (request in seen or command.get("expectedSeq", self.seq - 1) != self.seq - 1): accepted, error = False, "duplicate requestId or expectedSeq mismatch"
                 else:
-                    seen.append(request)
-                    if len(seen) > 256: seen.pop(0)
-                    try: self._synchronized(lambda: _dispatch(self.config, command))
-                    except Exception as exception: accepted, error = False, str(exception)
+                    if accepted:
+                        seen.append(request)
+                        if len(seen) > 256: seen.pop(0)
+                        try: self._synchronized(lambda: _dispatch(self.config, command))
+                        except Exception as exception: accepted, error = False, str(exception)
                 result = {"schemaVersion": 1, "type": "result", "requestId": request, "accepted": accepted, "seq": self.seq - 1}
                 if error is not None: result["error"] = error
                 self._send(stream, result); self.sample()
