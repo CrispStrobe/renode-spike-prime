@@ -67,8 +67,10 @@ input and is never uploaded as an artifact.
   independent from the external LAT signal, retain the complete 769-bit
   byte-oriented frame, and expose defensive snapshots for deterministic tests
   and UI adapters.
-- [ ] R5.2 Replace the integration-local IMU subset with a tested generic
-  LSM6DS3TR-C register/I2C model.
+- [x] R5.2 Replace the integration-local IMU subset with a tested generic
+  LSM6DS3TR-C register/I2C model. Model WHO_AM_I, immediate software reset,
+  control-register persistence, IF_INC burst access, deterministic raw sample
+  injection, and data-ready clearing after complete output reads.
 - [ ] R5.3 Verify whether the existing generic NOR flash model covers the
   W25Q256JV command set used by the board before adding any device-specific
   implementation.
@@ -85,3 +87,4 @@ input and is never uploaded as an artifact.
 | 2026-09-07 | R3.2–R3.3 | Complete | The unchanged Brickwright image completes SPI2 flash DMA, reaches protected userspace, consumes the opaque service pack through the lawful H4 responder, returns from `bt_enable`, registers its transport, and reaches the daemon-ready boundary. The firmware-side `net_buf_pool` linker correction fixed the post-HCI protected-userspace fault. |
 | 2026-09-07 | Public release | Complete | Published the Infrastructure fork first, changed its consumer to anonymous HTTPS, removed the deploy-key workflow dependency, retained read-only/no-artifact CI, and prepared anonymous recursive-clone validation before publishing the top fork. |
 | 2026-09-07 | R5.1 | Complete | Added a generic TLC5955 SPI/LAT model and three MIT-licensed unit tests covering edge-triggered latching, shift-register overflow, reset, counters, and defensive state snapshots. Public model CI includes the new fixture and remains source-only. |
+| 2026-09-07 | R5.2 | Complete | Added a generic LSM6DS3TR-C I2C/register model and five MIT-licensed tests covering identity, immediate reset, control and auto-increment behavior, little-endian accel/gyro/temperature injection, data-ready lifetime, and defensive register snapshots. Timing, FIFO, interrupts, sensor conversion, and physical noise remain explicitly outside this deterministic checkpoint. |
