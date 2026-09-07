@@ -13,29 +13,25 @@ fetched, committed, logged, cached, or uploaded by public CI.
    reaches only its catalogued milestones; two-ELF symbol lookup and the
    USART2/H4 path pass for Brickwright NuttX. Prime port traffic remains out of
    scope until a source-cited Prime LPF2 wiring overlay exists.
-2. Model LPF2 attachment and scheduling.
-   Depends on: existing UART endpoint contract.
-   Acceptance: both Essential ports expose source-cited attachment GPIO state;
-   attach, detach, reconnect, timeout, and report cadence use the emulated clock
-   and pass deterministic focused tests.
-3. Expand the lawful device catalog and fault cases.
-   Depends on: task 2.
-   Acceptance: each added device has a cited public type/mode contract, exact
-   byte fixtures, bounded parser state, and deterministic disconnect, stall,
-   truncation, checksum, and recovery tests.
-4. Complete deterministic brick fidelity gaps.
+2. Add only source-cited LPF2 devices.
+   Depends on: the bounded UART endpoint contract.
+   Acceptance: color, force, and large-motor models are added only where a
+   public MIT-compatible source identifies type IDs, modes, units, widths, and
+   command bytes. Exact fixtures cover discovery, data, output, disconnect,
+   stall, truncation, checksum failure, queue exhaustion, and recovery.
+3. Complete deterministic brick fidelity gaps.
    Depends on: existing brick-device overlays.
    Acceptance: Prime ADC button ladders, decoded 5x5 display state, LED phase,
    charger transitions, DAC sample width/pacing, and IMU ODR/FIFO interrupts
    have source-cited wiring, emulated-clock behavior, and bounded tests.
-5. Add deterministic fault, resource and soak gates.
-   Depends on: the unchanged-firmware scenario contract, task 4, and the
+4. Add deterministic fault, resource and soak gates.
+   Depends on: task 3, the unchanged-firmware scenario contract, and the
    completed neutral state contract.
    Acceptance: reset, disconnect, corrupt frames, exhausted buffers, stalled
    motors, low battery, storage failures and repeated boot/connect cycles pass
    with fixed emulated-time budgets, bounded queues, stable memory ceilings,
    reproducible seeds, and no wall-clock-dependent assertions.
-6. Rebase generic Renode changes and split upstream submissions.
+5. Rebase generic Renode changes and split upstream submissions.
    Depends on: stable focused tests for each generic change.
    Acceptance: current upstream builds and DMA, SPI, UART and device changes are
    independently reviewable; each patch has a focused regression test and no

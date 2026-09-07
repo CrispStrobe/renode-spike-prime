@@ -17,17 +17,26 @@ MIT-licensed:
 | IMU | LSM6DS3TR-C at I2C3; SCL PA8, SDA PC9, INT1 PC13 | Deterministic registers, samples, FIFO, watermark, and interrupt state; sampling advances only through the explicit model clock. |
 | External store | W25Q32-class device on SPI2; PB12 active-low CS; DMA1 streams 3 RX and 4 TX | Generic 4 MiB SPI NOR with JEDEC `ef 40 16`; SPI2 RX/TX DMA requests connect to streams 3/4. |
 | Bluetooth | CC256x H4 on USART2; DMA1 streams 6 TX and 7 RX; enable PC8 | The separate transport-neutral software controller can attach through raw TCP; it models public protocols, not TI firmware or RF. |
-| User ports | Two ports: UART5 for A and USART3 for B, with the GPIO map in the cited platform file | The wrapper connects a deterministic medium motor on A and ultrasonic sensor on B. Electrical identification GPIOs are not modeled. |
+| User ports | A uses UART5, PC1/PC0 identification pins and PB9 buffer control; B uses USART3, PA5/PA4 and PB8 | The wrapper connects a medium motor on A and ultrasonic sensor on B. It exposes logical attachment state named for both identification pins; voltage, resistance and analog detection are not inferred. |
 | LEDs | LP50xx at `0x28` on FMPI2C1; SDA PB14, SCL PB15, enable PB13; DMA1 streams 0 RX and 1 TX | Deterministic register/color model behind FMPI2C1 at `0x40006000`, IRQs 95/96, with enable/reset and DMA wiring. Analog current, PWM phase, and emitted light are not modeled. |
 | Button/power/charger | Center button PB2 active-low; power hold PB1; MP2639A mode PA10 and CHG PC6 | The optional brick-device overlay exposes button and board-policy state; it is not an electrical charger model. |
 
 Load `scripts/single-node/spike-essential.resc` to connect both endpoints.
-They implement checked discovery and mode/data exchange. The motor
-has deterministic power, speed-percent, angular-velocity, encoder, load and
-stall state. Call `essentialPortA StartNegotiation` or
-`essentialPortB StartNegotiation` only after the guest enables that UART. The
-model does not reproduce analog attachment detection, real-time physics,
-protocol jitter, or the complete LEGO device catalog.
+They implement checked discovery and mode/data exchange. Attachments settle
+after 10,000 emulated microseconds, then negotiate automatically. Missing ACKs
+time out after another 500,000 emulated microseconds. Streaming reports use
+the device's fixed emulated-time cadence; no wall clock is consulted. Each
+attach or detach increments `TopologyGeneration`. The motor has deterministic
+power, speed, encoder, load and stall state. The model does not reproduce
+analog attachment detection, physical motor dynamics, protocol jitter or the
+complete device catalog.
+
+`Gpio1Attached` and `Gpio2Attached` are logical, active-high observations. Their
+`Gpio1Pin` and `Gpio2Pin` names preserve the cited board mapping. They are not
+claims about connector voltage levels and are not yet wired to Renode GPIO
+lines. Input frames are limited to 35 bytes; undelivered output is limited to
+512 bytes and overflow is counted. One explicit time advance emits at most
+1,024 reports; older due reports are coalesced and counted.
 
 `platforms/boards/spike-essential.repl` contains only the verified executable
 subset. Unsupported devices are deliberately absent rather than silently
