@@ -79,7 +79,8 @@ class SocketTest(unittest.TestCase):
         identity = {"board": "spike-prime", "firmware": "brickwright-nuttx",
                     "transport": "none", "imageSha256": None}
         self.server = BoundedStateServer(self.machine, identity, {"power": "power"},
-                                         DeterministicClock(), line_limit=256, socket_timeout=1)
+                                         DeterministicClock(), line_limit=256, socket_timeout=1,
+                                         execute=lambda callback: callback())
         self.endpoint = self.server.start()
         client, stream = self.connect(); receive_line(stream)
         client.sendall(b"x" * 257)
@@ -103,6 +104,9 @@ class SocketTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "loopback"): validate_endpoint("0.0.0.0", 1)
         with self.assertRaises(ValueError): validate_endpoint("localhost", 1)
         with self.assertRaises(ValueError): validate_endpoint("127.0.0.1", 70000)
+        identity = {"board": "spike-prime", "firmware": "brickwright-nuttx"}
+        with self.assertRaisesRegex(TypeError, "execute"):
+            BoundedStateServer(self.machine, identity, {}, DeterministicClock())
 
     def test_monitor_launcher_is_direct_and_opt_in(self):
         source = (ROOT / "scripts/spike-state-server.py").read_text()

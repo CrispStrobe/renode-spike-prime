@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Bounded loopback TCP service for a live Renode SPIKE machine.
 
-The service is deliberately dependency-injected: production passes Renode's
-``monitor.Machine`` and master virtual-time source, while tests can use a
-synthetic object surface without claiming that dictionaries are Renode models.
+The service is dependency-injected for source-only tests. A caller must provide
+an executor that serializes every model access; there is no unsafe direct-access
+default. Renode itself uses the IronPython monitor service in ``scripts/``.
 """
 
 from __future__ import annotations
@@ -18,22 +18,6 @@ from spike_state_bridge import (MAX_LINE_BYTES, LiveStateSession, ProtocolError,
 
 MAX_CLIENTS = 4
 MAX_READ_BYTES = 16 * 1024
-
-
-class RenodePathSurface:
-    """Resolve explicit machine/external paths against live Renode registries."""
-
-    def __init__(self, machine, externals=None):
-        self.machine, self.externals = machine, externals
-
-    def __getitem__(self, path):
-        if path.startswith("machine:"):
-            return self.machine[path[8:]]
-        if path.startswith("external:"):
-            if self.externals is None:
-                raise KeyError(path)
-            return self.externals[path[9:]]
-        return self.machine[path]
 
 
 def validate_endpoint(host: str, port: int, allow_remote: bool = False) -> None:
@@ -52,7 +36,7 @@ class BoundedStateServer:
 
     def __init__(self, machine, identity, paths, clock_ns, *, host="127.0.0.1",
                  port=0, allow_remote=False, max_clients=1, line_limit=MAX_LINE_BYTES,
-                 socket_timeout=5.0, execute=lambda callback: callback()):
+                 socket_timeout=5.0, execute=None):
         validate_endpoint(host, port, allow_remote)
         if not 1 <= max_clients <= MAX_CLIENTS:
             raise ValueError("max_clients must be between 1 and MAX_CLIENTS")
@@ -163,17 +147,3 @@ class BoundedStateServer:
     @staticmethod
     def _send(client, message):
         client.sendall(canonical_bytes(message) + b"\n")
-
-
-def start_from_renode(monitor, emulation_manager, identity, paths, *, externals=None, **options):
-    """Create a server from Renode monitor globals, not stand-in objects."""
-    machine = RenodePathSurface(monitor.Machine, externals)
-    time_source = emulation_manager.CurrentEmulation.MasterTimeSource
-
-    def clock_ns():
-        # Renode TimeInterval ticks are 100 ns and advance only with virtual time.
-        return int(time_source.ElapsedVirtualTime.Ticks) * 100
-
-    server = BoundedStateServer(machine, identity, paths, clock_ns, **options)
-    server.start()
-    return server
