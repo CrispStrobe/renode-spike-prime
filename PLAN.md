@@ -12,9 +12,9 @@ fetched, committed, logged, cached, or uploaded by public CI.
    access and hexadecimal monitor values work at runtime; each available image
    reaches only its catalogued milestones; two-ELF symbol lookup and the
    USART2/H4 path pass for Brickwright NuttX. Prime port traffic remains out of
-   scope until a source-cited Prime LPF2 wiring overlay exists. Bind the neutral
-   state adapter to the actual Renode Python monitor and a bounded framed
-   transport; platform scenarios supply explicit identity and model paths.
+   scope until a source-cited Prime LPF2 wiring overlay exists. Platform
+   scenarios must start the state service with explicit identity and model
+   paths and assert its snapshots against real firmware execution.
 2. Add only source-cited LPF2 devices.
    Depends on: the bounded UART endpoint contract.
    Acceptance: color, force, and large-motor models are added only where a
