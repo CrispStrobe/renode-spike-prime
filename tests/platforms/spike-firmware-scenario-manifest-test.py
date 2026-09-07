@@ -54,6 +54,19 @@ class ScenarioManifestTests(unittest.TestCase):
             self.assertEqual(verified.returncode, 1)
             self.assertRegex(verified.stderr, "size mismatch|SHA-256 mismatch")
 
+    def test_execution_output_does_not_disclose_hash_or_source_path(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            image = root / "private-name.bin"
+            image.write_bytes(b"opaque")
+            prepared = self.run_tool(root, "prepare", "lego-prime-v3", "--artifact", f"firmware=raw=0x08008000={image}")
+            self.assertEqual(prepared.returncode, 0, prepared.stderr)
+            verified = self.run_tool(root, "verify", "lego-prime-v3", "--execution-json")
+            self.assertEqual(verified.returncode, 0, verified.stderr)
+            self.assertNotIn("sha256", verified.stdout)
+            self.assertNotIn(str(root), verified.stdout)
+            self.assertNotIn("private-name", verified.stdout)
+
     def test_protected_target_requires_both_artifacts(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary)
