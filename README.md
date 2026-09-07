@@ -18,6 +18,7 @@ provides:
   ATT/GATT, L2CAP, SDP, and RFCOMM test coverage;
 - deterministic LPF2 motor and ultrasonic endpoints;
 - observable display, LED, IMU, power, button, and bounded PCM state.
+- a versioned, bounded NDJSON snapshot/control boundary for Brickwright.
 
 It does not model RF, electrical behavior, complete motor or sensor physics, or
 the full Powered Up device catalog. Pending work and acceptance gates are in
@@ -28,6 +29,8 @@ the full Powered Up device catalog. Pending work and acceptance gates are in
 [Bluetooth controller](docs/bluetooth-controller.md) guides. Local image setup
 and the exact evidence limits are in the
 [unchanged-firmware scenario guide](docs/platforms/unchanged-firmware-scenarios.md).
+The wire contract and canonical fixtures are in
+[contracts/brick-state](contracts/brick-state/README.md).
 
 Run the source-only LEGO checks with:
 

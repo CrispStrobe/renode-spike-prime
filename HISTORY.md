@@ -1,5 +1,9 @@
 # Completed simulation work
 
+- Schema version 1, canonical fixtures, a bounded Python codec and queue,
+  overflow gaps, command sequencing, and process tests establish the neutral
+  Brickwright snapshot/control boundary.
+
 - Repository provenance and source-only CI were established on pinned Renode
   1.16.1 and public MIT Infrastructure revisions.
 - Generic STM32 DMA, SPI and UART behavior was corrected and covered by focused
