@@ -163,3 +163,146 @@ class CommandGate:
         if error:
             result["error"] = error
         return result
+
+
+class RenodeModelObserver:
+    """Read only public properties from the SPIKE models registered in a machine.
+
+    `paths` is explicit because Prime and Essential have different platform
+    topology. Missing models remain visible as limitations; they are never
+    represented as working hardware.
+    """
+
+    def __init__(self, machine, identity: dict, paths: dict[str, str]):
+        self.machine = machine
+        self.identity = dict(identity)
+        self.paths = dict(paths)
+        self.generation = 0
+
+    def _get(self, role):
+        path = self.paths.get(role)
+        if not path:
+            return None
+        try:
+            return self.machine[path]
+        except (KeyError, IndexError):
+            return None
+
+    def observe(self, seq: int, clock_ns: int) -> dict:
+        power, imu, display, audio = (self._get(x) for x in
+                                      ("power", "imu", "display", "audio"))
+        ports, motors, sensors = [], [], []
+        topology = []
+        for port_id in "ABCDEF":
+            port = self._get("port" + port_id)
+            device = getattr(port, "Device", None) if port else None
+            kind = None if device is None else device.__class__.__name__
+            generation = int(getattr(port, "TopologyGeneration", 0)) if port else 0
+            topology.append(generation)
+            ports.append({"id": port_id, "attached": device is not None, "kind": kind})
+            if device is not None and hasattr(device, "SpeedPercent"):
+                motors.append({"port": port_id, "speed": float(device.SpeedPercent),
+                               "position": float(getattr(device, "PositionDegrees", 0))})
+            elif device is not None:
+                sensors.append({"port": port_id, "kind": kind, "values": {}})
+        self.generation = max(topology, default=self.generation)
+        registers = list(getattr(imu, "RegisterSnapshot", bytes(0)))
+        def i16(offset):
+            return int.from_bytes(bytes(registers[offset:offset + 2]), "little", signed=True) if len(registers) > offset + 1 else 0
+        raw_display = list(getattr(display, "LatchedRegister", bytes(0)))
+        pixels = list(getattr(display, "OutputColorSnapshot", raw_display))
+        capabilities = ["model-observation", "bounded-command-dispatch"]
+        limitations = ["display values are raw model bytes, not optical brightness"]
+        if not any(self._get("port" + p) for p in "ABCDEF"):
+            limitations.append("LPF2 ports are not present in this platform overlay")
+        target = dict(self.identity)
+        target["capabilities"] = capabilities
+        target["limitations"] = limitations
+        millivolts = int(getattr(power, "BatteryMillivolts", 0))
+        percent = max(0, min(100, round((millivolts - 6000) / 24))) if power else 0
+        return {"schemaVersion": 1, "type": "snapshot", "seq": seq,
+                "clockNs": clock_ns, "target": target,
+                "lifecycle": {"phase": "ready", "generation": self.generation},
+                "ports": ports, "motors": motors, "sensors": sensors,
+                "display": {"width": 0, "height": 0, "pixels": pixels[:4096]},
+                "buttons": {}, "battery": {"percent": percent, "millivolts": millivolts},
+                "power": {"state": "on" if getattr(power, "PowerHold", False) else "off",
+                          "chargerConnected": bool(getattr(power, "ChargerConnected", False))},
+                "imu": {"acceleration": {"x": i16(0x28), "y": i16(0x2a), "z": i16(0x2c)},
+                        "angularVelocity": {"x": i16(0x22), "y": i16(0x24), "z": i16(0x26)}},
+                "audio": {"active": bool(getattr(audio, "Enabled", False)),
+                          "bufferedBytes": int(getattr(audio, "BufferedBytes", 0))},
+                "storage": {"ready": self._get("storage") is not None},
+                "bluetooth": {"state": "modeled" if self._get("bluetooth") else "unavailable",
+                              "transport": target["transport"]}}
+
+    def dispatch(self, command: str, arguments: dict) -> None:
+        if command == "power.set-battery-millivolts":
+            self._require("power").SetBatteryMillivolts(int(arguments["value"]))
+        elif command == "power.set-charger-connected":
+            self._require("power").SetChargerConnected(bool(arguments["connected"]))
+        elif command == "imu.advance-sample":
+            self._require("imu").AdvanceSample()
+        elif command == "lpf2.attach":
+            self._require_port(arguments).Attach(str(arguments["device"]))
+        elif command == "lpf2.detach":
+            self._require_port(arguments).Detach()
+        elif command == "lpf2.advance-microseconds":
+            self._require_port(arguments).AdvanceEmulatedTime(int(arguments["microseconds"]))
+        else:
+            raise ProtocolError("unknown command")
+
+    def _require(self, role):
+        model = self._get(role)
+        if model is None:
+            raise ProtocolError(f"capability unavailable: {role}")
+        return model
+
+    def _require_port(self, arguments):
+        port = str(arguments.get("port", "")).upper()
+        if port not in "ABCDEF" or len(port) != 1:
+            raise ProtocolError("invalid LPF2 port")
+        return self._require("port" + port)
+
+
+class LiveStateSession:
+    """One bounded transport session; socket implementations can wrap it."""
+
+    def __init__(self, observer, queue_capacity=MAX_QUEUE_ITEMS):
+        self.observer = observer
+        self.queue = SnapshotQueue(queue_capacity)
+        self.gate = CommandGate()
+        self.connected = False
+        self.next_seq = 0
+        self.clock_ns = 0
+
+    def connect(self):
+        self.connected = True
+
+    def disconnect(self):
+        self.connected = False
+
+    def sample(self, clock_ns: int):
+        if not self.connected:
+            raise ProtocolError("session is disconnected")
+        if clock_ns < self.clock_ns:
+            raise ProtocolError("emulated clock moved backwards")
+        self.clock_ns = clock_ns
+        snapshot = self.observer.observe(self.next_seq, clock_ns)
+        self.queue.publish(snapshot)
+        self.next_seq += 1
+        return snapshot
+
+    def command(self, command: dict) -> dict:
+        if not self.connected:
+            raise ProtocolError("session is disconnected")
+        self.gate.seq = self.next_seq - 1 if self.next_seq else 0
+        result = self.gate.accept(command)
+        if not result["accepted"]:
+            return result
+        try:
+            self.observer.dispatch(command["command"], command["arguments"])
+        except (KeyError, TypeError, ValueError, ProtocolError) as error:
+            result["accepted"] = False
+            result["error"] = str(error)
+        return result
