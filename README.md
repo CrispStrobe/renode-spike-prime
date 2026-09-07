@@ -4,9 +4,9 @@
 > evidence that any image is safe to flash to physical hardware.
 
 This public MIT-licensed fork extends Renode with deterministic LEGO hub
-models while retaining upstream Renode history. Its Essential machine can
-execute unmodified, locally supplied firmware. Prime integration is still
-assembled by the external firmware harness. This repository provides:
+models while retaining upstream Renode history. Its Prime and Essential
+machines can execute unmodified, locally supplied firmware. This repository
+provides:
 
 - STM32F4 DMA, SPI, and UART behavior required by SPIKE firmware;
 - a SPIKE Essential machine and optional Prime/Essential device overlays;

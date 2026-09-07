@@ -49,8 +49,10 @@ def parse_artifact(text):
     source_path = pathlib.Path(source).resolve()
     if not source_path.is_file():
         raise ManifestError(f"artifact does not exist: {source}")
-    if fmt == "elf" and source_path.read_bytes()[:4] != b"\x7fELF":
-        raise ManifestError(f"ELF artifact has no ELF magic: {name}")
+    if fmt == "elf":
+        with source_path.open("rb") as stream:
+            if stream.read(4) != b"\x7fELF":
+                raise ManifestError(f"ELF artifact has no ELF magic: {name}")
     return name, fmt, parsed_address, source_path
 
 
@@ -120,6 +122,8 @@ def verify(target, root):
         address = int(item["load_address"], 0)
         if not 0x08000000 <= address < 0x08200000:
             raise ManifestError(f"invalid load address: {filename}")
+        if item["format"] == "raw" and address + item["size"] > 0x08200000:
+            raise ManifestError(f"raw artifact exceeds the supported flash window: {filename}")
     return {"definition": definitions[target], "manifest": data, "directory": str(directory)}
 
 
@@ -133,6 +137,7 @@ def main():
     verify_parser = commands.add_parser("verify")
     verify_parser.add_argument("target")
     verify_parser.add_argument("--json", action="store_true")
+    verify_parser.add_argument("--execution-json", action="store_true")
     list_parser = commands.add_parser("list")
     list_parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
@@ -144,7 +149,16 @@ def main():
             if result is None:
                 print(f"SKIP: no local manifest for {args.target}")
                 return 77
-            print(json.dumps(result, sort_keys=True) if args.json else f"verified: {args.target}")
+            if args.execution_json:
+                public = {
+                    "board": result["definition"]["board"],
+                    "target": args.target,
+                    "artifacts": [{key: item[key] for key in ("name", "file", "format", "load_address")}
+                                  for item in result["manifest"]["artifacts"]],
+                }
+                print(json.dumps(public, sort_keys=True))
+            else:
+                print(json.dumps(result, sort_keys=True) if args.json else f"verified: {args.target}")
         else:
             definitions = catalog()["targets"]
             print(json.dumps(definitions, indent=2) if args.json else "\n".join(definitions))
