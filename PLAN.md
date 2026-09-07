@@ -15,12 +15,13 @@ fetched, committed, logged, cached, or uploaded by public CI.
    scope until a source-cited Prime LPF2 wiring overlay exists. Platform
    scenarios must start the state service with explicit identity and model
    paths and assert its snapshots against real firmware execution.
-2. Add only source-cited LPF2 devices.
+2. Complete source evidence for the remaining LPF2 devices.
    Depends on: the bounded UART endpoint contract.
-   Acceptance: color, force, and large-motor models are added only where a
-   public MIT-compatible source identifies type IDs, modes, units, widths, and
-   command bytes. Exact fixtures cover discovery, data, output, disconnect,
-   stall, truncation, checksum failure, queue exhaustion, and recovery.
+   Acceptance: a pinned MIT/Apache/BSD-compatible primary source supplies the
+   complete discovery bytes, units, widths, mappings, and output semantics for
+   SPIKE color (type 61), force (type 63), and Large Motor (type 49). Add each
+   model only after its evidence is complete. See
+   `docs/platforms/lpf2-device-catalog.md` for the missing facts.
 3. Complete deterministic brick fidelity gaps.
    Depends on: existing brick-device overlays.
    Acceptance: Prime ADC button ladders connect to the STM32 ADC; TLC5955 GSCLK
