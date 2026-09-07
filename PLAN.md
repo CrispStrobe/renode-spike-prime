@@ -95,7 +95,7 @@ input and is never uploaded as an artifact.
 - [x] R7.1 Define a source-only MIT controller boundary independent of TCP,
   UART, Renode, and firmware images, with explicit H4/controller/L2CAP/protocol
   layers and unit-tested channel contracts.
-- [ ] R7.2 Implement incremental H4 command and ACL framing plus deterministic
+- [x] R7.2 Implement incremental H4 command and ACL framing plus deterministic
   dual-mode HCI initialization, advertising, connection, and lifecycle events.
 - [ ] R7.3 Add minimal extensible BLE ATT/GATT and Classic L2CAP/RFCOMM peers,
   with byte-exact tests and no RF-fidelity claim.
@@ -118,3 +118,4 @@ input and is never uploaded as an artifact.
 | 2026-09-07 | R5.3 | Complete | Six configuration-level tests prove the generic SPI NOR model against the unchanged board driver's W25Q256JV opcodes and a high 32-bit address. Narrow generic fixes add the 4-byte fast-read dummy cycle, physical NOR bit clearing, WEL-gated chip erase, and an optional second-status opcode. Program/erase complete synchronously, so BUSY intentionally remains zero. |
 | 2026-09-07 | R6.1–R6.2 | Complete | Added the distinct `spike-essential.repl`, a source-cited hardware map, safe local-only SHA-256 manifests, loader self-tests, and opt-in image vector/progress gates. Platform parsing and device identity pass; a synthetic user-image fixture proves the executable gate while absent real images skip honestly. No image is fetched, tracked, logged, or uploaded. |
 | 2026-09-07 | R7.1 | Complete | Inventoried the earlier firmware-local TCP/H4 responder and defined a reusable MIT protocol core with transport-independent input/output, validated configuration, and tested L2CAP channel routing. No firmware or vendor material is present. |
+| 2026-09-07 | R7.2 | Complete | Added fragmented/coalesced H4 framing, deterministic dual-mode initialization commands, explicit opaque-vendor acknowledgement, advertising, LE and Classic connection lifecycle events, ACL reassembly/routing, flow-control completion, and byte-exact tests. |
