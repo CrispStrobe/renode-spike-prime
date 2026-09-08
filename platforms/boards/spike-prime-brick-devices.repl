@@ -39,11 +39,11 @@ gpioPortC:
 buttonLadders: Analog.PrimeButtonLadder @ sysbus
     adc: adc1
 
-centerButton: Miscellaneous.Button @ none
+centerButton: Miscellaneous.Button @ sysbus
     -> buttonLadders@0
-leftButton: Miscellaneous.Button @ none
+leftButton: Miscellaneous.Button @ sysbus
     -> buttonLadders@1
-rightButton: Miscellaneous.Button @ none
+rightButton: Miscellaneous.Button @ sysbus
     -> buttonLadders@2
-bluetoothButton: Miscellaneous.Button @ none
+bluetoothButton: Miscellaneous.Button @ sysbus
     -> buttonLadders@3

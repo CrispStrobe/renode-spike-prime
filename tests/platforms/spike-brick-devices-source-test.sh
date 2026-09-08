@@ -18,7 +18,7 @@ grep -Fq 'TriggerOutput -> speaker@1' "$prime"
 grep -Fq 'UpdateDMARequest -> dma1@5' "$prime"
 grep -Fq 'buttonLadders: Analog.PrimeButtonLadder' "$prime"
 grep -Fq 'adc: adc1' "$prime"
-grep -Fq 'centerButton: Miscellaneous.Button @ none' "$prime"
+test "$(grep -Fc 'Miscellaneous.Button @ sysbus' "$prime")" -eq 4
 grep -Fq -- '-> buttonLadders@3' "$prime"
 test -x tests/platforms/spike-prime-platform-load-test.sh
 
