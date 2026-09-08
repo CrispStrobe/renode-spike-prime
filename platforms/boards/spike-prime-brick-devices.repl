@@ -36,7 +36,7 @@ gpioPortC:
 // Two physical resistor ladders drive ADC1_IN14 (PC4) and ADC1_IN1 (PA1).
 // Digital Button peripherals are frontend controls; the ladder chooses stable
 // raw samples strictly inside the pinned Pybricks decoder thresholds.
-buttonLadders: Analog.PrimeButtonLadder @ none
+buttonLadders: Analog.PrimeButtonLadder @ sysbus
     adc: adc1
 
 centerButton: Miscellaneous.Button @ none
