@@ -43,8 +43,10 @@
 - Deterministic TLC5955, LSM6DS3TR-C and W25Q256-compatible models were added.
 - Brick fidelity gained decoded Prime 5x5 display channels and explicit GSCLK
   phase, charger state transitions, bounded 12-bit DAC sample pacing, and IMU
-  ODR-driven FIFO/interrupt scheduling. Hardware timer and ADC connections
-  remain live roadmap work.
+  ODR-driven FIFO/interrupt scheduling. Source-cited Prime button ladders now
+  drive persistent ADC inputs, TIM12 clocks TLC5955 grayscale phase, and TIM6
+  paces the DAC sink and DMA requests on Renode's virtual clock. Stable board
+  ADC sources replace queued fixtures and survive peripheral reset.
 - A distinct SPIKE Essential platform, local hash-manifest image loaders and
   bounded official/Pybricks execution gates were added.
 - A versioned unchanged-firmware matrix now covers seven Prime and Essential

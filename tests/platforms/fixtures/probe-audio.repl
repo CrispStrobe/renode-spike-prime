@@ -1,0 +1,11 @@
+// SPDX-License-Identifier: MIT
+using "../cpus/stm32f4.repl"
+
+speaker: Sound.PCMAudioSink @ sysbus 0x40007408
+
+timer6:
+    TriggerOutput -> speaker@1
+    UpdateDMARequest -> dma1@5
+
+gpioPortC:
+    10 -> speaker@0

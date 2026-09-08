@@ -13,13 +13,8 @@ fetched, committed, logged, cached, or uploaded by public CI.
    SPIKE color (type 61), force (type 63), and Large Motor (type 49). Add each
    model only after its evidence is complete. See
    `docs/platforms/lpf2-device-catalog.md` for the missing facts.
-2. Complete deterministic brick fidelity gaps.
-   Depends on: existing brick-device overlays.
-   Acceptance: Prime ADC button ladders connect to the STM32 ADC; TLC5955 GSCLK
-   connects to TIM12; DAC sample pacing connects to TIM6/DMA. Each connection
-   must have source-cited wiring, emulated-clock behavior, and bounded tests.
-3. Add deterministic fault, resource and soak gates.
-   Depends on: task 2, the unchanged-firmware scenario contract, and the
+2. Add deterministic fault, resource and soak gates.
+   Depends on: the unchanged-firmware scenario contract and the
    completed neutral state contract.
    Acceptance: add model-supported storage fault injection; run repeated boot
    cycles for each locally available hash-verified image; enforce a measured

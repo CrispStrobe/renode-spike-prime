@@ -90,5 +90,11 @@ jobs:
           dotnet restore "$project" "${common[@]}"
           dotnet test "$project" --configuration Release --no-restore \
             "${common[@]}" \
-            --filter 'FullyQualifiedName~STM32DMATests|FullyQualifiedName~STM32SPITests|FullyQualifiedName~STM32_UARTTests|FullyQualifiedName~STM32F7I2CTests|FullyQualifiedName~TLC5955Tests|FullyQualifiedName~LSM6DS3TRCTests|FullyQualifiedName~LP50XXTests|FullyQualifiedName~GenericSpiFlashW25Q256Tests|FullyQualifiedName~LegoLpf2PortTests|FullyQualifiedName~BrickPowerControllerTests|FullyQualifiedName~PCMAudioSinkTests|FullyQualifiedName~SpikeFaultSoakTests' \
+            --filter 'FullyQualifiedName~STM32DMATests|FullyQualifiedName~STM32SPITests|FullyQualifiedName~STM32_UARTTests|FullyQualifiedName~STM32F7I2CTests|FullyQualifiedName~TLC5955Tests|FullyQualifiedName~LSM6DS3TRCTests|FullyQualifiedName~LP50XXTests|FullyQualifiedName~GenericSpiFlashW25Q256Tests|FullyQualifiedName~LegoLpf2PortTests|FullyQualifiedName~BrickPowerControllerTests|FullyQualifiedName~PCMAudioSinkTests|FullyQualifiedName~SpikeFaultSoakTests|FullyQualifiedName~PrimeButtonLadderTests|FullyQualifiedName~STM32TimerBoardClockTests' \
             --logger 'console;verbosity=normal'
+
+      - name: Build source-only headless Renode
+        run: ./build.sh --net --no-gui --skip-fetch
+
+      - name: Load the source-only SPIKE Prime platform
+        run: tests/platforms/spike-prime-platform-load-test.sh
