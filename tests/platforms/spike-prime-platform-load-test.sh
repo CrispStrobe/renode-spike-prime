@@ -21,8 +21,28 @@ sed '/^[[:space:]]*ApplySVD @https:\/\/dl\.antmicro\.com\/projects\/renode\/svd\
 test "$(wc -l <platforms/cpus/stm32f4.repl)" -eq "$(( $(wc -l <"$test_root/platforms/cpus/stm32f4.repl") + 1 ))"
 ! grep -R -E 'https?://|ApplySVD' "$test_root/platforms"
 
+cp tests/platforms/fixtures/probe-*.repl "$test_root/platforms/boards/"
+
 timeout --kill-after=5s 30s dotnet output/bin/Release/Renode.dll \
   --disable-xwt --plain -e 'mach create' -e 'quit'
+
+probe_failed=0
+for probe in adc display audio; do
+  probe_marker="$test_root/probe-$probe-loaded"
+  probe_log="$test_root/probe-$probe.log"
+  timeout --kill-after=5s 60s dotnet output/bin/Release/Renode.dll \
+    --disable-xwt --plain \
+    -e 'mach create' \
+    -e "machine LoadPlatformDescription @$test_root/platforms/boards/probe-$probe.repl" \
+    -e "python \"open(r'$probe_marker', 'w').write('loaded')\"" \
+    -e 'quit' >"$probe_log" 2>&1 || true
+  cat "$probe_log"
+  if ! test -f "$probe_marker"; then
+    echo "SPIKE Prime platform probe failed: $probe" >&2
+    probe_failed=1
+  fi
+done
+test "$probe_failed" -eq 0
 
 dotnet output/bin/Release/Renode.dll \
   --disable-xwt --plain \
