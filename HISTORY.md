@@ -1,5 +1,13 @@
 # Completed simulation work
 
+- Current-upstream replay validation completed for the remaining generic STM32
+  UART, SPI-DMA and STM32F7-I2C changes. Each topic lives on an independent
+  Infrastructure branch based on `556f8cb6f`, has focused regression tests,
+  passes the complete managed peripheral suite, and passes a full headless
+  Renode build. Existing upstream UART pacing, SPI GPIO names and I2C receive
+  DMA behavior were retained; only behavior still absent upstream was ported.
+  No upstream pull request was opened.
+
 - A hash-verified, unchanged local Brickwright NuttX kernel/userspace pair now
   reaches NuttX, board, IMU, storage, display, and Bluetooth-board milestones
   in Renode. The Prime overlay wires both SPI1 DMA streams, and the generic DMA
