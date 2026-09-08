@@ -4,6 +4,7 @@ set -euo pipefail
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 test_root=$(mktemp -d)
 log="$test_root/renode.log"
+marker="$test_root/platform-loaded"
 trap 'rm -rf "$test_root"' EXIT
 
 test -f "$repo_root/output/bin/Release/Renode.dll"
@@ -23,16 +24,24 @@ test "$(wc -l <platforms/cpus/stm32f4.repl)" -eq "$(( $(wc -l <"$test_root/platf
 timeout --kill-after=5s 30s dotnet output/bin/Release/Renode.dll \
   --disable-xwt --plain -e 'mach create' -e 'quit'
 
-timeout --kill-after=5s 120s dotnet output/bin/Release/Renode.dll \
+dotnet output/bin/Release/Renode.dll \
   --disable-xwt --plain \
   -e 'mach create' \
   -e "machine LoadPlatformDescription @$test_root/platforms/boards/spike-prime.repl" \
-  -e 'peripherals' \
-  -e 'quit' | tee "$log"
+  -e "python \"names = set(self.Machine.GetAllNames()); assert set(['adc1', 'bluetoothButton', 'centerButton', 'display', 'speaker', 'timer12']).issubset(names); open(r'$marker', 'w').write('loaded')\"" \
+  -e 'quit' >"$log" 2>&1 &
+renode_pid=$!
 
-grep -Fq 'adc1' "$log"
-grep -Fq 'bluetoothButton' "$log"
-grep -Fq 'centerButton' "$log"
-grep -Fq 'display' "$log"
-grep -Fq 'speaker' "$log"
-grep -Fq 'timer12' "$log"
+for _ in $(seq 1 300); do
+  if test -f "$marker" || ! kill -0 "$renode_pid" 2>/dev/null; then
+    break
+  fi
+  sleep 1
+done
+
+if kill -0 "$renode_pid" 2>/dev/null; then
+  kill "$renode_pid"
+fi
+wait "$renode_pid" 2>/dev/null || true
+cat "$log"
+test "$(cat "$marker")" = loaded
