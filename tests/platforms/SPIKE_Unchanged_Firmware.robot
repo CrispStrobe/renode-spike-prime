@@ -7,7 +7,6 @@ Test Timeout     120 seconds
 *** Variables ***
 ${IMAGE_ROOT}    ${CURDIR}/../../.local/spike-firmware-scenarios
 ${TOOL}          ${CURDIR}/../../tools/spike-firmware-scenarios/scenario_manifest.py
-${H4_PORT}       34561
 ${STATE_PORT}    34562
 
 *** Test Cases ***
@@ -21,10 +20,10 @@ Pybricks Prime unchanged image progresses
     Run Opaque Scenario    pybricks-prime
 
 spike-nx unchanged protected image reaches boot boundaries
-    Run Protected Scenario    spike-nx    false
+    Run Protected Scenario    spike-nx    ${False}
 
-Brickwright NuttX unchanged protected image reaches device boundaries
-    Run Protected Scenario    brickwright-nuttx    true
+Brickwright NuttX Renode profile reaches daemon and state boundaries
+    Run Protected Scenario    brickwright-nuttx    ${True}
 
 LEGO Essential unchanged image progresses
     Run Opaque Scenario    lego-essential
@@ -102,7 +101,7 @@ Run Protected Scenario
     Execute Command    cpu AddHook ${board_late.strip()} "monitor.Parse('log \\"MILESTONE board_late_initialize\\"'); machine.PauseAndRequestEmulationPause()"
     Execute Command    cpu AddHook ${bringup.strip()} "monitor.Parse('log \\"MILESTONE stm32_bringup\\"'); machine.PauseAndRequestEmulationPause()"
     IF    $with_h4
-        Set Up H4 Controller And Brickwright Hooks
+        Set Up Brickwright Simulation Hooks
     END
     Start Emulation
     Wait For Log Entry    MILESTONE nx_start    timeout=10
@@ -119,23 +118,24 @@ Run Protected Scenario
         Wait For Log Entry    MILESTONE display_init    timeout=15
         Start Emulation
         Wait For Log Entry    MILESTONE bluetooth_board_init    timeout=10
+        Start Emulation
+        Wait For Log Entry    MILESTONE daemon_ready    timeout=30
         Assert Brickwright State Snapshot
     END
 
-Set Up H4 Controller And Brickwright Hooks
+Set Up Brickwright Simulation Hooks
     Execute Command    include "${CURDIR}/../../scripts/spike-state-server.py"
     Execute Command    spike_state_start "127.0.0.1" ${STATE_PORT} "${CURDIR}/../../contracts/brick-state/renode-prime.example.json"
-    Execute Command    emulation CreateServerSocketTerminal ${H4_PORT} "hci" false
-    Execute Command    connector Connect sysbus.usart2 hci
-    Start Process    python3    ${CURDIR}/../../tools/spike-bluetooth-controller.py    127.0.0.1    ${H4_PORT}    --acknowledge-vendor-commands    alias=h4
     ${imu}=    Execute Command    sysbus GetSymbolAddress "stm32_lsm6dsl_initialize"
     ${storage}=    Execute Command    sysbus GetSymbolAddress "stm32_w25q256_initialize"
     ${display}=    Execute Command    sysbus GetSymbolAddress "tlc5955_initialize"
     ${bluetooth}=    Execute Command    sysbus GetSymbolAddress "stm32_bluetooth_initialize"
+    ${ready}=    Execute Command    sysbus GetSymbolAddress "brickwright_simulation_daemon_ready"
     Execute Command    cpu AddHook ${imu.strip()} "monitor.Parse('log \\"MILESTONE imu_init\\"'); machine.PauseAndRequestEmulationPause()"
     Execute Command    cpu AddHook ${storage.strip()} "monitor.Parse('log \\"MILESTONE storage_init\\"'); machine.PauseAndRequestEmulationPause()"
     Execute Command    cpu AddHook ${display.strip()} "monitor.Parse('log \\"MILESTONE display_init\\"'); machine.PauseAndRequestEmulationPause()"
     Execute Command    cpu AddHook ${bluetooth.strip()} "monitor.Parse('log \\"MILESTONE bluetooth_board_init\\"'); machine.PauseAndRequestEmulationPause()"
+    Execute Command    cpu AddHook ${ready.strip()} "monitor.Parse('log \\"MILESTONE daemon_ready\\"'); machine.PauseAndRequestEmulationPause()"
 
 Assert Brickwright State Snapshot
     ${read}=    Run Process    python3    ${CURDIR}/../../tools/spike-state-read-once.py    127.0.0.1    ${STATE_PORT}    --board    spike-prime    --firmware    brickwright-nuttx

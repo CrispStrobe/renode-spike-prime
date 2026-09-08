@@ -3,8 +3,12 @@
 - A hash-verified, unchanged local Brickwright NuttX kernel/userspace pair now
   reaches NuttX, board, IMU, storage, display, and Bluetooth-board milestones
   in Renode. The Prime overlay wires both SPI1 DMA streams, and the generic DMA
-  engine correctly bounds non-incrementing destinations. Application H4 and
-  daemon execution remain deliberately unclaimed.
+  engine correctly bounds non-incrementing destinations.
+
+- The TI-free Renode firmware profile now reaches its in-process dual-mode HCI
+  controller and exported daemon-ready boundary. Modeling the STM32F413 SRAM2
+  window fixed the allocator failure that previously reset execution before
+  `rcS`; physical watchdog behavior remains confined to hardware builds.
 
 - The same real-image run now starts the bounded loopback state service with an
   explicit Prime/Brickwright identity and model paths, then validates a live
@@ -38,8 +42,8 @@
 - A versioned unchanged-firmware matrix now covers seven Prime and Essential
   targets. It verifies every local artifact before machine creation, skips
   absent inputs explicitly, and declares target-specific vector, progress,
-  symbol, device-initialization, and H4 boundaries. Public CI exercises only
-  synthetic loader contracts; live scenario validation remains pending.
+  symbol, device-initialization, controller-daemon, and state boundaries. Public
+  CI exercises only synthetic loader contracts.
 - A bounded transport-neutral Bluetooth controller now covers incremental H4,
   dual-mode HCI, ACL/L2CAP, ATT/GATT notifications, Classic signaling, SDP,
   RFCOMM and raw TCP/in-memory adapters in source-only tests.
