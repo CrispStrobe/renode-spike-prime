@@ -29,11 +29,12 @@ load_platform() {
   local name=$1
   local platform=$2
   local expected=$3
+  local inspection=${4:-}
   local load_log="$test_root/$name.log"
 
   timeout --kill-after=5s 60s dotnet output/bin/Release/Renode.dll \
     --disable-xwt --console --plain \
-    -e "mach create; machine LoadPlatformDescription @$platform; peripherals; quit" \
+    -e "mach create; machine LoadPlatformDescription @$platform; $inspection peripherals; quit" \
     >"$load_log" 2>&1
   cat "$load_log"
   ! grep -Fq 'Error E' "$load_log"
@@ -55,7 +56,10 @@ for probe in adc display audio; do
 done
 test "$probe_failed" -eq 0
 
-load_platform full "$test_root/platforms/boards/spike-prime.repl" speaker | tee "$log"
+load_platform full "$test_root/platforms/boards/spike-prime.repl" speaker \
+  "python \"names = set(self.Machine.GetAllNames()); assert set(['adc1', 'bluetoothButton', 'buttonLadders', 'centerButton', 'display', 'leftButton', 'rightButton', 'speaker', 'timer12']).issubset(names); print('SPIKE_PLATFORM_NAMES_OK')\";" \
+  | tee "$log"
+grep -Fq SPIKE_PLATFORM_NAMES_OK "$log"
 for expected in adc1 display speaker timer12; do
   grep -Fq "$expected" "$log"
 done
