@@ -18,6 +18,7 @@ grep -Fq 'TriggerOutput -> speaker@1' "$prime"
 grep -Fq 'UpdateDMARequest -> dma1@5' "$prime"
 grep -Fq 'buttonLadders: Analog.PrimeButtonLadder' "$prime"
 grep -Fq 'adc: adc1' "$prime"
+test -x tests/platforms/spike-prime-platform-load-test.sh
 
 tlc=src/Infrastructure/src/Emulator/Peripherals/Peripherals/SPI/TLC5955.cs
 imu=src/Infrastructure/src/Emulator/Peripherals/Peripherals/Sensors/LSM6DS3TRC.cs
