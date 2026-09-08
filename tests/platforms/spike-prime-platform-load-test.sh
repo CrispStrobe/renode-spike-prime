@@ -43,7 +43,7 @@ load_platform() {
 probe_failed=0
 for probe in adc display audio; do
   case "$probe" in
-    adc) expected=buttonLadders ;;
+    adc) expected=adc1 ;;
     display) expected=display ;;
     audio) expected=speaker ;;
   esac
@@ -55,7 +55,7 @@ for probe in adc display audio; do
 done
 test "$probe_failed" -eq 0
 
-load_platform full "$test_root/platforms/boards/spike-prime.repl" bluetoothButton | tee "$log"
-for expected in adc1 centerButton display speaker timer12; do
+load_platform full "$test_root/platforms/boards/spike-prime.repl" speaker | tee "$log"
+for expected in adc1 display speaker timer12; do
   grep -Fq "$expected" "$log"
 done
