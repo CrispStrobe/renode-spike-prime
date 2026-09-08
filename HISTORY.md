@@ -2,9 +2,11 @@
 
 - Correction: the first full-platform name assertion was not valid evidence.
   Renode echoed its input command before reporting an `AssertionError`, and
-  the shell matched the success text in that echo. The live roadmap restores
-  button registration as pending; the gate now requires a marker created only
-  after the runtime assertion and rejects generic monitor-command errors.
+  the shell matched the success text in that echo. The replacement gate rejects
+  generic monitor-command errors and reads a closed marker containing the
+  assertion result. Prime's ladder and all four explicit button frontends are
+  registered at the machine root, retain their signal wiring, and passed the
+  full public source/model/build/runtime workflow.
 
 - Current-upstream replay validation completed for the remaining generic STM32
   UART, SPI-DMA and STM32F7-I2C changes. Each topic lives on an independent
