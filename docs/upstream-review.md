@@ -1,49 +1,43 @@
 # Upstream review manifest
 
-This manifest is the replay contract for generic changes. It contains no LEGO,
-TI, firmware-image, or Brickwright interface dependency.
+This manifest records generic changes only. It has no LEGO, TI, firmware-image,
+or Brickwright interface dependency. Topic branches remain separate so they can
+be reviewed or submitted independently. Automation must not open upstream pull
+requests.
 
-## Baselines
+## Current baselines
 
-- Renode: `ab721d88e135a1bcb8ed2ecc5a38f51cbe61fdd2`
-- Renode Infrastructure: `066a7f13c052215632d469c995c89aea37c573b1`
+- Renode: `6c860c0ae46bd203050e8b247d0b68ed27a13a0c`
+- Renode Infrastructure: `556f8cb6f9e50d472728d4946183ccd82a931f86`
 
-The product branch is 40 Renode commits and 18 Infrastructure commits ahead of
-its merge bases, while current upstream is respectively 1002 and 811 commits
-ahead. Replaying isolated patches is safer and more reviewable than rewriting
-the product branch.
+## Completed current-upstream topics
 
-## Replay branches
+- `audit/uart-current`, tip `56590f4c6`: retains upstream's managed paced
+  receiver and completes UE/TE transmit gating, the SR-then-DR IDLE-clear
+  sequence, and configured frame-length timing. Focused result: 6 passed.
+  Complete peripheral result: 106 passed, 5 skipped, 0 failed.
+- `audit/spi-dma-current`, tip `6f541e790`: retains upstream's `DMASend` and
+  `DMAReceive` API while correcting completion, circular reload, request-paced
+  peripheral transfers, pending level requests, and SPI-enable gating.
+  Focused result: 7 passed. Complete peripheral result: 107 passed, 5 skipped,
+  0 failed.
+- `audit/stm32f7-i2c-current`, tip `9e0bfb9d5`: retains upstream's `DmaReceive`
+  behavior and adds an independently gated, per-byte `DmaTransmit` request.
+  Focused result: 2 passed. Complete peripheral result: 102 passed, 5 skipped,
+  0 failed.
 
-`feat/upstream-generic-stm32-review` contains one cleanly replayed patch:
+Each topic passed `./build.sh --skip-fetch --no-gui`, including all native cores
+and the managed solution, with zero errors. The builds reported one existing
+unreachable-code warning in `BitmapImageExtensions.cs`. Their elapsed times were
+4m00s for UART, 4m23s for SPI-DMA, and 4m28s for STM32F7-I2C.
 
-1. `0de918d1e`: correct STM32 DMA completion, with focused regression tests.
+## Earlier replay topics
 
-`feat/upstream-generic-devices-review` contains four ordered patches:
+- `feat/upstream-generic-stm32-review` contains the isolated STM32 DMA
+  completion correction.
+- `feat/upstream-generic-devices-review` contains independent TLC5955,
+  LSM6DS3TR-C, NOR/W25Q256, and LP50xx model commits.
 
-1. `e9325a85a`: TLC5955 shift/latch model and tests.
-2. `c7451e26d`: LSM6DS3TR-C register model and tests.
-3. `e882245d4`: generic NOR/W25Q256 behavior and tests. The replay preserves
-   upstream's status-register-stub option and adds the optional secondary
-   status opcode after it.
-4. `0c8851bbb`: LP50xx LED model and tests, split from the original mixed
-   LP50xx/STM32-I2C commit.
-
-The SDK-style test project discovers test files automatically, so obsolete
-explicit `Compile` entries were discarded during replay.
-
-## Required before upstream submission
-
-- Port the UART idle/enable patch onto upstream's managed receiver thread.
-- Rework the SPI/UART paced DMA request series against current peripheral APIs.
-- Split and port the STM32F7 I2C DMA portion independently from LP50xx.
-- Build each topic in a current, fully initialized Renode checkout and run only
-  its named fixture first, then the complete peripheral suite.
-- Review commit messages and authorship, then submit one topic at a time. Do not
-  open upstream pull requests from automation.
-
-The replay worktrees passed `git diff --check`. A fully initialized current
-Renode superproject generated its build targets and compiled native x86 and ARM
-cores plus several managed dependencies. Its focused .NET 8 test build did not
-reach the test runner before the bounded audit ended, so this is not a native
-pass and the native gate remains pending.
+Before any upstream submission, rebase one topic onto the then-current upstream
+tip, rerun its focused fixture, complete peripheral suite, and full headless
+build, then review commit authorship and message wording manually.
