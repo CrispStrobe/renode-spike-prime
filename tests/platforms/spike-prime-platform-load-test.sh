@@ -2,12 +2,11 @@
 set -euo pipefail
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
-renode_dll=${RENODE_DLL:-"$repo_root/output/bin/Release/Renode.dll"}
 test_root=$(mktemp -d)
 log="$test_root/renode.log"
 trap 'rm -rf "$test_root"' EXIT
 
-test -f "$renode_dll"
+test -f "$repo_root/output/bin/Release/Renode.dll"
 cd "$repo_root"
 
 # The generic STM32F4 platform fetches an SVD used only for monitor register
@@ -21,9 +20,15 @@ sed '/^[[:space:]]*ApplySVD @https:\/\/dl\.antmicro\.com\/projects\/renode\/svd\
 test "$(wc -l <platforms/cpus/stm32f4.repl)" -eq "$(( $(wc -l <"$test_root/platforms/cpus/stm32f4.repl") + 1 ))"
 ! grep -R -E 'https?://|ApplySVD' "$test_root/platforms"
 
-timeout --kill-after=5s 120s dotnet "$renode_dll" --disable-xwt --plain \
-  -e "mach create; machine LoadPlatformDescription @$test_root/platforms/boards/spike-prime.repl; peripherals; quit" \
-  | tee "$log"
+timeout --kill-after=5s 30s dotnet output/bin/Release/Renode.dll \
+  --disable-xwt --plain -e 'mach create' -e 'quit'
+
+timeout --kill-after=5s 120s dotnet output/bin/Release/Renode.dll \
+  --disable-xwt --plain \
+  -e 'mach create' \
+  -e "machine LoadPlatformDescription @$test_root/platforms/boards/spike-prime.repl" \
+  -e 'peripherals' \
+  -e 'quit' | tee "$log"
 
 grep -Fq 'adc1' "$log"
 grep -Fq 'bluetoothButton' "$log"
