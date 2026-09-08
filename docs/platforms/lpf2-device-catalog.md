@@ -25,12 +25,35 @@ integration are deterministic simulator policy, not motor-electronics claims.
 
 ## Pending evidence
 
-- SPIKE Color Sensor type 61: SPDX-MIT declarations identify modes, widths,
-  and LIGHT output, but not its complete discovery stream and units.
-- SPIKE Force Sensor type 63: SPDX-MIT declarations cover only FRAW mode 4 and
-  CALIB mode 6; the remaining discovery contract is absent.
-- SPIKE Large Motor type 49: the ID is declared, but no complete permissive
-  discovery fixture was found. It is not the implemented Technic type-46 motor.
+- SPIKE Color Sensor type 61: Pybricks commit
+  `621b830b531ef32c29af7fe12ae963c2bcc19832` is MIT licensed. Its
+  `lib/lego/lego/device.h` blob
+  `e397dc406bf1f4819f5e23d3a135d5880c579f8e` supplies all ten mode indices,
+  names, widths, data types, and the three-byte LIGHT output shape. Its
+  `lib/lego/lego/lump.h` blob
+  `7b842e04d133ffb8c73dc4203f6d829a7f14397a` supplies type 61. Neither file nor
+  the repository's UART tests supplies the complete discovery transcript,
+  per-mode units/ranges/mappings, versions, or LIGHT value semantics.
+- SPIKE Force Sensor type 63: the same pinned `lump.h` supplies type 63, while
+  the same pinned `device.h` supplies only FRAW mode 4 as one `int16_t` and
+  CALIB mode 6 as eight `int16_t` values. Modes 0--3 and 5, the complete
+  discovery transcript, units/ranges/mappings, versions, and output semantics
+  remain absent.
+- SPIKE Large Motor type 49: the same pinned `lump.h` supplies the ID. Pybricks
+  `lib/pbio/src/motor/servo_settings.c` blob
+  `83047c7772d6fe76b1959568d81ea255d0775f69` establishes that its control
+  tuning is shared with the Technic Large Angular Motor, but does not establish
+  an identical UART discovery contract. No complete type-49 discovery fixture,
+  units/widths/mappings/version record, or device-side command semantics is
+  present.
+
+Pybricks Technical Information commit
+`cce611e0d28278d9d5b4472f101a89fc7c81e778` is also MIT licensed. Its
+`assigned-numbers.md` and `uart-protocol.md` corroborate the three IDs and the
+generic discovery grammar, but contain no device-specific transcript or mode
+table that closes the gaps above. The audit also checked the full history of
+Pybricks' `lib/pbio/test/src/test_uartdev.c`; its exact transcripts cover older
+devices, including type 46, but not types 49, 61, or 63.
 
 These devices stay unimplemented until a complete MIT/Apache/BSD-compatible
 primary capture or specification can be pinned by file and commit.
