@@ -22,7 +22,7 @@ Pybricks Prime unchanged image progresses
 spike-nx unchanged protected image reaches boot boundaries
     Run Protected Scenario    spike-nx    false
 
-Brickwright NuttX unchanged protected image reaches device and H4 boundaries
+Brickwright NuttX unchanged protected image reaches device boundaries
     Run Protected Scenario    brickwright-nuttx    true
 
 LEGO Essential unchanged image progresses
@@ -100,7 +100,7 @@ Run Protected Scenario
     Execute Command    cpu AddHook ${nx_start.strip()} "monitor.Parse('log \\"MILESTONE nx_start\\"'); machine.PauseAndRequestEmulationPause()"
     Execute Command    cpu AddHook ${board_late.strip()} "monitor.Parse('log \\"MILESTONE board_late_initialize\\"'); machine.PauseAndRequestEmulationPause()"
     Execute Command    cpu AddHook ${bringup.strip()} "monitor.Parse('log \\"MILESTONE stm32_bringup\\"'); machine.PauseAndRequestEmulationPause()"
-    IF    ${with_h4}
+    IF    $with_h4
         Set Up H4 Controller And Brickwright Hooks
     END
     Start Emulation
@@ -109,7 +109,7 @@ Run Protected Scenario
     Wait For Log Entry    MILESTONE board_late_initialize    timeout=10
     Start Emulation
     Wait For Log Entry    MILESTONE stm32_bringup    timeout=10
-    IF    ${with_h4}
+    IF    $with_h4
         Start Emulation
         Wait For Log Entry    MILESTONE imu_init    timeout=10
         Start Emulation
@@ -117,9 +117,7 @@ Run Protected Scenario
         Start Emulation
         Wait For Log Entry    MILESTONE display_init    timeout=15
         Start Emulation
-        Wait For Log Entry    MILESTONE bluetooth_bootstrap    timeout=10
-        Start Emulation
-        Wait For Log Entry    MILESTONE daemon_ready    timeout=90
+        Wait For Log Entry    MILESTONE bluetooth_board_init    timeout=10
     END
 
 Set Up H4 Controller And Brickwright Hooks
@@ -129,13 +127,11 @@ Set Up H4 Controller And Brickwright Hooks
     ${imu}=    Execute Command    sysbus GetSymbolAddress "stm32_lsm6dsl_initialize"
     ${storage}=    Execute Command    sysbus GetSymbolAddress "stm32_w25q256_initialize"
     ${display}=    Execute Command    sysbus GetSymbolAddress "tlc5955_initialize"
-    ${bluetooth}=    Execute Command    sysbus GetSymbolAddress "physical_open"
-    ${ready}=    Execute Command    sysbus GetSymbolAddress "daemon_wait_for_stop"
+    ${bluetooth}=    Execute Command    sysbus GetSymbolAddress "stm32_bluetooth_initialize"
     Execute Command    cpu AddHook ${imu.strip()} "monitor.Parse('log \\"MILESTONE imu_init\\"'); machine.PauseAndRequestEmulationPause()"
     Execute Command    cpu AddHook ${storage.strip()} "monitor.Parse('log \\"MILESTONE storage_init\\"'); machine.PauseAndRequestEmulationPause()"
     Execute Command    cpu AddHook ${display.strip()} "monitor.Parse('log \\"MILESTONE display_init\\"'); machine.PauseAndRequestEmulationPause()"
-    Execute Command    cpu AddHook ${bluetooth.strip()} "monitor.Parse('log \\"MILESTONE bluetooth_bootstrap\\"'); machine.PauseAndRequestEmulationPause()"
-    Execute Command    cpu AddHook ${ready.strip()} "monitor.Parse('log \\"MILESTONE daemon_ready\\"'); machine.PauseAndRequestEmulationPause()"
+    Execute Command    cpu AddHook ${bluetooth.strip()} "monitor.Parse('log \\"MILESTONE bluetooth_board_init\\"'); machine.PauseAndRequestEmulationPause()"
 
 Reset Scenario
     Terminate All Processes    kill=True

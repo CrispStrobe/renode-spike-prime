@@ -1,5 +1,11 @@
 # Completed simulation work
 
+- A hash-verified, unchanged local Brickwright NuttX kernel/userspace pair now
+  reaches NuttX, board, IMU, storage, display, and Bluetooth-board milestones
+  in Renode. The Prime overlay wires both SPI1 DMA streams, and the generic DMA
+  engine correctly bounds non-incrementing destinations. Application H4 and
+  daemon/state execution remain deliberately unclaimed.
+
 - Added a deterministic snapshot adapter seam for public SPIKE model properties
   and a bounded power, IMU, and LPF2 command allowlist.
 

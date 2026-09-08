@@ -24,3 +24,7 @@ gpioPortB:
 
 spi2:
     DMATransmit -> dma1@4
+
+spi1:
+    DMAReceive -> dma2@2
+    DMATransmit -> dma2@3

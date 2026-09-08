@@ -11,7 +11,9 @@ fetched, committed, logged, cached, or uploaded by public CI.
    Acceptance: Robot Framework parses with Renode's keyword library; dictionary
    access and hexadecimal monitor values work at runtime; each available image
    reaches only its catalogued milestones; two-ELF symbol lookup and the
-   USART2/H4 path pass for Brickwright NuttX. Prime port traffic remains out of
+   USART2/H4 application path pass for Brickwright NuttX. Board Bluetooth
+   initialization is proven; starting `btsensor` and exchanging H4 remain.
+   Prime port traffic remains out of
    scope until a source-cited Prime LPF2 wiring overlay exists. Platform
    scenarios must start the state service with explicit identity and model
    paths and assert its snapshots against real firmware execution.
