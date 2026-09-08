@@ -23,7 +23,7 @@ test "$(wc -l <platforms/cpus/stm32f4.repl)" -eq "$(( $(wc -l <"$test_root/platf
 cp tests/platforms/fixtures/probe-*.repl "$test_root/platforms/boards/"
 
 timeout --kill-after=5s 30s dotnet output/bin/Release/Renode.dll \
-  --disable-xwt --plain -e 'mach create' -e 'quit'
+  --disable-xwt --console --plain -e 'mach create; quit'
 
 load_platform() {
   local name=$1
@@ -31,25 +31,12 @@ load_platform() {
   local expected=$3
   local load_log="$test_root/$name.log"
 
-  dotnet output/bin/Release/Renode.dll \
-    --disable-xwt --plain \
-    -e 'mach create' \
-    -e "machine LoadPlatformDescription @$platform" \
-    -e 'peripherals' \
-    -e 'quit' >"$load_log" 2>&1 &
-  local load_pid=$!
-
-  for _ in $(seq 1 60); do
-    if grep -Fq "$expected" "$load_log" || ! kill -0 "$load_pid" 2>/dev/null; then
-      break
-    fi
-    sleep 1
-  done
-  if kill -0 "$load_pid" 2>/dev/null; then
-    kill "$load_pid"
-  fi
-  wait "$load_pid" 2>/dev/null || true
+  timeout --kill-after=5s 60s dotnet output/bin/Release/Renode.dll \
+    --disable-xwt --console --plain \
+    -e "mach create; machine LoadPlatformDescription @$platform; peripherals; quit" \
+    >"$load_log" 2>&1
   cat "$load_log"
+  ! grep -Fq 'Error E' "$load_log"
   grep -Fq "$expected" "$load_log"
 }
 
