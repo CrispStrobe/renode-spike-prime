@@ -43,6 +43,10 @@ storage, or Bluetooth model is not evidence that firmware exercised it. Those
 milestones remain pending until observable counters or an equivalent public
 contract exists.
 
+With local inputs present, Prime v2, Prime v3, and Pybricks Prime pass this
+bounded vector/progress gate; spike-nx passes its protected two-ELF boot-symbol
+gate. These results do not imply full peripheral compatibility.
+
 The Prime machine currently has display, IMU, storage, power, speaker, and H4
 building blocks but no source-cited LPF2 port wiring overlay. Prime port traffic
 is therefore not claimed. Runtime dictionary expansion, monitor numeric

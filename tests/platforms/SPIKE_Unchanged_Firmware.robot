@@ -69,7 +69,7 @@ Set And Validate Vectors
     ${initial_pc_text}=    Execute Command    sysbus ReadDoubleWord ${reset_address}
     ${initial_sp}=    Convert To Integer    ${initial_sp_text.strip()}
     ${initial_pc}=    Evaluate    int($initial_pc_text.strip(), 0) & ~1
-    Should Be True    0x20000000 <= ${initial_sp} < 0x20050000
+    Should Be True    0x20000000 <= ${initial_sp} <= 0x20050000
     Should Be True    0x08000000 <= ${initial_pc} < 0x08200000
     Execute Command    cpu SP ${initial_sp}
     Execute Command    cpu PC ${initial_pc}

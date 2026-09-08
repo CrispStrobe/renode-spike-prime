@@ -12,6 +12,11 @@
   service now loads its .NET networking assemblies explicitly and serializes
   model numeric values safely under IronPython.
 
+- Locally supplied, hash-manifested LEGO Prime v2, LEGO Prime v3, Pybricks
+  Prime, and spike-nx images now pass their deliberately bounded unchanged-image
+  gates. An initial stack pointer exactly at the top of SRAM is accepted as the
+  valid ARM one-past-end stack convention. Essential inputs remain absent.
+
 - Added a deterministic snapshot adapter seam for public SPIKE model properties
   and a bounded power, IMU, and LPF2 command allowlist.
 
