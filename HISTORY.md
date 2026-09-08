@@ -4,7 +4,13 @@
   reaches NuttX, board, IMU, storage, display, and Bluetooth-board milestones
   in Renode. The Prime overlay wires both SPI1 DMA streams, and the generic DMA
   engine correctly bounds non-incrementing destinations. Application H4 and
-  daemon/state execution remain deliberately unclaimed.
+  daemon execution remain deliberately unclaimed.
+
+- The same real-image run now starts the bounded loopback state service with an
+  explicit Prime/Brickwright identity and model paths, then validates a live
+  display snapshot after firmware-driven device initialization. The monitor
+  service now loads its .NET networking assemblies explicitly and serializes
+  model numeric values safely under IronPython.
 
 - Added a deterministic snapshot adapter seam for public SPIKE model properties
   and a bounded power, IMU, and LPF2 command allowlist.

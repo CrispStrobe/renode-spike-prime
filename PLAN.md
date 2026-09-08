@@ -15,8 +15,8 @@ fetched, committed, logged, cached, or uploaded by public CI.
    initialization is proven; starting `btsensor` and exchanging H4 remain.
    Prime port traffic remains out of
    scope until a source-cited Prime LPF2 wiring overlay exists. Platform
-   scenarios must start the state service with explicit identity and model
-   paths and assert its snapshots against real firmware execution.
+   The state-service snapshot gate is complete. Application H4 and daemon
+   execution remain pending on the simulation-only firmware controller backend.
 2. Complete source evidence for the remaining LPF2 devices.
    Depends on: the bounded UART endpoint contract.
    Acceptance: a pinned MIT/Apache/BSD-compatible primary source supplies the

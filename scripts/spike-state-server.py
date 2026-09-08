@@ -7,11 +7,14 @@ Including it never opens a listener, and no general monitor command is exposed.
 import json
 import os
 import sys
+import clr
+clr.AddReference("System.Net.Primitives")
+clr.AddReference("System.Net.Sockets")
 from System import Array, Byte
 from System.Net import IPAddress
 from System.Net.Sockets import TcpListener
 from System.Text import Encoding
-from System.Threading import Thread
+from System.Threading import Thread, ThreadStart
 from threading import Lock, RLock
 
 _tools = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "tools"))
@@ -63,9 +66,9 @@ def _snapshot(config, seq, generation):
                             "values": {"distanceMillimeters": int(device.DistanceMillimeters)}})
     display, pixels, width, height, semantics = _optional(paths, "display"), [], 0, 0, "unavailable"
     if display is not None and hasattr(display, "Matrix"):
-        pixels, width, height, semantics = list(display.Matrix), 5, 5, "grayscale-16bit"
+        pixels, width, height, semantics = [int(value) for value in display.Matrix], 5, 5, "grayscale-16bit"
     elif display is not None and hasattr(display, "RenderedModuleSnapshot"):
-        modules = [list(module) for module in display.RenderedModuleSnapshot]
+        modules = [[int(value) for value in module] for module in display.RenderedModuleSnapshot]
         pixels = [value for module in modules for value in module]
         width, height, semantics = 3, len(modules), "rgb-components-8bit"
     power = _optional(paths, "power")
@@ -132,10 +135,11 @@ class _Server(object):
         if port < 0 or port > 65535 or clients != 1 or self.limit < 256 or self.limit > _MAX_LINE or self.timeout < 50 or self.timeout > 60000:
             raise ValueError("endpoint or resource limit is outside the supported range")
         self.config, self.running, self.generation = validate_config(config), True, 0
+        self.last_error = ""
         self.stream, self.seq, self.write_lock, self.state_lock = None, 0, Lock(), RLock()
         self.listener = TcpListener(address, port)
         self.listener.Start(clients)
-        self.thread = Thread(self._run); self.thread.IsBackground = True; self.thread.Start()
+        self.thread = Thread(ThreadStart(self._run)); self.thread.IsBackground = True; self.thread.Start()
 
     def close(self):
         self.running = False; self.listener.Stop()
@@ -173,8 +177,9 @@ class _Server(object):
             self.generation += 1
             try:
                 self._client(client, self.generation)
-            except:
-                pass
+            except Exception as exception:
+                self.last_error = str(exception)
+                print("SPIKE state client error: {0}".format(exception))
             finally:
                 self.stream = None
                 client.Close()
@@ -228,3 +233,7 @@ def mc_spike_state_stop():
 def mc_spike_state_sample():
     if _state_server is None or not _state_server.sample():
         raise RuntimeError("SPIKE state server has no connected client")
+
+
+def mc_spike_state_error():
+    print(_state_server.last_error if _state_server is not None else "state server is stopped")

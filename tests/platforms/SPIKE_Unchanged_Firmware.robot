@@ -8,6 +8,7 @@ Test Timeout     120 seconds
 ${IMAGE_ROOT}    ${CURDIR}/../../.local/spike-firmware-scenarios
 ${TOOL}          ${CURDIR}/../../tools/spike-firmware-scenarios/scenario_manifest.py
 ${H4_PORT}       34561
+${STATE_PORT}    34562
 
 *** Test Cases ***
 LEGO Prime v2 unchanged image progresses
@@ -118,9 +119,12 @@ Run Protected Scenario
         Wait For Log Entry    MILESTONE display_init    timeout=15
         Start Emulation
         Wait For Log Entry    MILESTONE bluetooth_board_init    timeout=10
+        Assert Brickwright State Snapshot
     END
 
 Set Up H4 Controller And Brickwright Hooks
+    Execute Command    include "${CURDIR}/../../scripts/spike-state-server.py"
+    Execute Command    spike_state_start "127.0.0.1" ${STATE_PORT} "${CURDIR}/../../contracts/brick-state/renode-prime.example.json"
     Execute Command    emulation CreateServerSocketTerminal ${H4_PORT} "hci" false
     Execute Command    connector Connect sysbus.usart2 hci
     Start Process    python3    ${CURDIR}/../../tools/spike-bluetooth-controller.py    127.0.0.1    ${H4_PORT}    --acknowledge-vendor-commands    alias=h4
@@ -133,6 +137,19 @@ Set Up H4 Controller And Brickwright Hooks
     Execute Command    cpu AddHook ${display.strip()} "monitor.Parse('log \\"MILESTONE display_init\\"'); machine.PauseAndRequestEmulationPause()"
     Execute Command    cpu AddHook ${bluetooth.strip()} "monitor.Parse('log \\"MILESTONE bluetooth_board_init\\"'); machine.PauseAndRequestEmulationPause()"
 
+Assert Brickwright State Snapshot
+    ${read}=    Run Process    python3    ${CURDIR}/../../tools/spike-state-read-once.py    127.0.0.1    ${STATE_PORT}    --board    spike-prime    --firmware    brickwright-nuttx
+    ${server_error}=    Execute Command    spike_state_error
+    Should Be Equal As Integers    ${read.rc}    0    State snapshot failed: ${read.stderr}; server: ${server_error}
+    ${snapshot}=    Evaluate    json.loads($read.stdout)    json
+    Should Be Equal    ${snapshot}[type]    snapshot
+    Should Be Equal    ${snapshot}[target][board]    spike-prime
+    Should Be Equal    ${snapshot}[target][firmware]    brickwright-nuttx
+    Should Be Equal As Integers    ${snapshot}[display][width]    5
+    Should Be Equal As Integers    ${snapshot}[display][height]    5
+    Should Be True    ${snapshot}[battery][millivolts] >= 0
+
 Reset Scenario
     Terminate All Processes    kill=True
+    Run Keyword And Ignore Error    Execute Command    spike_state_stop
     Reset Emulation

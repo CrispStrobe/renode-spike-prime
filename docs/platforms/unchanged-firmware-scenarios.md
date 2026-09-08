@@ -48,6 +48,7 @@ building blocks but no source-cited LPF2 port wiring overlay. Prime port traffic
 is therefore not claimed. Runtime dictionary expansion, monitor numeric
 conversion, two-ELF symbol lookup, device initialization, SPI1 RX/TX DMA, and
 entry into USART2 board initialization pass with the local Brickwright image.
+That run also validates a bounded state-service snapshot after these milestones.
 Application H4 execution remains in `PLAN.md`.
 
 Public CI tests only the catalog, loader, skip behavior, and tamper rejection
