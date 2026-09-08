@@ -78,6 +78,7 @@ jobs:
         run: |
           python3 -m unittest discover -s tests/tools -p 'spike_state_bridge_test.py'
           python3 -m unittest discover -s tests/tools -p 'spike_live_state_test.py'
+          python3 -m unittest discover -s tests/tools -p 'spike_state_socket_test.py'
           python3 -m json.tool contracts/brick-state/v1/schema.json >/dev/null
           python3 -m py_compile tools/spike_state_bridge.py tools/spike-state-bridge.py
 
