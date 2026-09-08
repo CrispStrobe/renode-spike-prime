@@ -5,9 +5,11 @@ Test Teardown    Reset Scenario
 Test Timeout     120 seconds
 
 *** Variables ***
-${IMAGE_ROOT}    ${CURDIR}/../../.local/spike-firmware-scenarios
+${IMAGE_ROOT}    %{SPIKE_FIRMWARE_IMAGE_ROOT=${CURDIR}/../../.local/spike-firmware-scenarios}
 ${TOOL}          ${CURDIR}/../../tools/spike-firmware-scenarios/scenario_manifest.py
-${STATE_PORT}    34562
+${STATE_PORT}    0
+${OPAQUE_INSTRUCTION_BUDGET}    2000
+${PROTECTED_INSTRUCTION_CEILING}    100000000
 
 *** Test Cases ***
 LEGO Prime v2 unchanged image progresses
@@ -80,7 +82,7 @@ Run Opaque Scenario
     Create Target Machine    ${input}[board]
     Load Artifact    ${target}    ${input}[artifacts][0]
     ${pc}=    Set And Validate Vectors    ${input}[artifacts][0][load_address]
-    Execute Command    cpu Step 2000
+    Execute Command    cpu Step ${OPAQUE_INSTRUCTION_BUDGET}
     ${after_text}=    Execute Command    cpu GetRegister "PC"
     ${after}=    Convert To Integer    ${after_text.strip()}
     Should Not Be Equal As Numbers    ${pc}    ${after}
@@ -122,10 +124,19 @@ Run Protected Scenario
         Wait For Log Entry    MILESTONE daemon_ready    timeout=30
         Assert Brickwright State Snapshot
     END
+    Assert Protected Instruction Ceiling
+
+Assert Protected Instruction Ceiling
+    ${instructions_text}=    Execute Command    cpu ExecutedInstructions
+    ${instructions}=    Convert To Integer    ${instructions_text.strip()}
+    Should Be True    0 < ${instructions} <= ${PROTECTED_INSTRUCTION_CEILING}
 
 Set Up Brickwright Simulation Hooks
     Execute Command    include "${CURDIR}/../../scripts/spike-state-server.py"
     Execute Command    spike_state_start "127.0.0.1" ${STATE_PORT} "${CURDIR}/../../contracts/brick-state/renode-prime.example.json"
+    ${state_port_text}=    Execute Command    spike_state_port
+    ${state_port}=    Convert To Integer    ${state_port_text.strip()}
+    Set Test Variable    ${STATE_PORT}    ${state_port}
     ${imu}=    Execute Command    sysbus GetSymbolAddress "stm32_lsm6dsl_initialize"
     ${storage}=    Execute Command    sysbus GetSymbolAddress "stm32_w25q256_initialize"
     ${display}=    Execute Command    sysbus GetSymbolAddress "tlc5955_initialize"

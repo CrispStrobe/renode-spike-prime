@@ -67,9 +67,11 @@ jobs:
             python3 "$test"
           done
           python3 tests/tools/spike_fault_soak_test.py
+          python3 tests/tools/spike_fault_resource_soak_test.py
           python3 -m py_compile \
             tools/bluetooth_controller/*.py \
             tools/spike-bluetooth-controller.py \
+            tools/spike-fault-resource-soak.py \
             tests/tools/bluetooth_controller_*_test.py
 
       - name: Run neutral brick-state contract gates

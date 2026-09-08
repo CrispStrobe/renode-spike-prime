@@ -56,3 +56,26 @@ That run also validates a bounded state-service snapshot after these milestones.
 Public CI tests only the catalog, loader, skip behavior, and tamper rejection
 with synthetic bytes. It never obtains or uploads firmware, manifests, hashes,
 test logs derived from private images, or TI controller data.
+
+## Local repeated-boot resource gate
+
+After building headless Renode, run:
+
+```bash
+tools/spike-fault-resource-soak.py
+```
+
+The gate re-verifies every locally present catalog image, runs its exact Robot
+scenario three times, and deletes the private Robot results when the run ends.
+It suppresses Renode output so artifact paths and hashes cannot enter console
+logs. Each target has a 180-second wall guard, opaque execution is exactly
+2,000 instructions per cycle, and protected execution must remain below 100
+million instructions per cycle. The default aggregate resident-set ceiling for
+the runner and its descendant processes is 1,536 MiB. Command-line overrides
+are intended for explicit local calibration; a one-cycle run is rejected.
+
+The W25Q256-compatible model exposes `FailNextProgramOperations` and
+`FailNextEraseOperations`. Set either counter before a recovery scenario to
+make that many complete operations consume write-enable while leaving storage
+unchanged. `InjectedProgramFailures` and `InjectedEraseFailures` make the
+consumed faults observable. These simulation controls do not alter image bytes.
