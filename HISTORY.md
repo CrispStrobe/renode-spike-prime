@@ -101,6 +101,14 @@
   deterministic mechanics reuse the bounded endpoint's fault recovery. The
   evidence audit kept incompletely sourced color, force, and type-49 motors out.
 
+- Added deterministic whole-operation NOR program/erase fault injection and a
+  privacy-safe local repeated-boot gate. The gate re-verifies every available
+  scenario input, repeats its full-machine test with fixed instruction ceilings
+  and seed, measures aggregate process-tree RSS, suppresses private run output,
+  and skips cleanly when no local image is present. The local acceptance run
+  completed three cycles each for five available Prime scenarios (15 total);
+  the highest observed aggregate RSS was 459 MiB against the 1,536 MiB ceiling.
+
 Commit history and CI retain detailed evidence.
 
 - Audited the product forks against Renode `ab721d88` and Infrastructure

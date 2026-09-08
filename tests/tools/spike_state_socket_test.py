@@ -116,6 +116,8 @@ class SocketTest(unittest.TestCase):
         self.assertIn('finally:\n                self.stream = None', source)
         self.assertIn('split_frames(pending, chunk', source)
         self.assertNotIn('_Server(str(host)', source.split('def mc_spike_state_start')[0])
+        self.assertIn('SocketOptionName.ReuseAddress', source)
+        self.assertIn('def mc_spike_state_port():', source)
 
 
 if __name__ == "__main__": unittest.main()

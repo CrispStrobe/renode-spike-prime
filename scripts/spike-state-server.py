@@ -12,7 +12,7 @@ clr.AddReference("System.Net.Primitives")
 clr.AddReference("System.Net.Sockets")
 from System import Array, Byte
 from System.Net import IPAddress
-from System.Net.Sockets import TcpListener
+from System.Net.Sockets import SocketOptionLevel, SocketOptionName, TcpListener
 from System.Text import Encoding
 from System.Threading import Thread, ThreadStart
 from threading import Lock, RLock
@@ -138,6 +138,7 @@ class _Server(object):
         self.last_error = ""
         self.stream, self.seq, self.write_lock, self.state_lock = None, 0, Lock(), RLock()
         self.listener = TcpListener(address, port)
+        self.listener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, True)
         self.listener.Start(clients)
         self.thread = Thread(ThreadStart(self._run)); self.thread.IsBackground = True; self.thread.Start()
 
@@ -228,6 +229,11 @@ def mc_spike_state_start(host, port, config_path):
 def mc_spike_state_stop():
     global _state_server
     if _state_server is not None: _state_server.close(); _state_server = None
+
+
+def mc_spike_state_port():
+    if _state_server is None: raise RuntimeError("SPIKE state server is stopped")
+    print(_state_server.listener.LocalEndpoint.Port)
 
 
 def mc_spike_state_sample():
