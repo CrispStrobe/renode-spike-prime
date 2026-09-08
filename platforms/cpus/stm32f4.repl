@@ -229,6 +229,10 @@ timer11: Timers.STM32_Timer @ sysbus 0x40014800
     frequency: 10000000
     initialLimit: 0xFFFF
 
+adc1: Analog.STM32_ADC @ sysbus 0x40012000
+    -> nvic@18
+    DMARequest -> dma2@0
+
 timer12: Timers.STM32_Timer @ sysbus 0x40001800
     -> nvic@43
     frequency: 10000000

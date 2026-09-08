@@ -9,6 +9,11 @@ imu: Sensors.LSM6DS3TRC @ i2c2 0x6a
 
 display: SPI.TLC5955 @ spi1
 
+// Pybricks prime_hub/platform.c (101c6bab), PWM_DEV_3_TIM12:
+// TIM12_CH2 on PB15 supplies the TLC5955 9.6 MHz grayscale clock.
+timer12:
+    1 -> display@1
+
 gpioPortA:
     15 -> display@0
 
@@ -19,6 +24,22 @@ gpioPortA:
 
 speaker: Sound.PCMAudioSink @ sysbus 0x40007408
 
+// The same pinned source routes TIM6 TRGO to DAC1_CH1 and DAC DMA to
+// DMA1_Stream5/Channel7. The sink represents the DAC holding register.
+timer6:
+    TriggerOutput -> speaker@1
+    UpdateDMARequest -> dma1@5
+
 gpioPortC:
     10 -> speaker@0
 
+// Two physical resistor ladders drive ADC1_IN14 (PC4) and ADC1_IN1 (PA1).
+// Digital Button peripherals are frontend controls; the ladder chooses stable
+// raw samples strictly inside the pinned Pybricks decoder thresholds.
+buttonLadders: Analog.PrimeButtonLadder @ none
+    adc: adc1
+
+centerButton: Miscellaneous.Button @ buttonLadders 0
+leftButton: Miscellaneous.Button @ buttonLadders 1
+rightButton: Miscellaneous.Button @ buttonLadders 2
+bluetoothButton: Miscellaneous.Button @ buttonLadders 3
