@@ -49,7 +49,7 @@ jobs:
           python3 tests/tools/steering_docs_test.py
           python3 tests/platforms/spike-firmware-scenario-manifest-test.py
           grep -Fq 'Run Opaque Scenario    lego-prime-v2' tests/platforms/SPIKE_Unchanged_Firmware.robot
-          grep -Fq 'Run Protected Scenario    brickwright-nuttx    true' tests/platforms/SPIKE_Unchanged_Firmware.robot
+          grep -Fq 'Run Protected Scenario    brickwright-nuttx    ${True}' tests/platforms/SPIKE_Unchanged_Firmware.robot
           grep -Fq 'primeStorage: SPI.GenericSpiFlash' platforms/boards/spike-prime.repl
           tests/platforms/spike-essential-loader-test.sh
           grep -Fq 'imu: Sensors.LSM6DS3TRC @ i2c3 0x6a' platforms/boards/spike-essential.repl
