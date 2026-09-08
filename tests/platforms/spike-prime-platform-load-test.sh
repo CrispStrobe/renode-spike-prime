@@ -59,7 +59,7 @@ test "$probe_failed" -eq 0
 
 names_marker="$test_root/platform-names.ok"
 load_platform full "$test_root/platforms/boards/spike-prime.repl" speaker \
-  "python \"names = set(self.Machine.GetAllNames()); assert set(['adc1', 'bluetoothButton', 'buttonLadders', 'centerButton', 'display', 'leftButton', 'rightButton', 'speaker', 'timer12']).issubset(names); open('$names_marker', 'w').write('ok')\";" \
+  "python \"names = set(self.Machine.GetAllNames()); required = ['adc1', 'bluetoothButton', 'buttonLadders', 'centerButton', 'display', 'leftButton', 'rightButton', 'speaker', 'timer12']; assert all(any(name == item or name.endswith('.' + item) for name in names) for item in required); open('$names_marker', 'w').write('ok')\";" \
   | tee "$log"
 test "$(cat "$names_marker")" = ok
 for expected in adc1 display speaker timer12; do
