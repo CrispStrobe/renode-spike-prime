@@ -38,6 +38,7 @@ load_platform() {
     >"$load_log" 2>&1
   cat "$load_log"
   ! grep -Fq 'Error E' "$load_log"
+  ! grep -Fq 'There was an error executing command' "$load_log"
   grep -Fq "$expected" "$load_log"
 }
 
@@ -56,10 +57,11 @@ for probe in adc display audio; do
 done
 test "$probe_failed" -eq 0
 
+names_marker="$test_root/platform-names.ok"
 load_platform full "$test_root/platforms/boards/spike-prime.repl" speaker \
-  "python \"names = set(self.Machine.GetAllNames()); assert set(['adc1', 'bluetoothButton', 'buttonLadders', 'centerButton', 'display', 'leftButton', 'rightButton', 'speaker', 'timer12']).issubset(names); print('SPIKE_PLATFORM_NAMES_OK')\";" \
+  "python \"names = set(self.Machine.GetAllNames()); assert set(['adc1', 'bluetoothButton', 'buttonLadders', 'centerButton', 'display', 'leftButton', 'rightButton', 'speaker', 'timer12']).issubset(names); open('$names_marker', 'w').write('ok')\";" \
   | tee "$log"
-grep -Fq SPIKE_PLATFORM_NAMES_OK "$log"
+test "$(cat "$names_marker")" = ok
 for expected in adc1 display speaker timer12; do
   grep -Fq "$expected" "$log"
 done

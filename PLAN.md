@@ -6,6 +6,11 @@ data must be MIT-compatible and source-only. Proprietary firmware and
 controller binaries are local inputs identified by SHA-256 and must never be
 fetched, committed, logged, cached, or uploaded by public CI.
 
+0. Close the Prime button registration regression.
+   Acceptance: all four button controls are registered in the machine with
+   stable names, drive the two ADC ladders, retain correct reset behavior, and
+   pass a runtime platform assertion whose success cannot be inferred from
+   echoed monitor input. CI must reject every monitor command error.
 1. Complete source evidence for the remaining LPF2 devices.
    Depends on: the bounded UART endpoint contract.
    Acceptance: a pinned MIT/Apache/BSD-compatible primary source supplies the
