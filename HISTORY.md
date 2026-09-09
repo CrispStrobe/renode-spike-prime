@@ -1,5 +1,11 @@
 # Completed simulation work
 
+- The remaining LPF2 evidence search was repeated against current public
+  sources. No permissively licensed complete type-49, type-61 or type-63 device
+  transcript was found. A pinned BSD-3-Clause Build HAT acquisition path and
+  the exact capture/contribution requirements are now recorded; incomplete and
+  unlicensed tables were not converted into models.
+
 - Correction: the first full-platform name assertion was not valid evidence.
   Renode echoed its input command before reporting an `AssertionError`, and
   the shell matched the success text in that echo. The replacement gate rejects
