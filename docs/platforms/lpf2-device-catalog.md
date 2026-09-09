@@ -57,3 +57,37 @@ devices, including type 46, but not types 49, 61, or 63.
 
 These devices stay unimplemented until a complete MIT/Apache/BSD-compatible
 primary capture or specification can be pinned by file and commit.
+
+## Closing the gaps
+
+The BSD-3-Clause Build HAT firmware at commit
+`19027849264d8839f7548713219a5982925dd885` provides a permissible acquisition
+path. Its `firmware-pico/message.c` blob
+`10700817c720ef9f3d308e49187046076cd0f288` parses the discovery messages and
+its `firmware-pico/device.c` blob
+`3fb471a3572bb3d733c7984b60cd6354e2cedb62` prints the resulting mode table.
+Those files do not contain device-specific tables, so they are capture tooling,
+not evidence for any pending device.
+
+One evidence set per physical device must contain:
+
+- the raw, byte-exact startup exchange from electrical connection through both
+  ACKs and the first data frame in every readable mode;
+- the complete parser dump, including device type, baud rate, versions, mode
+  count, combinations, names, units, formats, ranges and mappings;
+- one raw host-to-device frame and its observed effect for every writable mode;
+- the LEGO element number and all visible hardware/firmware revisions;
+- SHA-256 hashes of every capture and a signed-off `CC0-1.0`, `MIT`,
+  `Apache-2.0` or `BSD-3-Clause` contribution declaration.
+
+Capture facts must agree with the pinned Pybricks declarations above. A model
+may cover only the physical revision actually captured; differences between
+revisions remain separate evidence sets. Human-readable tables without an
+explicit compatible licence and runtime API summaries without raw discovery
+bytes cannot satisfy this gate.
+
+The public search through 2026-09-09 found useful tables in third-party pages
+and issue reports, but no explicit compatible licence covering their device
+data. They were therefore not used. Raspberry Pi's `docs/protocol.md` is also
+outside the two source-directory `LICENSE.txt` files and is not treated as
+BSD-3-Clause evidence.

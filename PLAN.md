@@ -12,7 +12,11 @@ fetched, committed, logged, cached, or uploaded by public CI.
    complete discovery bytes, units, widths, mappings, and output semantics for
    SPIKE color (type 61), force (type 63), and Large Motor (type 49). Add each
    model only after its evidence is complete. See
-   `docs/platforms/lpf2-device-catalog.md` for the missing facts.
+   `docs/platforms/lpf2-device-catalog.md` for the missing facts and the
+   BSD-licensed physical-capture contract. The next action is to capture one
+   identified physical example of each device and contribute the raw evidence
+   under a compatible licence; public sources alone do not currently close the
+   gate.
 2. Add deterministic fault, resource and soak gates.
    Depends on: the unchanged-firmware scenario contract and the
    completed neutral state contract.
