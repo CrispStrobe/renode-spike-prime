@@ -12,7 +12,7 @@ and a virtual phone share.
 | labwired backend | labwired-core `crates/core/src/sd_hle.rs`, `configs/chips/nrf51822.yaml` |
 | Renode backend | `renode/SoftDeviceHle.cs` (+ `NrfTimer.cs`, `NrfNvmc.cs`, `nrf51822-app.repl`, `run.py`) |
 | app-region extractor | `appimage.py` |
-| the shared air | `air/AIR.md`, `air/airhub.py`, `air/bumble_air.py` (bumble bridge + virtual phone), `air/fake_app.py` |
+| the shared air | `../bw-air/` (the one air of the project: `AIR.md`, `airhub.py`, `bumble_air.py`, `hci_node.py`, `scratch_link_node.py`); `fake_app.py` drives the HLE with no emulator |
 | conformance through the C ABI | `conformance/run_capi.py` |
 | interface-fact extraction (BSD-3 headers, fetched, never committed) | `facts/` |
 | GDB RSP probe (no ARM gdb needed) | `debug/rsp_probe.py` |
@@ -26,9 +26,9 @@ export SDHLE_LIB=$CARGO_TARGET_DIR/release/libnrf_softdevice_hle.so
 # 2. keep only the application region of an official hex
 python3 appimage.py program.hex v1 /tmp/app        # or: calliope
 # 3. the air, a run, a virtual phone
-python3 air/airhub.py &
+python3 ../bw-air/airhub.py &
 python3 renode/run.py --app /tmp/app.bin --out /tmp/run --secs 60 --air 127.0.0.1:7461 &
-python3 air/bumble_air.py central --target C0:EE:AA:BB:CC:01 --send hello
+python3 ../bw-air/bumble_air.py central --target C0:EE:AA:BB:CC:01 --send hello
 ```
 
 `run.py --app A.bin --app B.bin --radio-medium` puts two micro:bits on one

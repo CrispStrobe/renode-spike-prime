@@ -1,9 +1,22 @@
 # bw-air/1 — one virtual 2.4 GHz air for every simulated node
 
-Status: implemented for the emulated micro:bit V1 / Calliope mini (SoftDevice
-HLE in Renode and labwired), bumble devices (virtual phone), and raw radio.
-Open for the SPIKE Prime hub (renode-spike-prime / brickwright-spike-prime-fw)
-and lite (browser) — see "Joining" below.
+Status: the one simulated air of the project. Implemented for the emulated
+micro:bit V1 / Calliope mini (SoftDevice HLE in Renode and labwired), the
+emulated SPIKE Prime hub (its Zephyr host over the Renode UART, through
+`hci_node.py`), bumble devices (virtual phone, tests), raw radio, and Scratch
+Link clients such as Brickwright lite (through `scratch_link_node.py`).
+
+Home: `renode-spike-prime/tools/bw-air/`. This directory is the only
+implementation; other repositories (brickwright-spike-prime-fw, labwired-core)
+join it and do not carry their own air.
+
+| file | role |
+|---|---|
+| `airhub.py` | the hub (the medium); standard library only |
+| `bumble_air.py` | `AirLink`: a bumble `LocalLink` whose far side is the hub; virtual-phone central |
+| `hci_node.py` | HCI hosts on the air: a Renode UART exported as TCP (`--renode-hci`), HCI hosts dialling in (`--hci-listen`), in-process peers |
+| `scratch_link_node.py` | Scratch Link JSON-RPC (`/scratch/ble`, `/scratch/bt`) for browsers and lite |
+| `test_air.py` | self-test through the hub: LE GATT between dial-in HCI hosts, BR/EDR page/SSP/encryption/L2CAP |
 
 ## Why one air
 
@@ -51,6 +64,9 @@ convention), a random one none.
 | `connect_ind` | `initiator`, `advertiser`, `interval` (1.25 ms units), `latency`, `timeout` (10 ms units) | a central connects to an advertiser; the advertiser answers nothing — the connection exists from now on |
 | `acl` | `src`, `dst`, `data` = one L2CAP basic frame (length u16 LE, CID u16 LE, payload): CID 4 ATT, 5 LE signalling, 6 SMP | data on an established connection |
 | `ll` | `src`, `dst`, `op`, `error_code`, `rand`, `ediv`, `ltk` | LL control: `terminate_ind` (error_code = HCI reason), `enc_req` (rand, ediv, and the LTK the initiator uses — a virtual air carries it in the clear so the peer can check it matches instead of running AES-CCM), `start_enc_rsp`, `reject_ext_ind` (error_code), `feature_req`, `feature_rsp` |
+| `lmp` | `src`, `dst` (public addresses), `data` = one LMP PDU (opcode, escaped opcodes as two bytes, then parameters) | BR/EDR link manager: connection setup, Secure Simple Pairing, detach |
+| `acl_br` | `src`, `dst`, `data` = one L2CAP basic frame | BR/EDR data on an established ACL link (L2CAP signalling CID 1, SDP, RFCOMM) |
+| `enc_br` | `src`, `dst`, `state` (0 off, 1 E0, 2 AES-CCM) | BR/EDR link encryption changed; like `enc_req`, the air carries the fact, not ciphertext |
 | `raw` | `src`, `freq` (nRF FREQUENCY: 2400+freq MHz), `mode` (nRF RADIO MODE), `address` (BASEn \| PREFIX << 8*BALEN of the logical address used), `balen`, `packet` (the packet image in RAM at PACKETPTR: S0/LENGTH/S1 then payload), `tx_power` (dBm) | one proprietary 2.4 GHz frame (MakeCode radio uses `mode` 0 Nrf_1Mbit, freq 7 + band) |
 
 Security on the virtual air: pairing is real SMP over `acl` CID 6 (legacy Just
@@ -67,17 +83,22 @@ key, not ciphertext.
 * **Any bumble device:** `bumble_air.AirLink(host, port, node)` is a
   `LocalLink`; put a `bumble.controller.Controller` on it. `bumble_air.py
   central` is a virtual phone (scan, connect, pair, discover, UART service).
-* **SPIKE Prime hub (proposed, owned by the SPIKE lane):** its NuttX BT host
-  speaks HCI over the CC2564 UART. Replace the H4 responder with a bumble
-  `Controller` on an `AirLink`, bridged to the Renode UART by bumble's
-  transport (`tcp-server:` / `pty:`) — the hub then advertises and accepts
-  connections on this air, and a micro:bit or the virtual phone sees it. The
-  TI vendor commands (service pack) are answered before the bumble controller
-  sees the stream, as today.
-* **lite (browser):** a WebSocket to `:7462`, the same JSON. Web Bluetooth
-  can be backed by it (the SPIKE lane's virtual Web Bluetooth backend is the
-  natural place): `requestDevice` = collect `adv`, `connect` = send
-  `connect_ind`, GATT = ATT PDUs in `acl` frames.
+* **SPIKE Prime hub (Renode):** Renode exports the hub's USART2 (the CC2564C
+  HCI UART) with `emulation CreateServerSocketTerminal PORT "hci" false` and
+  `connector Connect sysbus.usart2 hci`; `hci_node.py --renode-hci
+  spike=127.0.0.1:PORT@02:B1:0E:5A:17:01` puts a bumble `Controller` on that
+  byte stream. The firmware's own Zephyr host then advertises, accepts LE and
+  BR/EDR connections, and serves FD02 GATT and SPP on this air. Only the
+  TI-free simulation profile runs here: it sends no vendor commands, and the
+  controller refuses any that arrive. End-to-end test:
+  brickwright-spike-prime-fw `simulation/bluetooth-air/test_spike_air.py`.
+* **Any HCI host in another emulator:** connect to `hci_node.py --hci-listen
+  PORT` and speak H4; each connection is one controller on the air.
+* **lite (browser):** today, `scratch_link_node.py --port 20111` serves the
+  Scratch Link protocol lite already uses for real hardware, with each session
+  a bumble central on the air. Later, a direct WebSocket to `:7462` with this
+  JSON can back a virtual Web Bluetooth: `requestDevice` = collect `adv`,
+  `connect` = send `connect_ind`, GATT = ATT PDUs in `acl` frames.
 * **Raw radio (MakeCode radio):** inside one Renode process, machines share a
   Renode wireless medium directly (`emulation CreateBLEMedium`, `connector
   Connect`); across processes/emulators a RADIO model emits/consumes `raw`.
@@ -86,6 +107,20 @@ key, not ciphertext.
 ## Non-goals
 
 No RF physics (path loss, collisions, timing) — labwired's `RfMedium` and
-Renode's range media remain available inside one emulator. No classic BR/EDR
-(the SPIKE's Classic/RFCOMM personality would need `lmp`-level messages; bumble
-has them, this protocol version does not carry them).
+Renode's range media remain available inside one emulator. BR/EDR is
+carried at bumble's LMP level (`lmp`, `acl_br`, `enc_br`); there is no inquiry
+procedure, so BR/EDR peers are found through their LE advertisement (a
+dual-mode device advertises its public address) or by known address.
+
+## Addresses on `acl`
+
+`src` is the address the sender uses on that connection (the one the peer saw
+in `adv`/`connect_ind`). bumble 0.0.235 labels LE data with the controller's
+random address, which a host advertising with its public identity never sets;
+`AirLink` corrects this.
+
+## Versioning
+
+`lmp`, `acl_br` and `enc_br` were added to bw-air/1 without a version change:
+they are new `t` values, and nodes ignore types they do not know (the Rust
+`nrf_softdevice_hle::air` parser already does).

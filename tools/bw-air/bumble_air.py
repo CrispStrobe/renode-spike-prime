@@ -10,7 +10,11 @@ Mapping (bumble 0.0.235 link API -> AIR.md messages):
   send_advertising_pdu(ConnectInd)            -> {"t":"connect_ind"}
   send_acl_data(dst, LE, l2cap_frame)         -> {"t":"acl"}
   send_ll_control_pdu(EncReq/StartEncRsp/TerminateInd/RejectExtInd/FeatureReq/Rsp) -> {"t":"ll"}
-and the reverse for messages from the hub.
+  send_lmp_packet(dst, lmp.Packet)            -> {"t":"lmp"}      (BR/EDR)
+  send_acl_data(dst, BR_EDR, l2cap_frame)     -> {"t":"acl_br"}   (BR/EDR)
+  encrypt_br(dst, state)                      -> {"t":"enc_br"}   (BR/EDR)
+and the reverse for messages from the hub. Controllers on the same AirLink
+talk directly (bumble's LocalLink); anything else goes through the hub.
 
   python bumble_air.py central --air 127.0.0.1:7461 --target C0:EE:AA:BB:CC:01 --send "hello"
       A virtual phone: scans, connects, pairs (Just Works), discovers the
@@ -19,7 +23,7 @@ Requires: pip install bumble (Apache-2.0).
 """
 import argparse, asyncio, json, logging, sys, time
 
-from bumble import hci, ll
+from bumble import hci, ll, lmp
 from bumble.core import PhysicalTransport
 from bumble.controller import Controller
 from bumble.device import Device, Peer
@@ -35,6 +39,31 @@ UART_RX = '6E400003-B5A3-F393-E0A9-E50E24DCCA9E'   # central -> micro:bit (write
 
 def addr(s):
     return hci.Address(s) if '/' in s else hci.Address(s, hci.Address.RANDOM_DEVICE_ADDRESS)
+
+
+def lmp_bytes(packet):
+    # bumble's lmp.Packet.__bytes__ uses a cached payload that is empty for a
+    # packet built from fields, so serialize the fields explicitly.
+    if packet.fields:
+        return bytes(packet.opcode) + hci.HCI_Object.dict_to_bytes(packet.__dict__, packet.fields)
+    return bytes(packet)
+
+
+def lmp_from_bytes(data):
+    # bumble's Opcode.parse_from unpacks the whole buffer for an escaped
+    # (two-byte) opcode, which fails whenever parameters follow.
+    if data[0] in (124, 127):
+        opcode, offset = lmp.Opcode(int.from_bytes(data[0:2], 'big')), 2
+    else:
+        opcode, offset = lmp.Opcode(data[0]), 1
+    subclass = lmp.Packet.subclasses.get(opcode)
+    if subclass is None:
+        packet = lmp.Packet()
+        packet.opcode = opcode
+    else:
+        packet = subclass(**hci.HCI_Object.dict_from_bytes(data, offset, subclass.fields))
+    packet.payload = data[offset:]
+    return packet
 
 
 class AirLink(LocalLink):
@@ -76,9 +105,39 @@ class AirLink(LocalLink):
                         'data': bytes(packet.data).hex(), 'scan_rsp': ''})
 
     def send_acl_data(self, sender, destination_address, transport, data):
-        if self.find_le_controller(destination_address) or transport != PhysicalTransport.LE:
-            return super().send_acl_data(sender, destination_address, transport, data)
-        self._send({'t': 'acl', 'src': str(sender.random_address), 'dst': str(destination_address), 'data': bytes(data).hex()})
+        if transport == PhysicalTransport.BR_EDR:
+            if self.find_classic_controller(destination_address):
+                return super().send_acl_data(sender, destination_address, transport, data)
+            self._send({'t': 'acl_br', 'src': str(sender.public_address), 'dst': str(destination_address),
+                        'data': bytes(data).hex()})
+            return
+        # The source is the address the sender uses on this connection. bumble
+        # uses the controller's random address, which a host advertising with
+        # its public identity (the SPIKE firmware) never sets.
+        connection = sender.le_connections.get(destination_address)
+        source = connection.self_address if connection is not None else sender.random_address
+        local = self.find_le_controller(destination_address)
+        if local is not None:
+            asyncio.get_running_loop().call_soon(
+                lambda: local.on_link_acl_data(source, transport, data))
+            return
+        self._send({'t': 'acl', 'src': str(source), 'dst': str(destination_address), 'data': bytes(data).hex()})
+
+    def send_lmp_packet(self, sender, receiver_address, packet):
+        if self.find_classic_controller(receiver_address):
+            return super().send_lmp_packet(sender, receiver_address, packet)
+        self._send({'t': 'lmp', 'src': str(sender.public_address), 'dst': str(receiver_address),
+                    'data': lmp_bytes(packet).hex()})
+
+    def encrypt_br(self, sender, receiver_address, state):
+        """BR/EDR link encryption changed (0 off, 1 E0, 2 AES-CCM). The air
+        carries no cipher; the peer's controller reports the same state."""
+        local = self.find_classic_controller(receiver_address)
+        if local is not None:
+            local.on_air_encryption_br(sender.public_address, state)
+            return
+        self._send({'t': 'enc_br', 'src': str(sender.public_address), 'dst': str(receiver_address),
+                    'state': state})
 
     def send_ll_control_pdu(self, sender_address, receiver_address, packet):
         if self.find_le_controller(receiver_address):
@@ -118,6 +177,19 @@ class AirLink(LocalLink):
             c = self.find_le_controller(addr(m['dst']))
             if c:
                 loop.call_soon(c.on_link_acl_data, addr(m['src']), PhysicalTransport.LE, bytes.fromhex(m['data']))
+        elif t == 'acl_br':
+            c = self.find_classic_controller(addr(m['dst']))
+            if c:
+                loop.call_soon(c.on_link_acl_data, addr(m['src']), PhysicalTransport.BR_EDR, bytes.fromhex(m['data']))
+        elif t == 'lmp':
+            c = self.find_classic_controller(addr(m['dst']))
+            if c:
+                pdu = lmp_from_bytes(bytes.fromhex(m['data']))
+                loop.call_soon(c.on_lmp_packet, addr(m['src']), pdu)
+        elif t == 'enc_br':
+            c = self.find_classic_controller(addr(m['dst']))
+            if c and hasattr(c, 'on_air_encryption_br'):
+                loop.call_soon(c.on_air_encryption_br, addr(m['src']), m.get('state', 0))
         elif t == 'll':
             c = self.find_le_controller(addr(m['dst']))
             if not c:

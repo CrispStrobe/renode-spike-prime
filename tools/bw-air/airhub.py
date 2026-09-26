@@ -72,6 +72,8 @@ async def tcp_client(r, w):
             line = line.decode(errors='replace').strip()
             if line:
                 deliver(port, line)
+    except ConnectionError:
+        pass  # a node that vanished is the same as one that left
     finally:
         nodes.pop(port, None)
         w.close()

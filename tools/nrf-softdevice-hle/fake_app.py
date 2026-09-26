@@ -6,7 +6,7 @@ emulator. Used to test the air hub + bumble central + SMP path on their own:
   airhub.py &  fake_app.py --air 127.0.0.1:7461 &  bumble_air.py central --target C0:EE:AA:BB:CC:01 --send hi
 """
 import argparse, ctypes, sys, time
-sys.path.insert(0, __file__.rsplit('/', 2)[0] + '/conformance')
+sys.path.insert(0, __file__.rsplit('/', 1)[0] + '/conformance')
 from run_capi import HostStruct, Mem, READ, WRITE, NOW, DEF_LIB  # noqa: E402
 
 
