@@ -13,7 +13,7 @@ import argparse, os, struct, subprocess, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 RENODE = os.environ.get('RENODE', '/mnt/volume1/code/lego/wt-generic-current-upstream/renode')
-LIB = os.environ.get('SDHLE_LIB', '/mnt/volume1/lw-sd-hle-target/release/libnrf_softdevice_hle.so')
+LIB = os.environ.get('SDHLE_LIB') or os.path.join(os.environ.get('CARGO_TARGET_DIR', 'target'), 'release', 'libnrf_softdevice_hle.so')
 LOCK = '/tmp/claude-1000/renode.lock'
 
 
@@ -28,6 +28,8 @@ def main():
     ap.add_argument('--exectrace', action='store_true')
     ap.add_argument('--press-a', type=float, default=None, help='virtual seconds at which button A is pressed on mb0')
     ap.add_argument('--radio-medium', action='store_true')
+    ap.add_argument('--pair', type=float, default=None,
+                    help='hold A+B on mb0 from reset for this many virtual seconds (DAL Bluetooth pairing mode)')
     ap.add_argument('--extra', default='', help='monitor lines appended before running')
     ap.add_argument('--post', default='', help='monitor lines run after the run, before quit')
     a = ap.parse_args()
@@ -51,6 +53,11 @@ def main():
             f'cpu SP 0x{sp:x}',
             f'cpu PC 0x{pc & ~1:x}',
             f'uart0 CreateFileBackend @{out}.{name}.uart true',
+            # Buttons A (P0.17) and B (P0.26) are pulled up on the board: released = high.
+            # A floating-low input reads as both pressed at reset, which puts the DAL
+            # into Bluetooth pairing mode and never starts the MakeCode program.
+            f'sysbus.gpio0 OnGPIO 17 {"false" if (a.pair and i == 0) else "true"}',
+            f'sysbus.gpio0 OnGPIO 26 {"false" if (a.pair and i == 0) else "true"}',
         ]
         if a.radio_medium:
             L.append(f'connector Connect sysbus.radio air')
@@ -59,6 +66,8 @@ def main():
         if a.gdb and i == 0:
             L.append(f'machine StartGdbServer {a.gdb}')
     L.append(f'logFile @{out}.log')
+    if a.pair:
+        L += ['mach set "mb0"', f'emulation RunFor "{a.pair}"', 'sysbus.gpio0 OnGPIO 17 true', 'sysbus.gpio0 OnGPIO 26 true']
     if a.press_a is not None:
         L += ['mach set "mb0"', f'emulation RunFor "{a.press_a}"', 'sysbus.gpio0 OnGPIO 17 false',
               'emulation RunFor "0.3"', 'sysbus.gpio0 OnGPIO 17 true']

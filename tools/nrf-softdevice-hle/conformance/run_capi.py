@@ -9,7 +9,7 @@ conformance/*.json); the Rust test runs the same files through the Host trait.
 """
 import argparse, ctypes, glob, json, os, sys
 
-DEF_LIB = '/mnt/volume1/lw-sd-hle-target/release/libnrf_softdevice_hle.so'
+DEF_LIB = os.environ.get('SDHLE_LIB') or os.path.join(os.environ.get('CARGO_TARGET_DIR', 'target'), 'release', 'libnrf_softdevice_hle.so')
 DEF_VEC = '/mnt/volume1/code/wt/lw-sd-hle/crates/nrf-softdevice-hle/conformance'
 
 READ = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_uint32, ctypes.c_void_p, ctypes.c_uint32)
