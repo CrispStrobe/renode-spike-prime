@@ -86,3 +86,15 @@ sysbus:
         Tag <0x40012000, 0x40012FFF> "QDEC"
         Tag <0x40013000, 0x40013FFF> "LPCOMP"
         Tag <0x40014000, 0x40019FFF> "SWI"
+
+// Buttons A (P0.17) and B (P0.26): active low, pulled up on the board
+// (released = high). As Renode Buttons they come back released after every
+// machine reset — the DAL resets itself after Bluetooth bonding, and a pin
+// reading low at boot would put it back into pairing mode.
+buttonA: Miscellaneous.Button @ gpio0 17
+    invert: true
+    -> gpio0@17
+
+buttonB: Miscellaneous.Button @ gpio0 26
+    invert: true
+    -> gpio0@26

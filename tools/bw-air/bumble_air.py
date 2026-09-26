@@ -213,12 +213,15 @@ async def central(a):
     dev = Device(name='virtual-phone', address=hci.Address('F0:F1:F2:F3:F4:F5'), host=Host(ctrl, AsyncPipeSink(ctrl)))
     dev.pairing_config_factory = lambda conn: PairingConfig(sc=False, mitm=False, bonding=True,
                                                              delegate=PairingDelegate(io_capability=PairingDelegate.NO_OUTPUT_NO_INPUT))
+    from bumble.keys import MemoryKeyStore
+    dev.keystore = MemoryKeyStore()
     await dev.power_on()
     t0 = time.monotonic()
     ev = lambda *x: print(f'[{time.monotonic() - t0:7.2f}s]', *x, flush=True)
     seen = asyncio.get_running_loop().create_future()
 
     def on_adv(adv):
+        nonlocal seen
         if str(adv.address).split('/')[0] == a.target.upper() and not seen.done():
             ev('advertisement from', adv.address, 'data', bytes(adv.data).hex() if hasattr(adv, 'data') else '')
             seen.set_result(adv)
@@ -231,6 +234,41 @@ async def central(a):
     if not a.no_pair:
         await asyncio.wait_for(conn.pair(), a.timeout)
         ev('paired; encrypted =', conn.is_encrypted)
+    if a.pair_then_reconnect:
+        # micro:bit DAL pairing mode: after bonding the board shows a tick and
+        # resets; it then advertises (whitelisted) as the MakeCode program.
+        gone = asyncio.get_running_loop().create_future()
+        conn.on('disconnection', lambda *_: gone.done() or gone.set_result(True))
+        await asyncio.wait_for(gone, a.timeout)
+        ev('disconnected (board resets after bonding)')
+        # Stay away while the board shows its tick (15 s virtual): a new
+        # connection attempt restarts its pairing-mode timer.
+        await asyncio.sleep(a.reconnect_delay)
+        # The DAL shows a tick for 15 s (virtual) and then resets into the
+        # program, now advertising to bonded peers only. Until then it may
+        # still accept a connection in pairing mode without the key loaded:
+        # retry until the bonded key encrypts the link.
+        deadline = time.monotonic() + a.timeout
+        while True:
+            seen = asyncio.get_running_loop().create_future()
+            await dev.start_scanning(filter_duplicates=False)
+            await asyncio.wait_for(seen, max(1, deadline - time.monotonic()))
+            await dev.stop_scanning()
+            conn = await asyncio.wait_for(dev.connect(addr(a.target), timeout=a.timeout), a.timeout)
+            ev('reconnected', conn)
+            try:
+                await asyncio.wait_for(conn.encrypt(), 30)
+                ev('encrypted with the bonded key =', conn.is_encrypted)
+                break
+            except Exception as e:
+                ev('encryption refused (', type(e).__name__, e, ') - board not reset yet, retrying')
+                try:
+                    await conn.disconnect()
+                except Exception:
+                    pass
+                if time.monotonic() > deadline:
+                    raise
+                await asyncio.sleep(5)
     peer = Peer(conn)
     await asyncio.wait_for(peer.discover_services(), a.timeout)
     for s in peer.services:
@@ -270,6 +308,9 @@ def main():
     ap.add_argument('--gap', type=float, default=3.0)
     ap.add_argument('--timeout', type=float, default=120.0)
     ap.add_argument('--no-pair', action='store_true')
+    ap.add_argument('--reconnect-delay', type=float, default=0.0, help='wall seconds to wait after the post-bonding disconnect')
+    ap.add_argument('--pair-then-reconnect', action='store_true',
+                    help='pair (board in pairing mode), wait for its reset, reconnect encrypted with the bond')
     ap.add_argument('--log', default='')
     ap.add_argument('-v', action='store_true')
     a = ap.parse_args()

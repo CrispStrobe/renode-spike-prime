@@ -53,11 +53,9 @@ def main():
             f'cpu SP 0x{sp:x}',
             f'cpu PC 0x{pc & ~1:x}',
             f'uart0 CreateFileBackend @{out}.{name}.uart true',
-            # Buttons A (P0.17) and B (P0.26) are pulled up on the board: released = high.
-            # A floating-low input reads as both pressed at reset, which puts the DAL
-            # into Bluetooth pairing mode and never starts the MakeCode program.
-            f'sysbus.gpio0 OnGPIO 17 {"false" if (a.pair and i == 0) else "true"}',
-            f'sysbus.gpio0 OnGPIO 26 {"false" if (a.pair and i == 0) else "true"}',
+            # Buttons A and B are Renode Buttons (nrf51822-app.repl), released
+            # unless --pair holds both at reset (DAL Bluetooth pairing mode).
+            *(['sysbus.gpio0.buttonA Press', 'sysbus.gpio0.buttonB Press'] if (a.pair and i == 0) else []),
         ]
         if a.radio_medium:
             L.append(f'connector Connect sysbus.radio air')
@@ -67,10 +65,10 @@ def main():
             L.append(f'machine StartGdbServer {a.gdb}')
     L.append(f'logFile @{out}.log')
     if a.pair:
-        L += ['mach set "mb0"', f'emulation RunFor "{a.pair}"', 'sysbus.gpio0 OnGPIO 17 true', 'sysbus.gpio0 OnGPIO 26 true']
+        L += ['mach set "mb0"', f'emulation RunFor "{a.pair}"', 'sysbus.gpio0.buttonA Release', 'sysbus.gpio0.buttonB Release']
     if a.press_a is not None:
-        L += ['mach set "mb0"', f'emulation RunFor "{a.press_a}"', 'sysbus.gpio0 OnGPIO 17 false',
-              'emulation RunFor "0.3"', 'sysbus.gpio0 OnGPIO 17 true']
+        L += ['mach set "mb0"', f'emulation RunFor "{a.press_a}"', 'sysbus.gpio0.buttonA Press',
+              'emulation RunFor "0.3"', 'sysbus.gpio0.buttonA Release']
     if a.extra:
         L += a.extra.split(';')
     if a.gdb_wait:

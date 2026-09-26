@@ -58,6 +58,8 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
             public static extern void sdhle_poll(IntPtr sd, HostStruct host);
             [DllImport("nrf_softdevice_hle", CallingConvention = CallingConvention.Cdecl)]
             public static extern IntPtr sdhle_svc_name(byte num);
+            [DllImport("nrf_softdevice_hle", CallingConvention = CallingConvention.Cdecl)]
+            public static extern void sdhle_reset(IntPtr sd);
         }
 
         public SoftDeviceHle(IMachine machine, long size, string library, string node = "microbit", string address = "C0:EE:AA:BB:CC:DD", string air = "", string tracePath = "")
@@ -100,7 +102,16 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
         }
 
         public long Size => size;
-        public void Reset() { }
+        // Machine reset (AIRCR.SYSRESETREQ, which the DAL uses after bonding):
+        // the SoftDevice restarts with the chip.
+        public void Reset()
+        {
+            if(handle != IntPtr.Zero)
+            {
+                Native.sdhle_reset(handle);
+                if(trace != null) trace.WriteLine($"{{\"ev\":\"reset\",\"t_us\":{HostNow(IntPtr.Zero)}}}");
+            }
+        }
 
         public void Dispose()
         {
@@ -150,6 +161,12 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
             uint r = Native.sdhle_svc(handle, num, a[0], a[1], a[2], a[3], host);
             bus.WriteDoubleWord(frame, r);
             count++;
+            if(trace != null && num == 0x61 && r == 0 && a[0] != 0)
+            {
+                // sd_ble_evt_get delivered an event: log its id (ble_evt_hdr_t.evt_id).
+                var evb = bus.ReadBytes(a[0], 32);
+                trace.WriteLine($"{{\"ev\":\"ble_evt\",\"t_us\":{HostNow(IntPtr.Zero)},\"id\":{bus.ReadWord(a[0])},\"hex\":\"{BitConverter.ToString(evb).Replace("-", "")}\"}}");
+            }
             if(trace != null)
             {
                 var name = Marshal.PtrToStringAnsi(Native.sdhle_svc_name(num));
