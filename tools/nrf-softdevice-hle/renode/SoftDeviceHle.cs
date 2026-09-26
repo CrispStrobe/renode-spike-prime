@@ -64,8 +64,16 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
         {
             this.machine = machine;
             this.size = size;
-            NativeLibrary.SetDllImportResolver(typeof(SoftDeviceHle).Assembly, (name, asm, path) =>
-                name == "nrf_softdevice_hle" ? NativeLibrary.Load(library) : IntPtr.Zero);
+            lock(resolverLock)
+            {
+                // One resolver per assembly: the first SoftDevice (machine) sets it.
+                if(!resolverSet)
+                {
+                    NativeLibrary.SetDllImportResolver(typeof(SoftDeviceHle).Assembly, (name, asm, path) =>
+                        name == "nrf_softdevice_hle" ? NativeLibrary.Load(library) : IntPtr.Zero);
+                    resolverSet = true;
+                }
+            }
             handle = Native.sdhle_new(node, address, air);
             if(handle == IntPtr.Zero)
             {
@@ -199,6 +207,8 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
 
         public ulong HoleAccesses => holeAccesses;
 
+        private static readonly object resolverLock = new object();
+        private static bool resolverSet;
         private readonly IMachine machine;
         private readonly long size;
         private readonly StreamWriter trace;

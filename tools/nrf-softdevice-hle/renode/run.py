@@ -29,6 +29,7 @@ def main():
     ap.add_argument('--press-a', type=float, default=None, help='virtual seconds at which button A is pressed on mb0')
     ap.add_argument('--radio-medium', action='store_true')
     ap.add_argument('--extra', default='', help='monitor lines appended before running')
+    ap.add_argument('--post', default='', help='monitor lines run after the run, before quit')
     a = ap.parse_args()
     out = os.path.abspath(a.out)
     os.makedirs(os.path.dirname(out), exist_ok=True)
@@ -69,6 +70,8 @@ def main():
         n = max(1, int(float(a.secs) / 0.5))
         for _ in range(n):
             L += [f'emulation RunFor "{float(a.secs) / n}"'] + [f'mach set "mb{i}"\nsysbus.cpu PC' for i in range(len(a.app))]
+        if a.post:
+            L += a.post.split(';')
         L += ['quit']
     resc = out + '.resc'
     open(resc, 'w').write('\n'.join(L) + '\n')
