@@ -15,8 +15,9 @@ def main():
     ap.add_argument('--air', default='127.0.0.1:7461')
     ap.add_argument('--addr', default='C0:EE:AA:BB:CC:01')
     ap.add_argument('--secs', type=float, default=60)
+    ap.add_argument('--lib', default=DEF_LIB, help='the HLE cdylib (libnrf_softdevice_hle.so)')
     a = ap.parse_args()
-    lib = ctypes.CDLL(DEF_LIB)
+    lib = ctypes.CDLL(a.lib)
     lib.sdhle_new.restype = ctypes.c_void_p
     lib.sdhle_new.argtypes = [ctypes.c_char_p] * 3
     lib.sdhle_svc.restype = ctypes.c_uint32
