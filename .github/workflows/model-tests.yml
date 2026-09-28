@@ -124,3 +124,17 @@ jobs:
           dotnet output/bin/Release/Renode.dll --disable-gui --plain -e \
             'mach create; machine LoadPlatformDescription @platforms/boards/lego-ev3.repl; sysbus LoadELF @tests/platforms/LEGO_EV3/am1808-smoke.elf; uart1 CreateFileBackend @/tmp/ev3-arm9-uart.log true; emulation RunFor "0.01"; q'
           test "$(cat "$uart_log")" = "EV3 ARM9 IRQ"
+
+      - name: Qualify unpaced EV3 ARM9 throughput
+        shell: bash
+        run: |
+          tests/platforms/LEGO_EV3/am1808-throughput-test.sh \
+            output/bin/Release/Renode.dll \
+            /tmp/ev3-arm9-throughput.json
+          cat /tmp/ev3-arm9-throughput.json >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload EV3 ARM9 throughput receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ev3-arm9-throughput
+          path: /tmp/ev3-arm9-throughput.json
