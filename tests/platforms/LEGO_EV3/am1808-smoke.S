@@ -69,7 +69,22 @@ reset:
     ldr r0, =AINTC_SISR
     mov r1, #53
     str r1, [r0]
-1:  b 1b
+
+    /*
+     * Keep executing real guest work after the IRQ. A single branch-to-self is
+     * recognized as an idle loop and legitimately advances virtual time with
+     * no retired instructions, which makes it unsuitable for throughput
+     * qualification.
+     */
+    mov r2, #0
+    ldr r3, =0x13579bdf
+1:
+    add r2, r2, #1
+    eor r3, r3, r2, ror #3
+    sub r3, r3, #7
+    cmp r2, #0
+    bne 1b
+    b 1b
 
 irq:
     stmfd sp!, {r0-r1, lr}
