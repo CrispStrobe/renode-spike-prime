@@ -15,6 +15,10 @@ aintc: IRQControllers.TI_DA8xx_AINTC @ sysbus 0xFFFEE000
     IRQ -> cpu@0
     FIQ -> cpu@1
 
+timer0: Timers.TI_DA8xx_Timer64 @ sysbus 0x01C20000
+    IRQ12 -> aintc@21
+    IRQ34 -> aintc@22
+
 // AM1808 maps its 8 KiB ARM-local vector RAM at the high-vector address.
 armLocalRam: Memory.MappedMemory @ sysbus 0xFFFF0000
     size: 0x2000

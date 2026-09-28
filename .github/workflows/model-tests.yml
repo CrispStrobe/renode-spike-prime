@@ -97,7 +97,7 @@ jobs:
           dotnet restore "$project" "${common[@]}"
           dotnet test "$project" --configuration Release --no-restore \
             "${common[@]}" \
-            --filter 'FullyQualifiedName~STM32DMATests|FullyQualifiedName~STM32SPITests|FullyQualifiedName~STM32_UARTTests|FullyQualifiedName~STM32F7I2CTests|FullyQualifiedName~TLC5955Tests|FullyQualifiedName~LSM6DS3TRCTests|FullyQualifiedName~LP50XXTests|FullyQualifiedName~GenericSpiFlashW25Q256Tests|FullyQualifiedName~LegoLpf2PortTests|FullyQualifiedName~BrickPowerControllerTests|FullyQualifiedName~PCMAudioSinkTests|FullyQualifiedName~SpikeFaultSoakTests|FullyQualifiedName~PrimeButtonLadderTests|FullyQualifiedName~STM32TimerBoardClockTests|FullyQualifiedName~TI_DA8xx_AINTCTests' \
+            --filter 'FullyQualifiedName~STM32DMATests|FullyQualifiedName~STM32SPITests|FullyQualifiedName~STM32_UARTTests|FullyQualifiedName~STM32F7I2CTests|FullyQualifiedName~TLC5955Tests|FullyQualifiedName~LSM6DS3TRCTests|FullyQualifiedName~LP50XXTests|FullyQualifiedName~GenericSpiFlashW25Q256Tests|FullyQualifiedName~LegoLpf2PortTests|FullyQualifiedName~BrickPowerControllerTests|FullyQualifiedName~PCMAudioSinkTests|FullyQualifiedName~SpikeFaultSoakTests|FullyQualifiedName~PrimeButtonLadderTests|FullyQualifiedName~STM32TimerBoardClockTests|FullyQualifiedName~TI_DA8xx_AINTCTests|FullyQualifiedName~TI_DA8xx_Timer64Tests' \
             --logger 'console;verbosity=normal'
 
       - name: Build the permissive target qualification images
@@ -109,6 +109,9 @@ jobs:
           arm-none-eabi-gcc -mcpu=arm926ej-s -nostdlib \
             -Wl,-T,am1808-smoke.ld -o am1808-smoke.elf am1808-smoke.S
           test "$(arm-none-eabi-readelf -h am1808-smoke.elf | awk '/Entry point/{print $4}')" = 0xffff0000
+          arm-none-eabi-gcc -mcpu=arm926ej-s -nostdlib \
+            -Wl,-T,am1808-smoke.ld -o am1808-timer64-smoke.elf am1808-timer64-smoke.S
+          test "$(arm-none-eabi-readelf -h am1808-timer64-smoke.elf | awk '/Entry point/{print $4}')" = 0xffff0000
           cd ../SPIKE_Prime
           arm-none-eabi-gcc -mcpu=cortex-m4 -mthumb -nostdlib \
             -Wl,-T,stm32f413-throughput.ld -o stm32f413-throughput.elf \
@@ -129,6 +132,15 @@ jobs:
           dotnet output/bin/Release/Renode.dll --disable-gui --plain -e \
             'mach create; machine LoadPlatformDescription @platforms/boards/lego-ev3.repl; sysbus LoadELF @tests/platforms/LEGO_EV3/am1808-smoke.elf; uart1 CreateFileBackend @/tmp/ev3-arm9-uart.log true; emulation RunFor "0.01"; q'
           test "$(cat "$uart_log")" = "EV3 ARM9 IRQ"
+
+      - name: Execute the EV3 Timer64P0 interrupt path
+        shell: bash
+        run: |
+          uart_log=/tmp/ev3-timer64-uart.log
+          rm -f "$uart_log"
+          dotnet output/bin/Release/Renode.dll --disable-gui --plain -e \
+            'mach create; machine LoadPlatformDescription @platforms/boards/lego-ev3.repl; sysbus LoadELF @tests/platforms/LEGO_EV3/am1808-timer64-smoke.elf; uart1 CreateFileBackend @/tmp/ev3-timer64-uart.log true; emulation RunFor "0.05"; q'
+          test "$(cat "$uart_log")" = "EV3 TIMER64 IRQ"
 
       - name: Qualify unpaced EV3 ARM9 throughput
         shell: bash
