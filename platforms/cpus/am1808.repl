@@ -3,6 +3,9 @@
 
 cpu: CPU.ARMv7A @ sysbus
     cpuType: "arm926"
+    // The EV3 production AM1808 runs its ARM926EJ-S at 300 MHz. Renode uses
+    // this value to convert executed guest instructions into virtual time.
+    PerformanceInMips: 300
     init:
         ModelID 0x41069265
         ExceptionVectorAddress 0xFFFF0000
