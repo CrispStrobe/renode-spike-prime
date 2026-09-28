@@ -1,0 +1,100 @@
+// nRF51822 (micro:bit V1 / Calliope mini 1) with ONLY the application region mapped.
+// Register map and IRQ numbers: nRF51 Series Reference Manual v3.0 (public) / nrfx MDK nrf51.h (BSD-3).
+// 0x0-0x17FFF (MBR + S110 SoftDevice) and 0x3C000-0x3FFFF (bootloader) are NordicTrap holes, added by the run script.
+nvic: IRQControllers.NVIC @ sysbus 0xE000E000
+    -> cpu@0
+
+cpu: CPU.CortexM @ sysbus
+    cpuType: "cortex-m0"
+    nvic: nvic
+
+flash_app: Memory.MappedMemory @ sysbus 0x18000
+    size: 0x24000
+
+ram: Memory.MappedMemory @ sysbus 0x20000000
+    size: 0x4000
+
+clock: Miscellaneous.NRF_CLOCK @ sysbus 0x40000000
+    -> nvic@0
+
+radio: Wireless.NRF52840_Radio @ sysbus 0x40001000
+    -> nvic@1
+
+uart0: UART.NRF52840_UART @ sysbus 0x40002000
+    easyDMA: false
+    -> nvic@2
+
+twi0: I2C.NRF52840_I2C @ sysbus 0x40003000
+    -> nvic@3
+
+twi1: I2C.NRF52840_I2C @ sysbus 0x40004000
+    -> nvic@4
+
+gpio0: GPIOPort.NRF52840_GPIO @ sysbus 0x50000500
+
+gpiote: GPIOPort.NRF52840_GPIOTasksEvents @ sysbus 0x40006000
+    port0: gpio0
+    -> nvic@6
+
+timer0: Timers.NrfTimer @ sysbus 0x40008000
+    channels: 4
+    -> nvic@8
+timer1: Timers.NrfTimer @ sysbus 0x40009000
+    channels: 4
+    -> nvic@9
+timer2: Timers.NrfTimer @ sysbus 0x4000A000
+    channels: 4
+    -> nvic@10
+
+rtc0: Timers.NRF52840_RTC @ sysbus 0x4000B000
+    numberOfEvents: 3
+    -> nvic@11
+
+rng: Miscellaneous.NRF52840_RNG @ sysbus 0x4000D000
+    -> nvic@13
+
+ecb: Miscellaneous.NRF52840_ECB @ sysbus 0x4000E000
+    -> nvic@14
+
+wdt: Timers.NRF52840_Watchdog @ sysbus 0x40010000
+    -> nvic@16
+
+rtc1: Timers.NRF52840_RTC @ sysbus 0x40011000
+    numberOfEvents: 4
+    -> nvic@17
+
+ppi: Miscellaneous.NRF52840_PPI @ sysbus 0x4001F000
+
+nvmc: Miscellaneous.NrfNvmc @ sysbus 0x4001E000
+    pageSize: 0x400
+
+sysbus:
+    init:
+        Tag <0x10000000, 0x10000FFF> "FICR"
+        Tag <0x10000010, 0x10000013> "FICR.CODEPAGESIZE" 0x400
+        Tag <0x10000014, 0x10000017> "FICR.CODESIZE" 0x100
+        Tag <0x10000060, 0x10000063> "FICR.DEVICEID[0]" 0x12345678
+        Tag <0x10000064, 0x10000067> "FICR.DEVICEID[1]" 0x9abcdef0
+        Tag <0x100000a0, 0x100000a3> "FICR.DEVICEADDRTYPE" 0x1
+        Tag <0x100000a4, 0x100000a7> "FICR.DEVICEADDR[0]" 0xAABBCCDD
+        Tag <0x100000a8, 0x100000ab> "FICR.DEVICEADDR[1]" 0xC0EE
+        Tag <0x10001000, 0x10001FFF> "UICR"
+        Tag <0x10001014, 0x10001017> "UICR.BOOTLOADERADDR" 0xFFFFFFFF
+        Tag <0x40007000, 0x40007FFF> "ADC"
+        Tag <0x4000C000, 0x4000CFFF> "TEMP"
+        Tag <0x4000F000, 0x4000FFFF> "CCM_AAR"
+        Tag <0x40012000, 0x40012FFF> "QDEC"
+        Tag <0x40013000, 0x40013FFF> "LPCOMP"
+        Tag <0x40014000, 0x40019FFF> "SWI"
+
+// Buttons A (P0.17) and B (P0.26): active low, pulled up on the board
+// (released = high). As Renode Buttons they come back released after every
+// machine reset — the DAL resets itself after Bluetooth bonding, and a pin
+// reading low at boot would put it back into pairing mode.
+buttonA: Miscellaneous.Button @ gpio0 17
+    invert: true
+    -> gpio0@17
+
+buttonB: Miscellaneous.Button @ gpio0 26
+    invert: true
+    -> gpio0@26
