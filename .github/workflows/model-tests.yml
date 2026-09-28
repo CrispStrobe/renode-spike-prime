@@ -67,3 +67,15 @@ jobs:
           arm-none-eabi-gcc -mcpu=arm926ej-s -nostdlib \
             -Wl,-T,am1808-smoke.ld -o am1808-smoke.elf am1808-smoke.S
           test "$(arm-none-eabi-readelf -h am1808-smoke.elf | awk '/Entry point/{print $4}')" = 0xffff0000
+
+      - name: Execute the EV3 ARM9 UART and IRQ path
+        shell: bash
+        run: |
+          common=(-p:TargetFrameworks=net8.0 -p:GUI_DISABLED=true -p:CurrentPlatform=Linux)
+          dotnet restore src/Renode/Renode_NET.csproj "${common[@]}"
+          dotnet build src/Renode/Renode_NET.csproj --configuration Release --no-restore "${common[@]}"
+          uart_log=/tmp/ev3-arm9-uart.log
+          rm -f "$uart_log"
+          dotnet output/bin/Release/Renode.dll --disable-gui --plain -e \
+            'mach create; machine LoadPlatformDescription @platforms/boards/lego-ev3.repl; sysbus LoadELF @tests/platforms/LEGO_EV3/am1808-smoke.elf; uart1 CreateFileBackend @/tmp/ev3-arm9-uart.log true; emulation RunFor "0.01"; q'
+          test "$(cat "$uart_log")" = "EV3 ARM9 IRQ"
