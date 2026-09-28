@@ -1,0 +1,8 @@
+// SPDX-License-Identifier: MIT
+using "../cpus/stm32f4.repl"
+
+buttonLadders: Analog.PrimeButtonLadder @ none
+    adc: adc1
+
+centerButton: Miscellaneous.Button @ none
+    -> buttonLadders@0

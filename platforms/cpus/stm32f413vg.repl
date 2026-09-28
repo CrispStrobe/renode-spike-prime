@@ -1,0 +1,66 @@
+// SPDX-License-Identifier: MIT
+// STM32F413VG geometry and clock/UART deltas over Renode's common STM32F4 map.
+
+using "./stm32f4.repl"
+
+// The VG part used by SPIKE Prime has 1 MiB of flash. Disconnect the common
+// F4 map's 2 MiB backing and keep the flash controller on this exact window.
+flash: @ none
+
+flashF413: Memory.MappedMemory @ sysbus 0x08000000
+    size: 0x100000
+
+flash_controller:
+    flash: flashF413
+
+cpu:
+    cpuType: "cortex-m4f"
+
+nvic:
+    systickFrequency: 96000000
+
+// SPIKE Prime runs HCLK at 96 MHz. APB1 is divided by two, which restores the
+// x2 timer input clock; APB2 is undivided. Every timer therefore sees 96 MHz.
+timer1:
+    frequency: 96000000
+timer2:
+    frequency: 96000000
+timer3:
+    frequency: 96000000
+timer4:
+    frequency: 96000000
+timer5:
+    frequency: 96000000
+timer6:
+    frequency: 96000000
+timer7:
+    frequency: 96000000
+timer8:
+    frequency: 96000000
+timer9:
+    frequency: 96000000
+timer10:
+    frequency: 96000000
+timer11:
+    frequency: 96000000
+timer12:
+    frequency: 96000000
+timer13:
+    frequency: 96000000
+timer14:
+    frequency: 96000000
+
+usart6: UART.STM32_UART @ sysbus <0x40011400, +0x400>
+    -> nvic@71
+
+uart7: UART.STM32_UART @ sysbus <0x40007800, +0x400>
+    -> nvic@82
+
+uart8: UART.STM32_UART @ sysbus <0x40007c00, +0x400>
+    -> nvic@83
+
+uart9: UART.STM32_UART @ sysbus <0x40011800, +0x400>
+    -> nvic@88
+
+uart10: UART.STM32_UART @ sysbus <0x40011c00, +0x400>
+    -> nvic@89

@@ -1,0 +1,56 @@
+# Transport-neutral Bluetooth controller
+
+The SPIKE simulation uses an external Bluetooth controller service. The service
+models the public Bluetooth HCI and L2CAP interfaces; it does not emulate,
+interpret, disassemble, or redistribute TI controller firmware.
+
+The protocol core in `tools/bluetooth_controller/` has one input (`feed`) and
+one output callback. It has no socket, Renode, UART, or wall-clock dependency.
+Adapters may connect it to Renode's raw UART TCP terminal, an in-memory test, or
+another byte stream without changing controller behavior.
+
+## Contract
+
+The implementation separates these layers:
+
+1. H4 incrementally frames commands and ACL packets.
+2. The controller owns deterministic HCI state and events.
+3. ACL data is reassembled and routed as complete basic-mode L2CAP packets.
+4. Fixed or dynamically allocated L2CAP channels own ATT/GATT or RFCOMM
+   protocol state.
+
+The Classic signaling endpoint accepts basic-mode SDP PSM 1 and RFCOMM PSM 3
+connections, configures dynamic CIDs, and removes them on disconnection. The
+generic SDP responder carries an application-supplied encoded attribute list;
+it does not bake LEGO UUIDs into the controller. ATT telemetry helpers create
+bounded Handle Value Notifications and Indications for an embedding simulator.
+
+All byte-stream and ACL reassembly buffers have configurable hard limits.
+Malformed H4 type bytes are consumed before an error is reported, so a caller
+may log the fault and continue with the next valid frame.
+
+Vendor-specific commands are rejected unless the caller explicitly enables an
+opaque acknowledgement policy. When enabled, parameters remain uninterpreted
+and unretained; this only models completion of a separately supplied bootstrap
+stream.
+
+Reset clears protocol and connection state without changing configured limits.
+Adapters must preserve byte order and may not inject controller policy. Tests
+must use deterministic inputs and may not depend on RF or wall-clock timing.
+
+The implementation is MIT-licensed and contains no LEGO, Pybricks, or TI
+firmware. Its deterministic behavior is a software test model, not evidence of
+RF, timing, electrical, or physical-controller fidelity.
+
+## Raw TCP adapter
+
+For Renode's raw `ServerSocketTerminal`, run:
+
+```sh
+python3 tools/spike-bluetooth-controller.py \
+  --acknowledge-vendor-commands 127.0.0.1 3456
+```
+
+The opt-in switch is needed only when a local, separately licensed bootstrap
+stream must receive opaque command-complete events. Ordinary HCI commands,
+ATT/GATT, and RFCOMM do not require it.

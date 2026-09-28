@@ -1,0 +1,24 @@
+{
+  "identity": {
+    "board": "spike-prime",
+    "firmware": "brickwright-nuttx",
+    "transport": "none",
+    "imageSha256": null
+  },
+  "paths": {
+    "portA": "external:primePortA",
+    "portB": "external:primePortB",
+    "portC": "external:primePortC",
+    "portD": "external:primePortD",
+    "portE": "external:primePortE",
+    "portF": "external:primePortF",
+    "power": "machine:power",
+    "imu": "machine:sysbus.i2c2.imu",
+    "display": "machine:sysbus.spi1.display",
+    "audio": "machine:sysbus.speaker",
+    "storage": "machine:sysbus.spi2.primeStorageMux.primeStorage"
+  },
+  "maxClients": 1,
+  "maxLineBytes": 262144,
+  "socketTimeoutSeconds": 5
+}

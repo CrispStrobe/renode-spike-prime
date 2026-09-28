@@ -1,0 +1,46 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+set -eu
+
+essential=platforms/boards/spike-essential-brick-devices.repl
+prime=platforms/boards/spike-prime-brick-devices.repl
+prime_cpu=platforms/cpus/stm32f413vg.repl
+prime_script=scripts/single-node/spike-prime.resc
+
+grep -Fq 'invert: true' "$essential"
+grep -Fq '1 -> power@0' "$essential"
+grep -Fq '10 -> power@1' "$essential"
+grep -Fq '0 -> gpioPortC@13' "$essential"
+grep -Fq 'display: SPI.TLC5955 @ spi1' "$prime"
+grep -Fq '15 -> display@0' "$prime"
+grep -Fq 'speaker: Sound.PCMAudioSink @ sysbus 0x40007408' "$prime"
+grep -Fq '10 -> speaker@0' "$prime"
+grep -Fq '1 -> display@1' "$prime"
+grep -Fq 'TriggerOutput -> speaker@1' "$prime"
+grep -Fq 'UpdateDMARequest -> dma1@5' "$prime"
+grep -Fq 'buttonLadders: Analog.PrimeButtonLadder' "$prime"
+grep -Fq 'adc: adc1' "$prime"
+test "$(grep -Fc 'Miscellaneous.Button @ sysbus' "$prime")" -eq 4
+grep -Fq -- '-> buttonLadders@3' "$prime"
+grep -Fq 'cpuType: "cortex-m4f"' "$prime_cpu"
+grep -Fq 'systickFrequency: 96000000' "$prime_cpu"
+grep -Fq 'size: 0x100000' "$prime_cpu"
+test "$(grep -Fc 'frequency: 96000000' "$prime_cpu")" -eq 14
+test "$(grep -Ec '^uart(7|8|9|10):' "$prime_cpu")" -eq 4
+test "$(grep -Fc 'CreateLegoLpf2Port "primePort' "$prime_script")" -eq 6
+grep -Fq 'CreateLegoLpf2Port "primePortA" "medium-motor" "PD7" "PD8"' "$prime_script"
+grep -Fq 'CreateLegoLpf2Port "primePortF" "none" "PC11" "PE6"' "$prime_script"
+test -x tests/platforms/spike-prime-platform-load-test.sh
+
+tlc=src/Infrastructure/src/Emulator/Peripherals/Peripherals/SPI/TLC5955.cs
+imu=src/Infrastructure/src/Emulator/Peripherals/Peripherals/Sensors/LSM6DS3TRC.cs
+audio=src/Infrastructure/src/Emulator/Peripherals/Peripherals/Sound/PCMAudioSink.cs
+power=src/Infrastructure/src/Emulator/Peripherals/Peripherals/Miscellaneous/BrickPowerController.cs
+ladder=src/Infrastructure/src/Emulator/Peripherals/Peripherals/Analog/PrimeButtonLadder.cs
+grep -Fq 'public ushort[] Matrix' "$tlc"
+grep -Fq 'GrayscaleClockEdges' "$tlc"
+grep -Fq 'AdvanceTimeMicroseconds' "$imu"
+grep -Fq 'AdvanceSampleClock' "$audio"
+grep -Fq 'ChargeStates' "$power"
+grep -Fq 'adc.SetChannelValue(14, Ladder0Value)' "$ladder"
+grep -Fq 'adc.SetChannelValue(1, Ladder1Value)' "$ladder"

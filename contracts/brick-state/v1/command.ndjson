@@ -1,0 +1,1 @@
+{"arguments":{"port":"A","speed":35},"command":"motor.setSpeed","expectedSeq":7,"requestId":"req-1","schemaVersion":1,"type":"command"}
