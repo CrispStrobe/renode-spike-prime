@@ -1,5 +1,8 @@
-// LEGO MINDSTORMS EV3 (AM1808) executable baseline.
-// The AM1808 CPU, RAM, interrupt controller and debug UART are functional.
+// LEGO MINDSTORMS EV3 (AM1808) executable post-EEPROM baseline.
+// The AM1808 CPU, RAM, clock/power/pinmux controls, interrupt controller,
+// Timer64 and debug UART are functional. platforms/cpus/am1808.repl explicitly
+// selects the deterministic post-bootloader constructor preset because no
+// proprietary boot ROM or EEPROM image is executed or distributed.
 // LCD, GPIO, ADC/SPI motor/sensor front ends and PRU are intentionally not
 // claimed until their models are connected.
 

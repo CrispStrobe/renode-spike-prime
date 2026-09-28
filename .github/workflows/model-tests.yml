@@ -1,4 +1,4 @@
-name: STM32 model tests
+name: Renode model tests
 
 on:
   workflow_dispatch:
@@ -86,6 +86,15 @@ jobs:
           python3 -m json.tool contracts/brick-state/v1/schema.json >/dev/null
           python3 -m py_compile tools/spike_state_bridge.py tools/spike-state-bridge.py
 
+      - name: Run source-only EV3 control gates
+        shell: bash
+        run: |
+          grep -Fq 'psc0: Miscellaneous.TI_DA8xx_PSC @ sysbus 0x01C10000' platforms/cpus/am1808.repl
+          grep -Fq 'pll0: Miscellaneous.TI_DA8xx_PLLC @ sysbus 0x01C11000' platforms/cpus/am1808.repl
+          grep -Fq 'syscfg0: Miscellaneous.TI_DA8xx_SYSCFG0 @ sysbus 0x01C14000' platforms/cpus/am1808.repl
+          test "$(grep -Fc 'postBootloaderState: true' platforms/cpus/am1808.repl)" = 5
+          grep -Fq 'SPDX-License-Identifier: MIT' tests/platforms/LEGO_EV3/am1808-control-smoke.S
+
       - name: Build native translator libraries
         run: ./build.sh --net --no-gui --external-lib-only
 
@@ -97,7 +106,7 @@ jobs:
           dotnet restore "$project" "${common[@]}"
           dotnet test "$project" --configuration Release --no-restore \
             "${common[@]}" \
-            --filter 'FullyQualifiedName~STM32DMATests|FullyQualifiedName~STM32SPITests|FullyQualifiedName~STM32_UARTTests|FullyQualifiedName~STM32F7I2CTests|FullyQualifiedName~TLC5955Tests|FullyQualifiedName~LSM6DS3TRCTests|FullyQualifiedName~LP50XXTests|FullyQualifiedName~GenericSpiFlashW25Q256Tests|FullyQualifiedName~LegoLpf2PortTests|FullyQualifiedName~BrickPowerControllerTests|FullyQualifiedName~PCMAudioSinkTests|FullyQualifiedName~SpikeFaultSoakTests|FullyQualifiedName~PrimeButtonLadderTests|FullyQualifiedName~STM32TimerBoardClockTests|FullyQualifiedName~TI_DA8xx_AINTCTests|FullyQualifiedName~TI_DA8xx_Timer64Tests' \
+            --filter 'FullyQualifiedName~STM32DMATests|FullyQualifiedName~STM32SPITests|FullyQualifiedName~STM32_UARTTests|FullyQualifiedName~STM32F7I2CTests|FullyQualifiedName~TLC5955Tests|FullyQualifiedName~LSM6DS3TRCTests|FullyQualifiedName~LP50XXTests|FullyQualifiedName~GenericSpiFlashW25Q256Tests|FullyQualifiedName~LegoLpf2PortTests|FullyQualifiedName~BrickPowerControllerTests|FullyQualifiedName~PCMAudioSinkTests|FullyQualifiedName~SpikeFaultSoakTests|FullyQualifiedName~PrimeButtonLadderTests|FullyQualifiedName~STM32TimerBoardClockTests|FullyQualifiedName~TI_DA8xx_AINTCTests|FullyQualifiedName~TI_DA8xx_Timer64Tests|FullyQualifiedName~TI_DA8xx_PSCTests|FullyQualifiedName~TI_DA8xx_PLLCTests|FullyQualifiedName~TI_DA8xx_SYSCFG0Tests' \
             --logger 'console;verbosity=normal'
 
       - name: Build the permissive target qualification images
@@ -112,6 +121,9 @@ jobs:
           arm-none-eabi-gcc -mcpu=arm926ej-s -nostdlib \
             -Wl,-T,am1808-smoke.ld -o am1808-timer64-smoke.elf am1808-timer64-smoke.S
           test "$(arm-none-eabi-readelf -h am1808-timer64-smoke.elf | awk '/Entry point/{print $4}')" = 0xffff0000
+          arm-none-eabi-gcc -mcpu=arm926ej-s -nostdlib \
+            -Wl,-T,am1808-smoke.ld -o am1808-control-smoke.elf am1808-control-smoke.S
+          test "$(arm-none-eabi-readelf -h am1808-control-smoke.elf | awk '/Entry point/{print $4}')" = 0xffff0000
           cd ../SPIKE_Prime
           arm-none-eabi-gcc -mcpu=cortex-m4 -mthumb -nostdlib \
             -Wl,-T,stm32f413-throughput.ld -o stm32f413-throughput.elf \
@@ -141,6 +153,43 @@ jobs:
           dotnet output/bin/Release/Renode.dll --disable-gui --plain -e \
             'mach create; machine LoadPlatformDescription @platforms/boards/lego-ev3.repl; sysbus LoadELF @tests/platforms/LEGO_EV3/am1808-timer64-smoke.elf; uart1 CreateFileBackend @/tmp/ev3-timer64-uart.log true; emulation RunFor "0.05"; q'
           test "$(cat "$uart_log")" = "EV3 TIMER64 IRQ"
+
+      - name: Execute the EV3 post-EEPROM control handoff
+        shell: bash
+        run: |
+          uart_log=/tmp/ev3-control-uart.log
+          receipt=/tmp/ev3-control-receipt.json
+          rm -f "$uart_log" "$receipt"
+          dotnet output/bin/Release/Renode.dll --disable-gui --plain -e \
+            'mach create; machine LoadPlatformDescription @platforms/boards/lego-ev3.repl; sysbus LoadELF @tests/platforms/LEGO_EV3/am1808-control-smoke.elf; uart1 CreateFileBackend @/tmp/ev3-control-uart.log true; emulation RunFor "0.01"; q'
+          test "$(cat "$uart_log")" = "EV3 PSC PLL PINMUX OK"
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          receipt = {
+              "schema": "brickwright.ev3.am1808-control.v1",
+              "platform": "platforms/boards/lego-ev3.repl",
+              "payload": "MIT source-built ARM926EJ-S",
+              "boundary": "explicit post-EEPROM preset; no boot ROM/EEPROM binary",
+              "proofs": [
+                  "PSC0 module 6 enabled-syncreset-enabled transition",
+                  "PLLC0 divider GOSET transition and restore",
+                  "SYSCFG0 rev2.2 KICK no-op, pinmux/suspend/config mutation and restore",
+              ],
+              "uart": Path("/tmp/ev3-control-uart.log").read_text().rstrip("\n"),
+          }
+          Path("/tmp/ev3-control-receipt.json").write_text(
+              json.dumps(receipt, indent=2, sort_keys=True) + "\n"
+          )
+          PY
+          cat "$receipt" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload EV3 AM1808 control receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ev3-am1808-control
+          path: /tmp/ev3-control-receipt.json
 
       - name: Qualify unpaced EV3 ARM9 throughput
         shell: bash
