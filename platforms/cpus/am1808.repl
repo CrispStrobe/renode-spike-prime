@@ -15,6 +15,22 @@ aintc: IRQControllers.TI_DA8xx_AINTC @ sysbus 0xFFFEE000
     IRQ -> cpu@0
     FIQ -> cpu@1
 
+edma0tc0: DMA.TI_DA8xx_EDMA3TC @ sysbus 0x01C08000
+    configuration: 0x212
+    IRQ -> aintc@13
+
+edma0tc1: DMA.TI_DA8xx_EDMA3TC @ sysbus 0x01C08400
+    configuration: 0x212
+    IRQ -> aintc@32
+
+edma0cc: DMA.TI_DA8xx_EDMA3CC @ sysbus 0x01C00000
+    controllerIndex: 0
+    IRQ -> aintc@11
+    ErrorIRQ -> aintc@12
+    init:
+        AttachTransferController edma0tc0 0
+        AttachTransferController edma0tc1 1
+
 // The ROM and I2C EEPROM boot stages are intentionally not distributed or
 // executed. These constructor presets describe the public, deterministic
 // handoff state they leave for an EV3 application image.
@@ -72,6 +88,17 @@ psc1: Miscellaneous.TI_DA8xx_PSC @ sysbus 0x01E27000
     initiallyEnabledModules: 0x80000040
     powerDomain1Module: -1
     postBootloaderState: true
+
+edma1tc0: DMA.TI_DA8xx_EDMA3TC @ sysbus 0x01E38000
+    configuration: 0x213
+    IRQ -> aintc@95
+
+edma1cc: DMA.TI_DA8xx_EDMA3CC @ sysbus 0x01E30000
+    controllerIndex: 1
+    IRQ -> aintc@93
+    ErrorIRQ -> aintc@94
+    init:
+        AttachTransferController edma1tc0 0
 
 sysbus:
     init:
