@@ -15,6 +15,23 @@ aintc: IRQControllers.TI_DA8xx_AINTC @ sysbus 0xFFFEE000
     IRQ -> cpu@0
     FIQ -> cpu@1
 
+// The ROM and I2C EEPROM boot stages are intentionally not distributed or
+// executed. These constructor presets describe the public, deterministic
+// handoff state they leave for an EV3 application image.
+psc0: Miscellaneous.TI_DA8xx_PSC @ sysbus 0x01C10000
+    moduleCount: 16
+    initiallyEnabledModules: 0x40C0
+    powerDomain1Module: 15
+    postBootloaderState: true
+
+pll0: Miscellaneous.TI_DA8xx_PLLC @ sysbus 0x01C11000
+    primary: true
+    postBootloaderState: true
+
+syscfg0: Miscellaneous.TI_DA8xx_SYSCFG0 @ sysbus 0x01C14000
+    bootConfiguration: 0
+    postBootloaderState: true
+
 timer0: Timers.TI_DA8xx_Timer64 @ sysbus 0x01C20000
     IRQ12 -> aintc@21
     IRQ34 -> aintc@22
@@ -45,6 +62,16 @@ uart1: UART.NS16550 @ sysbus 0x01D0C000
 uart2: UART.NS16550 @ sysbus 0x01D0D000
     wideRegisters: true
     -> aintc@61
+
+pll1: Miscellaneous.TI_DA8xx_PLLC @ sysbus 0x01E1A000
+    primary: false
+    postBootloaderState: true
+
+psc1: Miscellaneous.TI_DA8xx_PSC @ sysbus 0x01E27000
+    moduleCount: 32
+    initiallyEnabledModules: 0x80000040
+    powerDomain1Module: -1
+    postBootloaderState: true
 
 sysbus:
     init:
