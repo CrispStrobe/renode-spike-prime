@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: private-model-tests-${{ github.ref }}
+  group: model-tests-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -44,6 +44,48 @@ jobs:
             exit 1
           fi
 
+      - name: Run source-only SPIKE Essential gates
+        run: |
+          python3 tests/tools/steering_docs_test.py
+          python3 tests/platforms/spike-firmware-scenario-manifest-test.py
+          grep -Fq 'Run Opaque Scenario    lego-prime-v2' tests/platforms/SPIKE_Unchanged_Firmware.robot
+          grep -Fq 'Run Protected Scenario    brickwright-nuttx    ${True}' tests/platforms/SPIKE_Unchanged_Firmware.robot
+          grep -Fq 'primeStorage: SPI.GenericSpiFlash' platforms/boards/spike-prime.repl
+          grep -Fq 'using "../cpus/stm32f413vg.repl"' platforms/boards/spike-prime-brick-devices.repl
+          grep -Fq 'size: 0x100000' platforms/cpus/stm32f413vg.repl
+          grep -Fq 'systickFrequency: 96000000' platforms/cpus/stm32f413vg.repl
+          grep -Fq 'connector Connect uart9 primePortFHub' scripts/single-node/spike-prime.resc
+          tests/platforms/spike-essential-loader-test.sh
+          grep -Fq 'imu: Sensors.LSM6DS3TRC @ i2c3 0x6a' platforms/boards/spike-essential.repl
+          grep -Fq 'essentialStorage: SPI.GenericSpiFlash' platforms/boards/spike-essential.repl
+          grep -Fq 'connector Connect uart5 essentialPortAHub' scripts/single-node/spike-essential.resc
+          grep -Fq 'connector Connect usart3 essentialPortBHub' scripts/single-node/spike-essential.resc
+          grep -Fq 'fmpi2c1: I2C.STM32F7_I2C @ sysbus 0x40006000' platforms/boards/spike-essential.repl
+          grep -Fq 'essentialLeds: I2C.LP50XX @ fmpi2c1 0x28' platforms/boards/spike-essential.repl
+          ! grep -Fq 'spike-prime.repl' platforms/boards/spike-essential.repl
+          tests/platforms/spike-brick-devices-source-test.sh
+
+      - name: Run source-only Bluetooth controller gates
+        run: |
+          for test in tests/tools/bluetooth_controller_*_test.py; do
+            python3 "$test"
+          done
+          python3 tests/tools/spike_fault_soak_test.py
+          python3 tests/tools/spike_fault_resource_soak_test.py
+          python3 -m py_compile \
+            tools/bluetooth_controller/*.py \
+            tools/spike-bluetooth-controller.py \
+            tools/spike-fault-resource-soak.py \
+            tests/tools/bluetooth_controller_*_test.py
+
+      - name: Run neutral brick-state contract gates
+        run: |
+          python3 -m unittest discover -s tests/tools -p 'spike_state_bridge_test.py'
+          python3 -m unittest discover -s tests/tools -p 'spike_live_state_test.py'
+          python3 -m unittest discover -s tests/tools -p 'spike_state_socket_test.py'
+          python3 -m json.tool contracts/brick-state/v1/schema.json >/dev/null
+          python3 -m py_compile tools/spike_state_bridge.py tools/spike-state-bridge.py
+
       - name: Build native translator libraries
         run: ./build.sh --net --no-gui --external-lib-only
 
@@ -55,5 +97,11 @@ jobs:
           dotnet restore "$project" "${common[@]}"
           dotnet test "$project" --configuration Release --no-restore \
             "${common[@]}" \
-            --filter 'FullyQualifiedName~STM32DMATests|FullyQualifiedName~STM32SPITests|FullyQualifiedName~STM32_UARTTests' \
+            --filter 'FullyQualifiedName~STM32DMATests|FullyQualifiedName~STM32SPITests|FullyQualifiedName~STM32_UARTTests|FullyQualifiedName~STM32F7I2CTests|FullyQualifiedName~TLC5955Tests|FullyQualifiedName~LSM6DS3TRCTests|FullyQualifiedName~LP50XXTests|FullyQualifiedName~GenericSpiFlashW25Q256Tests|FullyQualifiedName~LegoLpf2PortTests|FullyQualifiedName~BrickPowerControllerTests|FullyQualifiedName~PCMAudioSinkTests|FullyQualifiedName~SpikeFaultSoakTests|FullyQualifiedName~PrimeButtonLadderTests|FullyQualifiedName~STM32TimerBoardClockTests' \
             --logger 'console;verbosity=normal'
+
+      - name: Build source-only headless Renode
+        run: ./build.sh --net --no-gui --skip-fetch
+
+      - name: Load the source-only SPIKE Prime platform
+        run: tests/platforms/spike-prime-platform-load-test.sh

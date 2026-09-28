@@ -1,4 +1,55 @@
-# Renode
+# Renode: Brickwright LEGO hub simulation fork
+
+> **Status:** simulation work in progress. Do not use simulation results as
+> evidence that any image is safe to flash to physical hardware.
+
+This public MIT-licensed fork extends Renode with deterministic LEGO hub
+models while retaining upstream Renode history. Its Prime and Essential
+machines can execute unmodified, locally supplied firmware. This repository
+provides:
+
+- STM32F4 DMA, SPI, and UART behavior required by SPIKE firmware;
+- a SPIKE Essential machine and optional Prime/Essential device overlays;
+- TLC5955 display, LSM6DS3TR-C IMU, and W25Q-series flash models;
+- hash-manifested local image loaders that never fetch or publish firmware;
+- one versioned unchanged-firmware scenario catalog for seven Prime and
+  Essential firmware families;
+- a transport-neutral dual-mode Bluetooth controller model with H4/HCI,
+  ATT/GATT, L2CAP, SDP, and RFCOMM test coverage;
+- deterministic LPF2 motor and ultrasonic endpoints with source-mapped logical
+  attachment state, emulated-time negotiation/reporting and bounded queues;
+- an exact permissively sourced Technic Large Linear Motor discovery fixture;
+- observable display, LED, IMU, power, button, and bounded PCM state.
+- a versioned, bounded NDJSON snapshot/control boundary for Brickwright.
+
+It does not model RF, electrical behavior, complete motor or sensor physics, or
+the full Powered Up device catalog. Pending work and acceptance gates are in
+[PLAN.md](PLAN.md). Completed evidence is summarized in
+[HISTORY.md](HISTORY.md). Hardware contracts and use instructions are in the
+[Essential platform](docs/platforms/spike-essential.md),
+[brick-device](docs/platforms/spike-brick-devices.md), and
+[Bluetooth controller](docs/bluetooth-controller.md) guides. Local image setup
+and the exact evidence limits are in the
+[unchanged-firmware scenario guide](docs/platforms/unchanged-firmware-scenarios.md).
+LPF2 evidence and deliberately omitted contracts are in the
+[device catalog](docs/platforms/lpf2-device-catalog.md).
+The wire contract and canonical fixtures are in
+[contracts/brick-state](contracts/brick-state/README.md).
+
+Run the source-only LEGO checks with:
+
+```bash
+tests/platforms/spike-essential-loader-test.sh
+tests/platforms/spike-brick-devices-source-test.sh
+python3 tests/platforms/spike-firmware-scenario-manifest-test.py
+python3 -m unittest discover -s tests/tools -p 'bluetooth_controller*_test.py'
+```
+
+Official LEGO, Pybricks, and TI binaries are neither included nor downloaded.
+Local firmware tests require an ignored SHA-256 manifest documented in the
+Essential platform guide. Public CI remains source-only.
+
+## Upstream Renode
 
 Copyright (c) 2010-2026 [Antmicro](https://www.antmicro.com)
 

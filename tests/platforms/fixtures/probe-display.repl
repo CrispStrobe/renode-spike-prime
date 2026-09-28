@@ -1,0 +1,10 @@
+// SPDX-License-Identifier: MIT
+using "../cpus/stm32f4.repl"
+
+display: SPI.TLC5955 @ spi1
+
+timer12:
+    1 -> display@1
+
+gpioPortA:
+    15 -> display@0

@@ -1,0 +1,37 @@
+# SPDX-License-Identifier: MIT
+# Exact STM32F413VG Prime machine plus six deterministic Powered Up endpoints.
+
+mach create
+machine LoadPlatformDescription @platforms/boards/spike-prime.repl
+
+# The UART assignment is the public spike-nx board map:
+# A=UART7, B=UART4, C=UART8, D=UART5, E=UART10, F=UART9.
+emulation CreateUARTHub "primePortAHub"
+emulation CreateLegoLpf2Port "primePortA" "medium-motor" "PD7" "PD8"
+connector Connect uart7 primePortAHub
+connector Connect primePortA primePortAHub
+
+emulation CreateUARTHub "primePortBHub"
+emulation CreateLegoLpf2Port "primePortB" "ultrasonic" "PD9" "PD10"
+connector Connect uart4 primePortBHub
+connector Connect primePortB primePortBHub
+
+emulation CreateUARTHub "primePortCHub"
+emulation CreateLegoLpf2Port "primePortC" "none" "PD11" "PE4"
+connector Connect uart8 primePortCHub
+connector Connect primePortC primePortCHub
+
+emulation CreateUARTHub "primePortDHub"
+emulation CreateLegoLpf2Port "primePortD" "none" "PC15" "PC14"
+connector Connect uart5 primePortDHub
+connector Connect primePortD primePortDHub
+
+emulation CreateUARTHub "primePortEHub"
+emulation CreateLegoLpf2Port "primePortE" "none" "PC13" "PE12"
+connector Connect uart10 primePortEHub
+connector Connect primePortE primePortEHub
+
+emulation CreateUARTHub "primePortFHub"
+emulation CreateLegoLpf2Port "primePortF" "none" "PC11" "PE6"
+connector Connect uart9 primePortFHub
+connector Connect primePortF primePortFHub
