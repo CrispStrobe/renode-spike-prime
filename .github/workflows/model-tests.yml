@@ -94,6 +94,16 @@ jobs:
           grep -Fq 'syscfg0: Miscellaneous.TI_DA8xx_SYSCFG0 @ sysbus 0x01C14000' platforms/cpus/am1808.repl
           test "$(grep -Fc 'postBootloaderState: true' platforms/cpus/am1808.repl)" = 5
           grep -Fq 'SPDX-License-Identifier: MIT' tests/platforms/LEGO_EV3/am1808-control-smoke.S
+          grep -Fq 'edma0cc: DMA.TI_DA8xx_EDMA3CC @ sysbus 0x01C00000' platforms/cpus/am1808.repl
+          grep -Fq 'edma0tc0: DMA.TI_DA8xx_EDMA3TC @ sysbus 0x01C08000' platforms/cpus/am1808.repl
+          grep -Fq 'edma0tc1: DMA.TI_DA8xx_EDMA3TC @ sysbus 0x01C08400' platforms/cpus/am1808.repl
+          grep -Fq 'edma1cc: DMA.TI_DA8xx_EDMA3CC @ sysbus 0x01E30000' platforms/cpus/am1808.repl
+          grep -Fq 'edma1tc0: DMA.TI_DA8xx_EDMA3TC @ sysbus 0x01E38000' platforms/cpus/am1808.repl
+          grep -Fq 'AttachTransferController edma0tc0 0' platforms/cpus/am1808.repl
+          grep -Fq 'AttachTransferController edma0tc1 1' platforms/cpus/am1808.repl
+          grep -Fq 'AttachTransferController edma1tc0 0' platforms/cpus/am1808.repl
+          grep -Fq 'SPDX-License-Identifier: MIT' tests/platforms/LEGO_EV3/am1808-edma-smoke.S
+          grep -Fq 'EV3 EDMA FAIL DATA' tests/platforms/LEGO_EV3/am1808-edma-smoke.S
 
       - name: Build native translator libraries
         run: ./build.sh --net --no-gui --external-lib-only
@@ -106,7 +116,7 @@ jobs:
           dotnet restore "$project" "${common[@]}"
           dotnet test "$project" --configuration Release --no-restore \
             "${common[@]}" \
-            --filter 'FullyQualifiedName~STM32DMATests|FullyQualifiedName~STM32SPITests|FullyQualifiedName~STM32_UARTTests|FullyQualifiedName~STM32F7I2CTests|FullyQualifiedName~TLC5955Tests|FullyQualifiedName~LSM6DS3TRCTests|FullyQualifiedName~LP50XXTests|FullyQualifiedName~GenericSpiFlashW25Q256Tests|FullyQualifiedName~LegoLpf2PortTests|FullyQualifiedName~BrickPowerControllerTests|FullyQualifiedName~PCMAudioSinkTests|FullyQualifiedName~SpikeFaultSoakTests|FullyQualifiedName~PrimeButtonLadderTests|FullyQualifiedName~STM32TimerBoardClockTests|FullyQualifiedName~TI_DA8xx_AINTCTests|FullyQualifiedName~TI_DA8xx_Timer64Tests|FullyQualifiedName~TI_DA8xx_PSCTests|FullyQualifiedName~TI_DA8xx_PLLCTests|FullyQualifiedName~TI_DA8xx_SYSCFG0Tests' \
+            --filter 'FullyQualifiedName~STM32DMATests|FullyQualifiedName~STM32SPITests|FullyQualifiedName~STM32_UARTTests|FullyQualifiedName~STM32F7I2CTests|FullyQualifiedName~TLC5955Tests|FullyQualifiedName~LSM6DS3TRCTests|FullyQualifiedName~LP50XXTests|FullyQualifiedName~GenericSpiFlashW25Q256Tests|FullyQualifiedName~LegoLpf2PortTests|FullyQualifiedName~BrickPowerControllerTests|FullyQualifiedName~PCMAudioSinkTests|FullyQualifiedName~SpikeFaultSoakTests|FullyQualifiedName~PrimeButtonLadderTests|FullyQualifiedName~STM32TimerBoardClockTests|FullyQualifiedName~TI_DA8xx_AINTCTests|FullyQualifiedName~TI_DA8xx_Timer64Tests|FullyQualifiedName~TI_DA8xx_PSCTests|FullyQualifiedName~TI_DA8xx_PLLCTests|FullyQualifiedName~TI_DA8xx_SYSCFG0Tests|FullyQualifiedName~TI_DA8xx_EDMA3CCTests|FullyQualifiedName~TI_DA8xx_EDMA3TCTests' \
             --logger 'console;verbosity=normal'
 
       - name: Build the permissive target qualification images
@@ -124,6 +134,13 @@ jobs:
           arm-none-eabi-gcc -mcpu=arm926ej-s -nostdlib \
             -Wl,-T,am1808-smoke.ld -o am1808-control-smoke.elf am1808-control-smoke.S
           test "$(arm-none-eabi-readelf -h am1808-control-smoke.elf | awk '/Entry point/{print $4}')" = 0xffff0000
+          arm-none-eabi-gcc -mcpu=arm926ej-s -nostdlib \
+            -Wl,-T,am1808-smoke.ld -o am1808-edma-smoke.elf am1808-edma-smoke.S
+          test "$(arm-none-eabi-readelf -h am1808-edma-smoke.elf | awk '/Entry point/{print $4}')" = 0xffff0000
+          arm-none-eabi-gcc -mcpu=arm926ej-s -nostdlib \
+            -Wa,-defsym,EDMA_HW16=1 -Wl,-T,am1808-smoke.ld \
+            -o am1808-edma-hw16-smoke.elf am1808-edma-smoke.S
+          test "$(arm-none-eabi-readelf -h am1808-edma-hw16-smoke.elf | awk '/Entry point/{print $4}')" = 0xffff0000
           cd ../SPIKE_Prime
           arm-none-eabi-gcc -mcpu=cortex-m4 -mthumb -nostdlib \
             -Wl,-T,stm32f413-throughput.ld -o stm32f413-throughput.elf \
@@ -190,6 +207,49 @@ jobs:
         with:
           name: ev3-am1808-control
           path: /tmp/ev3-control-receipt.json
+
+      - name: Execute the EV3 EDMA software and hardware event paths
+        shell: bash
+        run: |
+          software_log=/tmp/ev3-edma-software-uart.log
+          hardware_log=/tmp/ev3-edma-hw16-uart.log
+          receipt=/tmp/ev3-edma-receipt.json
+          rm -f "$software_log" "$hardware_log" "$receipt"
+          dotnet output/bin/Release/Renode.dll --disable-gui --plain -e \
+            'mach create; machine LoadPlatformDescription @platforms/boards/lego-ev3.repl; sysbus LoadELF @tests/platforms/LEGO_EV3/am1808-edma-smoke.elf; uart1 CreateFileBackend @/tmp/ev3-edma-software-uart.log true; emulation RunFor "0.02"; q'
+          test "$(cat "$software_log")" = "EV3 EDMA IRQ"
+          dotnet output/bin/Release/Renode.dll --disable-gui --plain -e \
+            'mach create; machine LoadPlatformDescription @platforms/boards/lego-ev3.repl; sysbus LoadELF @tests/platforms/LEGO_EV3/am1808-edma-hw16-smoke.elf; uart1 CreateFileBackend @/tmp/ev3-edma-hw16-uart.log true; edma0cc OnGPIO 16 true; edma0cc OnGPIO 16 false; emulation RunFor "0.02"; q'
+          test "$(cat "$hardware_log")" = "EV3 EDMA HW16 IRQ"
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          receipt = {
+              "schema": "brickwright.ev3.am1808-edma.v1",
+              "platform": "platforms/boards/lego-ev3.repl",
+              "payload": "MIT source-built ARM926EJ-S",
+              "timing_model": "functional immediate; not cycle accurate",
+              "proofs": [
+                  "EDMA0 software channel 0 copies 16 bytes",
+                  "EDMA0 hardware channel 16 latches the MMC/SD0 RX request before EER and drains it on EESR",
+                  "completion TCC raises physical AINTC system event 11",
+                  "IRQ handler clears IPR/ICR and validates copied data",
+              ],
+              "software_uart": Path("/tmp/ev3-edma-software-uart.log").read_text().rstrip("\n"),
+              "hardware_uart": Path("/tmp/ev3-edma-hw16-uart.log").read_text().rstrip("\n"),
+          }
+          Path("/tmp/ev3-edma-receipt.json").write_text(
+              json.dumps(receipt, indent=2, sort_keys=True) + "\n"
+          )
+          PY
+          cat "$receipt" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload EV3 AM1808 EDMA receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ev3-am1808-edma
+          path: /tmp/ev3-edma-receipt.json
 
       - name: Qualify unpaced EV3 ARM9 throughput
         shell: bash

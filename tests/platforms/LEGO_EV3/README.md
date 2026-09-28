@@ -12,6 +12,11 @@ arm-none-eabi-gcc -mcpu=arm926ej-s -nostdlib -Wl,-T,am1808-smoke.ld \
   -o am1808-timer64-smoke.elf am1808-timer64-smoke.S
 arm-none-eabi-gcc -mcpu=arm926ej-s -nostdlib -Wl,-T,am1808-smoke.ld \
   -o am1808-control-smoke.elf am1808-control-smoke.S
+arm-none-eabi-gcc -mcpu=arm926ej-s -nostdlib -Wl,-T,am1808-smoke.ld \
+  -o am1808-edma-smoke.elf am1808-edma-smoke.S
+arm-none-eabi-gcc -mcpu=arm926ej-s -nostdlib -Wa,-defsym,EDMA_HW16=1 \
+  -Wl,-T,am1808-smoke.ld -o am1808-edma-hw16-smoke.elf \
+  am1808-edma-smoke.S
 ```
 
 Then load `platforms/boards/lego-ev3.repl`, load the ELF, attach a UART analyzer
@@ -32,6 +37,23 @@ correct KICK sequences (the documented revision 2+ behavior), and restores the
 handoff values. A distinct `FAIL` line makes a bad preset observable rather
 than merely timing out.
 
+The EDMA image has two builds. The default programs DRAE0, PaRAM set 0 and
+region-0 interrupt enables, starts a 16-byte copy with software `ESR`, receives
+the real EDMA0 completion signal through AINTC event 11, and prints exactly
+`EV3 EDMA IRQ` only after checking all copied words. The `EDMA_HW16` build
+instead uses the public MMC/SD0 receive event mapping. The isolated workflow
+pulses EDMA0 channel 16 through its request input before the CPU starts, proving the request latches with
+EER clear and drains when the guest writes EESR; success is
+`EV3 EDMA HW16 IRQ`. No fake request source exists in the EV3 production
+platform. This is request-line coverage for the public MMC/SD0 RX
+mapping, not a claim that an MMC controller is integrated yet.
+Wrong IRQ state, missing completion and corrupt data each produce a distinct
+`EV3 EDMA FAIL ...` line, so mutations cannot silently look like success.
+
+EDMA transfers complete synchronously in the current functional model. This
+proves programming, bus-copy and interrupt semantics, not cycle-accurate queue
+or bus-arbitration timing.
+
 This is deliberately not described as full EV3 emulation. The next required
-models are EDMA, MMC/SD, GPIO, LCDC, SPI/ADC sensor and motor front ends, and
+models are MMC/SD, GPIO, LCDC, SPI/ADC sensor and motor front ends, and
 optionally PRU.
