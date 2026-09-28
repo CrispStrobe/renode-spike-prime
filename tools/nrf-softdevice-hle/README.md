@@ -22,7 +22,7 @@ and a virtual phone share.
 
 ```sh
 # 1. the HLE library (labwired-core checkout)
-cargo build --release -p nrf-softdevice-hle --features capi
+cargo rustc --release -p nrf-softdevice-hle --features capi --crate-type cdylib
 export SDHLE_LIB=$CARGO_TARGET_DIR/release/libnrf_softdevice_hle.so
 # 2. keep only the application region of an official hex
 python3 appimage.py program.hex v1 /tmp/app        # or: calliope
