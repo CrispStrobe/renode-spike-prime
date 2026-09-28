@@ -219,14 +219,41 @@ async def central(a):
     t0 = time.monotonic()
     ev = lambda *x: print(f'[{time.monotonic() - t0:7.2f}s]', *x, flush=True)
     seen = asyncio.get_running_loop().create_future()
+    # --min-advs N: let the board advertise N times before the first connect.
+    # Advertising runs on the board's emulated clock, so this waits in
+    # EMULATED time whatever the emulator's speed (a wall-clock sleep does
+    # not): e.g. 200 ms advertising in micro:bit pairing mode, 20 = 4 s.
+    advs, need = 0, a.min_advs
+    # Local name to ignore (the pairing-mode one, after bonding).
+    skip_name = None
+    first_name = None
+
+    def local_name(data):
+        # AD structures: len, type, payload; 0x08 shortened / 0x09 complete name.
+        i = 0
+        while i < len(data) and data[i]:
+            n, t = data[i], data[i + 1] if i + 1 < len(data) else 0
+            if t in (0x08, 0x09):
+                return bytes(data[i + 2:i + 1 + n])
+            i += 1 + n
+        return None
 
     def on_adv(adv):
-        nonlocal seen
+        nonlocal seen, advs, first_name
         if str(adv.address).split('/')[0] == a.target.upper() and not seen.done():
-            ev('advertisement from', adv.address, 'data', bytes(adv.data).hex() if hasattr(adv, 'data') else '')
+            data = bytes(adv.data) if hasattr(adv, 'data') else b''
+            name = local_name(data)
+            if skip_name is not None and name == skip_name:
+                return
+            advs += 1
+            if advs < need:
+                return
+            if first_name is None:
+                first_name = name
+            ev('advertisement from', adv.address, 'name', name, 'data', data.hex(), f'(#{advs})')
             seen.set_result(adv)
     dev.on('advertisement', on_adv)
-    await dev.start_scanning(filter_duplicates=True)
+    await dev.start_scanning(filter_duplicates=a.min_advs <= 1)
     await asyncio.wait_for(seen, a.timeout)
     await dev.stop_scanning()
     conn = await asyncio.wait_for(dev.connect(addr(a.target), timeout=a.timeout), a.timeout)
@@ -249,6 +276,16 @@ async def central(a):
         # still accept a connection in pairing mode without the key loaded:
         # retry until the bonded key encrypts the link.
         deadline = time.monotonic() + a.timeout
+        # Do not connect while the board is still in pairing mode: every
+        # connection there re-enters the DAL's pairing flow (and a connection
+        # that lands during its 15 s tick delays the reset into the program).
+        # The program advertises under a DIFFERENT local name (pairing mode
+        # appends the friendly name, "BBC micro:bit [tezut]"), so wait, in
+        # emulated time, until the name changes; then --reconnect-min-advs
+        # more advertisements under the new name, so the program has added its
+        # own services before discovery.
+        skip_name = first_name
+        advs, need = 0, a.reconnect_min_advs
         while True:
             seen = asyncio.get_running_loop().create_future()
             await dev.start_scanning(filter_duplicates=False)
@@ -259,9 +296,18 @@ async def central(a):
             try:
                 await asyncio.wait_for(conn.encrypt(), 30)
                 ev('encrypted with the bonded key =', conn.is_encrypted)
-                break
+                # Still the pairing-mode GATT (the board has not reset into
+                # the program yet)? Its table has no UART service: retry.
+                probe = Peer(conn)
+                await asyncio.wait_for(probe.discover_services(), a.timeout)
+                if any(str(s.uuid).upper() == UART_SERVICE for s in probe.services):
+                    break
+                raise RuntimeError('no UART service yet')
             except Exception as e:
-                ev('encryption refused (', type(e).__name__, e, ') - board not reset yet, retrying')
+                # Reached when encryption fails or the table is still the
+                # pairing-mode one; with the name gate above that should not
+                # happen on the DAL, and polling is the fallback.
+                ev('not ready (', type(e).__name__, e, ') - board not reset into the program yet, retrying')
                 try:
                     await conn.disconnect()
                 except Exception:
@@ -308,7 +354,11 @@ def main():
     ap.add_argument('--gap', type=float, default=3.0)
     ap.add_argument('--timeout', type=float, default=120.0)
     ap.add_argument('--no-pair', action='store_true')
+    ap.add_argument('--min-advs', type=int, default=1,
+                    help='advertisements to see before the first connect (emulated-time wait)')
     ap.add_argument('--reconnect-delay', type=float, default=0.0, help='wall seconds to wait after the post-bonding disconnect')
+    ap.add_argument('--reconnect-min-advs', type=int, default=1,
+                    help='advertisements to see before reconnecting after the bonding reset (emulated-time wait)')
     ap.add_argument('--pair-then-reconnect', action='store_true',
                     help='pair (board in pairing mode), wait for its reset, reconnect encrypted with the bond')
     ap.add_argument('--log', default='')
