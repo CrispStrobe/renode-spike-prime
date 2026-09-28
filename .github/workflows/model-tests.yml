@@ -47,7 +47,7 @@ jobs:
       - name: Build native translator libraries
         run: ./build.sh --net --no-gui --external-lib-only
 
-      - name: Run focused STM32 model tests
+      - name: Run focused STM32 and AM1808 model tests
         shell: bash
         run: |
           project=src/Infrastructure/src/Emulator/Peripherals/Test/PeripheralsTests/PeripheralsTests_NET.csproj
@@ -55,5 +55,15 @@ jobs:
           dotnet restore "$project" "${common[@]}"
           dotnet test "$project" --configuration Release --no-restore \
             "${common[@]}" \
-            --filter 'FullyQualifiedName~STM32DMATests|FullyQualifiedName~STM32SPITests|FullyQualifiedName~STM32_UARTTests' \
+            --filter 'FullyQualifiedName~STM32DMATests|FullyQualifiedName~STM32SPITests|FullyQualifiedName~STM32_UARTTests|FullyQualifiedName~TI_DA8xx_AINTCTests' \
             --logger 'console;verbosity=normal'
+
+      - name: Build the permissive EV3 ARM9 smoke image
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi
+          cd tests/platforms/LEGO_EV3
+          arm-none-eabi-gcc -mcpu=arm926ej-s -nostdlib \
+            -Wl,-T,am1808-smoke.ld -o am1808-smoke.elf am1808-smoke.S
+          test "$(arm-none-eabi-readelf -h am1808-smoke.elf | awk '/Entry point/{print $4}')" = 0x0
