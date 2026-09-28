@@ -3,4 +3,4 @@
 // LCD, GPIO, ADC/SPI motor/sensor front ends and PRU are intentionally not
 // claimed until their models are connected.
 
-using "../cpus/am1808.repl"
+using "platforms/cpus/am1808.repl"
