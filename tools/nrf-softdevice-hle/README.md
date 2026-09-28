@@ -16,6 +16,7 @@ and a virtual phone share.
 | conformance through the C ABI | `conformance/run_capi.py` |
 | interface-fact extraction (BSD-3 headers, fetched, never committed) | `facts/` |
 | GDB RSP probe (no ARM gdb needed) | `debug/rsp_probe.py` |
+| end to end: bond, reset, bonded reconnect, Nordic UART round trip (labwired) | `e2e_bond_uart.py` + `programs/` (two MakeCode programs, their app images, recipe, licences) |
 
 ## Quick start (Renode)
 
@@ -30,6 +31,24 @@ python3 ../bw-air/airhub.py &
 python3 renode/run.py --app /tmp/app.bin --out /tmp/run --secs 60 --air 127.0.0.1:7461 &
 python3 ../bw-air/bumble_air.py central --target C0:EE:AA:BB:CC:01 --send hello
 ```
+
+## End to end on labwired: bonding and the Nordic UART service
+
+```sh
+cargo build --release -p labwired-core --features event-scheduler --example sd_hle_run
+python3 e2e_bond_uart.py --sd-hle-run $CARGO_TARGET_DIR/release/examples/sd_hle_run \
+    --program ble-uart-echo --app programs/ble-uart-echo.v1.bin
+python3 e2e_bond_uart.py --sd-hle-run $CARGO_TARGET_DIR/release/examples/sd_hle_run \
+    --program ble-uart-echo-icons --app programs/ble-uart-echo-icons.v1.bin
+```
+
+The board starts in DAL pairing mode (A+B held from reset), the virtual phone
+pairs and bonds, the board resets into the program, the phone reconnects only
+once the program is advertising (so it never lands in pairing mode) and
+re-encrypts with the bonded key. `ble-uart-echo` must echo three lines;
+`ble-uart-echo-icons` must panic with 020 (out of heap) at the reconnection,
+which is what 16 KB of RAM allows it on V1 (`programs/README.md`). Several
+minutes of wall time each; exit 0 = expectation met.
 
 `run.py --app A.bin --app B.bin --radio-medium` puts two micro:bits on one
 Renode wireless medium (MakeCode radio). `--gdb 3333` starts Renode's GDB

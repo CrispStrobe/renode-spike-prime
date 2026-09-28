@@ -1,0 +1,32 @@
+{
+  "compiler": {
+    "target": "pxt-microbit@9.1.1",
+    "core": "pxt-core@13.0.1"
+  },
+  "programs": {
+    "ble-uart-echo": {
+      "source": "ble-uart-echo.ts",
+      "packages": [
+        "core",
+        "bluetooth"
+      ],
+      "variant": "v1",
+      "app_bin_sha256": "deb4904bd5ef9fbc50c21c5d34a431de9d34c8d0f02c16cdd1dc6c181608da46",
+      "app_bytes": 130880,
+      "reset": "0x2579d",
+      "expect": "echo"
+    },
+    "ble-uart-echo-icons": {
+      "source": "ble-uart-echo-icons.ts",
+      "packages": [
+        "core",
+        "bluetooth"
+      ],
+      "variant": "v1",
+      "app_bin_sha256": "15b4ed141895cc596b9d6eec0e8de77b151fe2c8e2922fb0e402e8ac92060e93",
+      "app_bytes": 133840,
+      "reset": "0x2579d",
+      "expect": "panic:20"
+    }
+  }
+}
