@@ -100,7 +100,7 @@ jobs:
             --filter 'FullyQualifiedName~STM32DMATests|FullyQualifiedName~STM32SPITests|FullyQualifiedName~STM32_UARTTests|FullyQualifiedName~STM32F7I2CTests|FullyQualifiedName~TLC5955Tests|FullyQualifiedName~LSM6DS3TRCTests|FullyQualifiedName~LP50XXTests|FullyQualifiedName~GenericSpiFlashW25Q256Tests|FullyQualifiedName~LegoLpf2PortTests|FullyQualifiedName~BrickPowerControllerTests|FullyQualifiedName~PCMAudioSinkTests|FullyQualifiedName~SpikeFaultSoakTests|FullyQualifiedName~PrimeButtonLadderTests|FullyQualifiedName~STM32TimerBoardClockTests|FullyQualifiedName~TI_DA8xx_AINTCTests' \
             --logger 'console;verbosity=normal'
 
-      - name: Build the permissive EV3 ARM9 smoke image
+      - name: Build the permissive target qualification images
         shell: bash
         run: |
           sudo apt-get update
@@ -109,6 +109,11 @@ jobs:
           arm-none-eabi-gcc -mcpu=arm926ej-s -nostdlib \
             -Wl,-T,am1808-smoke.ld -o am1808-smoke.elf am1808-smoke.S
           test "$(arm-none-eabi-readelf -h am1808-smoke.elf | awk '/Entry point/{print $4}')" = 0xffff0000
+          cd ../SPIKE_Prime
+          arm-none-eabi-gcc -mcpu=cortex-m4 -mthumb -nostdlib \
+            -Wl,-T,stm32f413-throughput.ld -o stm32f413-throughput.elf \
+            stm32f413-throughput.S
+          test "$(arm-none-eabi-readelf -h stm32f413-throughput.elf | awk '/Entry point/{print $4}')" = 0x8000009
 
       - name: Build source-only headless Renode
         run: ./build.sh --net --no-gui --skip-fetch
@@ -138,3 +143,17 @@ jobs:
         with:
           name: ev3-arm9-throughput
           path: /tmp/ev3-arm9-throughput.json
+
+      - name: Qualify unpaced SPIKE Prime throughput
+        shell: bash
+        run: |
+          tests/platforms/SPIKE_Prime/stm32f413-throughput-test.sh \
+            output/bin/Release/Renode.dll \
+            /tmp/spike-prime-throughput.json
+          cat /tmp/spike-prime-throughput.json >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload SPIKE Prime throughput receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: spike-prime-throughput
+          path: /tmp/spike-prime-throughput.json
