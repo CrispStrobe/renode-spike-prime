@@ -66,4 +66,4 @@ jobs:
           cd tests/platforms/LEGO_EV3
           arm-none-eabi-gcc -mcpu=arm926ej-s -nostdlib \
             -Wl,-T,am1808-smoke.ld -o am1808-smoke.elf am1808-smoke.S
-          test "$(arm-none-eabi-readelf -h am1808-smoke.elf | awk '/Entry point/{print $4}')" = 0x0
+          test "$(arm-none-eabi-readelf -h am1808-smoke.elf | awk '/Entry point/{print $4}')" = 0xffff0000

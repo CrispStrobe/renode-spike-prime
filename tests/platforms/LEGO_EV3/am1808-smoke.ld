@@ -2,7 +2,7 @@
 ENTRY(_start)
 SECTIONS
 {
-    . = 0;
+    . = 0xFFFF0000;
     .text : { KEEP(*(.vectors)) *(.text*) }
     .rodata : { *(.rodata*) }
     .data : { *(.data*) }

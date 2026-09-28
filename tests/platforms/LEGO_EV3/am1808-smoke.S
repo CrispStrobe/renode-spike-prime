@@ -27,9 +27,9 @@ _start:
 
 reset:
     msr cpsr_c, #0xd2       /* IRQ mode, masked */
-    ldr sp, =0x8001f000
+    ldr sp, =0xffff1f00
     msr cpsr_c, #0xd3       /* SVC mode, masked */
-    ldr sp, =0x8001e000
+    ldr sp, =0xffff1e00
 
     ldr r0, =UART1_THR
     mov r1, #'E'

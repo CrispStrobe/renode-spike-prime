@@ -5,17 +5,23 @@ cpu: CPU.ARMv7A @ sysbus
     cpuType: "arm926"
     init:
         ModelID 0x41069265
+        ExceptionVectorAddress 0xFFFF0000
+        PC 0xFFFF0000
 
 aintc: IRQControllers.TI_DA8xx_AINTC @ sysbus 0xFFFEE000
     IRQ -> cpu@0
     FIQ -> cpu@1
 
-// AM1808 ARM local/shared SRAM. The low alias is the reset mapping used by
-// source-built bare-metal validation images; Linux/u-boot use the DDR mapping.
-sram: Memory.MappedMemory @ {
-        sysbus 0x00000000;
-        sysbus 0x80000000
-    }
+// AM1808 maps its 8 KiB ARM-local vector RAM at the high-vector address.
+armLocalRam: Memory.MappedMemory @ sysbus 0xFFFF0000
+    size: 0x2000
+
+// The boot ROM contents are deliberately absent; never substitute recovery
+// firmware. This mapping reserves the documented 64 KiB address window.
+armLocalRom: Memory.MappedMemory @ sysbus 0x11700000
+    size: 0x10000
+
+sharedRam: Memory.MappedMemory @ sysbus 0x80000000
     size: 0x20000
 
 ddr: Memory.MappedMemory @ sysbus 0xC0000000
@@ -36,4 +42,3 @@ uart2: UART.NS16550 @ sysbus 0x01D0D000
 sysbus:
     init:
         Tag <0x01C00000, 0x01FFFFFF> "AM1808 peripheral configuration bus"
-        Tag <0x11700000, 0x1170FFFF> "AM1808 boot ROM (not modeled)"
