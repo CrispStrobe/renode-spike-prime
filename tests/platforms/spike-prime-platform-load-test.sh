@@ -15,6 +15,7 @@ cd "$repo_root"
 mkdir -p "$test_root/platforms/boards" "$test_root/platforms/cpus"
 cp platforms/boards/spike-prime.repl "$test_root/platforms/boards/"
 cp platforms/boards/spike-prime-brick-devices.repl "$test_root/platforms/boards/"
+cp platforms/cpus/stm32f413vg.repl "$test_root/platforms/cpus/"
 sed '/^[[:space:]]*ApplySVD @https:\/\/dl\.antmicro\.com\/projects\/renode\/svd\/STM32F40x\.svd\.gz$/d' \
   platforms/cpus/stm32f4.repl >"$test_root/platforms/cpus/stm32f4.repl"
 test "$(wc -l <platforms/cpus/stm32f4.repl)" -eq "$(( $(wc -l <"$test_root/platforms/cpus/stm32f4.repl") + 1 ))"
@@ -59,13 +60,13 @@ test "$probe_failed" -eq 0
 
 names_marker="$test_root/platform-names.ok"
 load_platform full "$test_root/platforms/boards/spike-prime.repl" speaker \
-  "python \"names = set(self.Machine.GetAllNames()); required = ['adc1', 'bluetoothButton', 'buttonLadders', 'centerButton', 'display', 'leftButton', 'rightButton', 'speaker', 'timer12']; missing = [item for item in required if not any(name == item or name.endswith('.' + item) for name in names)]; output = open('$names_marker', 'w'); output.write('ok' if not missing else ','.join(missing)); output.close()\";" \
+  "python \"names = set(self.Machine.GetAllNames()); required = ['adc1', 'bluetoothButton', 'buttonLadders', 'centerButton', 'display', 'flashF413', 'leftButton', 'rightButton', 'speaker', 'timer12', 'uart7', 'uart8', 'uart9', 'uart10']; missing = [item for item in required if not any(name == item or name.endswith('.' + item) for name in names)]; output = open('$names_marker', 'w'); output.write('ok' if not missing else ','.join(missing)); output.close()\";" \
   | tee "$log"
 names_result=$(cat "$names_marker")
 if test "$names_result" != ok; then
   echo "missing expected peripheral names: $names_result" >&2
   exit 1
 fi
-for expected in adc1 display speaker timer12; do
+for expected in adc1 display flashF413 speaker timer12 uart7 uart8 uart9 uart10; do
   grep -Fq "$expected" "$log"
 done

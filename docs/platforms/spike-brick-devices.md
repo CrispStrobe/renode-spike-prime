@@ -14,6 +14,13 @@ tests and frontends. They contain no LEGO firmware or TI service-pack data.
 | Essential LEDs | Supplied by the separate LP50xx/FMPI2C1 layer | This overlay deliberately does not duplicate that model. |
 | IMU | Explicit deterministic samples, CTRL1/CTRL2 ODR scheduling, output registers, 4 KiB byte FIFO, threshold status and INT1/INT2 | Time advances only through `AdvanceTimeMicroseconds`; sensor physics and unimplemented FIFO modes remain outside the contract. |
 | Prime speaker | Byte observations plus bounded 12-bit DAC sample input, TIM6 TRGO pacing, DMA1 stream 5 requests, overflow counters and PC10 amplifier enable | One queued sample advances per virtual-clock TRGO pulse; analog output and host playback are excluded. |
+| Prime LPF2 ports | `scripts/single-node/spike-prime.resc` connects all six source-mapped UARTs to bounded LPF2 externals; A starts with a medium motor and B with an ultrasonic sensor | Device electrical identification and motor physics remain deterministic abstractions. |
+
+The Prime machine now uses `stm32f413vg.repl`: Cortex-M4F, a 96 MHz SysTick
+and timer domain, the exact 1 MiB flash and contiguous 320 KiB SRAM geometry,
+and USART6/UART7/UART8/UART9/UART10 at their F413 addresses and IRQs. The
+common STM32F4 base still supplies a harmless peripheral superset; unsupported
+blocks are not evidence of physical SPIKE hardware.
 
 The Prime mappings are sourced from the MIT-tagged Pybricks `prime_hub/platform.c`
 at commit `101c6babb592148bda9a8fd912b7953c7d561c0a`: I2C2 IMU with PB4 INT1,

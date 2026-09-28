@@ -6,7 +6,13 @@
     "imageSha256": null
   },
   "paths": {
-    "power": "external:power",
+    "portA": "external:primePortA",
+    "portB": "external:primePortB",
+    "portC": "external:primePortC",
+    "portD": "external:primePortD",
+    "portE": "external:primePortE",
+    "portF": "external:primePortF",
+    "power": "machine:power",
     "imu": "machine:sysbus.i2c2.imu",
     "display": "machine:sysbus.spi1.display",
     "audio": "machine:sysbus.speaker",

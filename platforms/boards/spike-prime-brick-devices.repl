@@ -2,7 +2,7 @@
 // Evidence-bounded SPIKE Prime brick-device overlay. This is not yet a full
 // Prime platform: port, radio and external-flash wiring live in other layers.
 
-using "../cpus/stm32f4.repl"
+using "../cpus/stm32f413vg.repl"
 
 imu: Sensors.LSM6DS3TRC @ i2c2 0x6a
     0 -> gpioPortB@4

@@ -59,3 +59,11 @@ and mutation. `spike_state_sample` emits a snapshot at the current virtual time,
 so Robot scenarios can sample after deterministic emulated-time milestones.
 There is no wall-clock telemetry loop; periodic virtual-time sampling remains
 a scenario responsibility.
+
+For the Prime script, the six port paths are `external:primePortA` through
+`external:primePortF`; the checked-in example config includes them. Start the
+machine with `include @scripts/single-node/spike-prime.resc`, include
+`@scripts/spike-state-server.py`, then run
+`spike_state_start 127.0.0.1 8765 @contracts/brick-state/renode-prime.example.json`.
+The boundary is raw loopback TCP, not WebSocket; an application broker must
+translate or forward canonical NDJSON without exposing Renode's monitor.
