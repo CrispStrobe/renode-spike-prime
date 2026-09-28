@@ -41,11 +41,11 @@ The EDMA image has two builds. The default programs DRAE0, PaRAM set 0 and
 region-0 interrupt enables, starts a 16-byte copy with software `ESR`, receives
 the real EDMA0 completion signal through AINTC event 11, and prints exactly
 `EV3 EDMA IRQ` only after checking all copied words. The `EDMA_HW16` build
-instead uses the public MMC/SD0 receive event mapping. An isolated test button
-pulses EDMA0 channel 16 before the CPU starts, proving the request latches with
+instead uses the public MMC/SD0 receive event mapping. The isolated workflow
+pulses EDMA0 channel 16 through its request input before the CPU starts, proving the request latches with
 EER clear and drains when the guest writes EESR; success is
-`EV3 EDMA HW16 IRQ`. The button exists only in the test overlay, not the EV3
-production platform. This is request-line coverage for the public MMC/SD0 RX
+`EV3 EDMA HW16 IRQ`. No fake request source exists in the EV3 production
+platform. This is request-line coverage for the public MMC/SD0 RX
 mapping, not a claim that an MMC controller is integrated yet.
 Wrong IRQ state, missing completion and corrupt data each produce a distinct
 `EV3 EDMA FAIL ...` line, so mutations cannot silently look like success.

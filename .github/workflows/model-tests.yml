@@ -219,7 +219,7 @@ jobs:
             'mach create; machine LoadPlatformDescription @platforms/boards/lego-ev3.repl; sysbus LoadELF @tests/platforms/LEGO_EV3/am1808-edma-smoke.elf; uart1 CreateFileBackend @/tmp/ev3-edma-software-uart.log true; emulation RunFor "0.02"; q'
           test "$(cat "$software_log")" = "EV3 EDMA IRQ"
           dotnet output/bin/Release/Renode.dll --disable-gui --plain -e \
-            'mach create; machine LoadPlatformDescription @platforms/boards/lego-ev3.repl; machine LoadPlatformDescriptionFromString "edmaEvent16: Miscellaneous.Button @ edma0cc 16"; sysbus LoadELF @tests/platforms/LEGO_EV3/am1808-edma-hw16-smoke.elf; uart1 CreateFileBackend @/tmp/ev3-edma-hw16-uart.log true; edma0cc.edmaEvent16 PressAndRelease; emulation RunFor "0.02"; q'
+            'mach create; machine LoadPlatformDescription @platforms/boards/lego-ev3.repl; sysbus LoadELF @tests/platforms/LEGO_EV3/am1808-edma-hw16-smoke.elf; uart1 CreateFileBackend @/tmp/ev3-edma-hw16-uart.log true; edma0cc OnGPIO 16 true; edma0cc OnGPIO 16 false; emulation RunFor "0.02"; q'
           test "$(cat "$hardware_log")" = "EV3 EDMA HW16 IRQ"
           python3 - <<'PY'
           import json
