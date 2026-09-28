@@ -15,6 +15,7 @@ flash_controller:
 
 cpu:
     cpuType: "cortex-m4f"
+    PerformanceInMips: 96
 
 nvic:
     systickFrequency: 96000000
