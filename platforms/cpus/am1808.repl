@@ -52,6 +52,14 @@ timer0: Timers.TI_DA8xx_Timer64 @ sysbus 0x01C20000
     IRQ12 -> aintc@21
     IRQ34 -> aintc@22
 
+// EV3 populates MMC/SD0 only. Named DMA outputs preserve the public AM1808
+// event mapping: receive channel 16 and transmit channel 17 on EDMA0.
+mmcsd0: SD.TI_DA8xx_MMCSD @ sysbus 0x01C40000
+    IRQ -> aintc@16
+    SDIOIRQ -> aintc@17
+    RxDMARequest -> edma0cc@16
+    TxDMARequest -> edma0cc@17
+
 // AM1808 maps its 8 KiB ARM-local vector RAM at the high-vector address.
 armLocalRam: Memory.MappedMemory @ sysbus 0xFFFF0000
     size: 0x2000
