@@ -104,6 +104,19 @@ jobs:
           grep -Fq 'AttachTransferController edma1tc0 0' platforms/cpus/am1808.repl
           grep -Fq 'SPDX-License-Identifier: MIT' tests/platforms/LEGO_EV3/am1808-edma-smoke.S
           grep -Fq 'EV3 EDMA FAIL DATA' tests/platforms/LEGO_EV3/am1808-edma-smoke.S
+          grep -Fq 'mmcsd0: SD.TI_DA8xx_MMCSD @ sysbus 0x01C40000' platforms/cpus/am1808.repl
+          grep -Fq 'IRQ -> aintc@16' platforms/cpus/am1808.repl
+          grep -Fq 'SDIOIRQ -> aintc@17' platforms/cpus/am1808.repl
+          grep -Fq 'RxDMARequest -> edma0cc@16' platforms/cpus/am1808.repl
+          grep -Fq 'TxDMARequest -> edma0cc@17' platforms/cpus/am1808.repl
+          if grep -Fq 'mmcsd1:' platforms/cpus/am1808.repl; then
+            echo '::error::EV3 must not wire disabled MMC/SD1'
+            exit 1
+          fi
+          grep -Fq 'SPDX-License-Identifier: MIT' tests/platforms/LEGO_EV3/am1808-mmc-smoke.S
+          grep -Fq 'EV3 MMC FAIL NBLC' tests/platforms/LEGO_EV3/am1808-mmc-smoke.S
+          grep -Fq 'EV3 MMC FAIL POWER' tests/platforms/LEGO_EV3/am1808-mmc-smoke.S
+          grep -Fq 'SPDX-License-Identifier: MIT' tests/platforms/LEGO_EV3/generate-am1808-sd-image.py
 
       - name: Build native translator libraries
         run: ./build.sh --net --no-gui --external-lib-only
@@ -116,7 +129,7 @@ jobs:
           dotnet restore "$project" "${common[@]}"
           dotnet test "$project" --configuration Release --no-restore \
             "${common[@]}" \
-            --filter 'FullyQualifiedName~STM32DMATests|FullyQualifiedName~STM32SPITests|FullyQualifiedName~STM32_UARTTests|FullyQualifiedName~STM32F7I2CTests|FullyQualifiedName~TLC5955Tests|FullyQualifiedName~LSM6DS3TRCTests|FullyQualifiedName~LP50XXTests|FullyQualifiedName~GenericSpiFlashW25Q256Tests|FullyQualifiedName~LegoLpf2PortTests|FullyQualifiedName~BrickPowerControllerTests|FullyQualifiedName~PCMAudioSinkTests|FullyQualifiedName~SpikeFaultSoakTests|FullyQualifiedName~PrimeButtonLadderTests|FullyQualifiedName~STM32TimerBoardClockTests|FullyQualifiedName~TI_DA8xx_AINTCTests|FullyQualifiedName~TI_DA8xx_Timer64Tests|FullyQualifiedName~TI_DA8xx_PSCTests|FullyQualifiedName~TI_DA8xx_PLLCTests|FullyQualifiedName~TI_DA8xx_SYSCFG0Tests|FullyQualifiedName~TI_DA8xx_EDMA3CCTests|FullyQualifiedName~TI_DA8xx_EDMA3TCTests' \
+            --filter 'FullyQualifiedName~STM32DMATests|FullyQualifiedName~STM32SPITests|FullyQualifiedName~STM32_UARTTests|FullyQualifiedName~STM32F7I2CTests|FullyQualifiedName~TLC5955Tests|FullyQualifiedName~LSM6DS3TRCTests|FullyQualifiedName~LP50XXTests|FullyQualifiedName~GenericSpiFlashW25Q256Tests|FullyQualifiedName~LegoLpf2PortTests|FullyQualifiedName~BrickPowerControllerTests|FullyQualifiedName~PCMAudioSinkTests|FullyQualifiedName~SpikeFaultSoakTests|FullyQualifiedName~PrimeButtonLadderTests|FullyQualifiedName~STM32TimerBoardClockTests|FullyQualifiedName~TI_DA8xx_AINTCTests|FullyQualifiedName~TI_DA8xx_Timer64Tests|FullyQualifiedName~TI_DA8xx_PSCTests|FullyQualifiedName~TI_DA8xx_PLLCTests|FullyQualifiedName~TI_DA8xx_SYSCFG0Tests|FullyQualifiedName~TI_DA8xx_EDMA3CCTests|FullyQualifiedName~TI_DA8xx_EDMA3TCTests|FullyQualifiedName~TI_DA8xx_MMCSDTests' \
             --logger 'console;verbosity=normal'
 
       - name: Build the permissive target qualification images
@@ -141,6 +154,16 @@ jobs:
             -Wa,-defsym,EDMA_HW16=1 -Wl,-T,am1808-smoke.ld \
             -o am1808-edma-hw16-smoke.elf am1808-edma-smoke.S
           test "$(arm-none-eabi-readelf -h am1808-edma-hw16-smoke.elf | awk '/Entry point/{print $4}')" = 0xffff0000
+          arm-none-eabi-gcc -mcpu=arm926ej-s -nostdlib \
+            -Wl,-T,am1808-smoke.ld -o am1808-mmc-pio-smoke.elf am1808-mmc-smoke.S
+          test "$(arm-none-eabi-readelf -h am1808-mmc-pio-smoke.elf | awk '/Entry point/{print $4}')" = 0xffff0000
+          arm-none-eabi-gcc -mcpu=arm926ej-s -nostdlib \
+            -Wa,-defsym,MMC_EDMA=1 -Wl,-T,am1808-smoke.ld \
+            -o am1808-mmc-edma-smoke.elf am1808-mmc-smoke.S
+          test "$(arm-none-eabi-readelf -h am1808-mmc-edma-smoke.elf | awk '/Entry point/{print $4}')" = 0xffff0000
+          python3 generate-am1808-sd-image.py /tmp/ev3-am1808-sd.img
+          test "$(stat -c '%s' /tmp/ev3-am1808-sd.img)" = 1048576
+          test "$(sha256sum /tmp/ev3-am1808-sd.img | awk '{print $1}')" = 8e8b458d4c0b8ee96c726f78962fd63fb109f78b1dc073da15a8fc53df28c637
           cd ../SPIKE_Prime
           arm-none-eabi-gcc -mcpu=cortex-m4 -mthumb -nostdlib \
             -Wl,-T,stm32f413-throughput.ld -o stm32f413-throughput.elf \
@@ -250,6 +273,55 @@ jobs:
         with:
           name: ev3-am1808-edma
           path: /tmp/ev3-edma-receipt.json
+
+      - name: Execute the EV3 MMC PIO and EDMA read paths
+        shell: bash
+        run: |
+          pio_log=/tmp/ev3-mmc-pio-uart.log
+          edma_log=/tmp/ev3-mmc-edma-uart.log
+          receipt=/tmp/ev3-mmc-receipt.json
+          rm -f "$pio_log" "$edma_log" "$receipt"
+          dotnet output/bin/Release/Renode.dll --disable-gui --plain -e \
+            'mach create; machine LoadPlatformDescription @platforms/boards/lego-ev3.repl; machine SdCardFromFile @/tmp/ev3-am1808-sd.img mmcsd0 0x100000 false "ev3Sd"; sysbus LoadELF @tests/platforms/LEGO_EV3/am1808-mmc-pio-smoke.elf; uart1 CreateFileBackend @/tmp/ev3-mmc-pio-uart.log true; emulation RunFor "0.03"; q'
+          test "$(cat "$pio_log")" = "EV3 MMC PIO READ OK"
+          dotnet output/bin/Release/Renode.dll --disable-gui --plain -e \
+            'mach create; machine LoadPlatformDescription @platforms/boards/lego-ev3.repl; machine SdCardFromFile @/tmp/ev3-am1808-sd.img mmcsd0 0x100000 false "ev3Sd"; sysbus LoadELF @tests/platforms/LEGO_EV3/am1808-mmc-edma-smoke.elf; uart1 CreateFileBackend @/tmp/ev3-mmc-edma-uart.log true; emulation RunFor "0.03"; q'
+          test "$(cat "$edma_log")" = "EV3 MMC EDMA READ OK"
+          test "$(sha256sum /tmp/ev3-am1808-sd.img | awk '{print $1}')" = 8e8b458d4c0b8ee96c726f78962fd63fb109f78b1dc073da15a8fc53df28c637
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          receipt = {
+              "schema": "brickwright.ev3.am1808-mmc.v1",
+              "platform": "platforms/boards/lego-ev3.repl",
+              "payload": "MIT source-built ARM926EJ-S",
+              "media": {
+                  "bytes": 1048576,
+                  "persistent": False,
+                  "sha256": "8e8b458d4c0b8ee96c726f78962fd63fb109f78b1dc073da15a8fc53df28c637",
+                  "source": "tests/platforms/LEGO_EV3/generate-am1808-sd-image.py",
+              },
+              "proofs": [
+                  "PSC0 module 5 transitions to ENABLE before MMC0 access",
+                  "PIO CMD17 validates all 512 authored bytes, status and NBLC",
+                  "EDMA0 channel 16 drains sixteen 32-byte MMC RX requests",
+                  "physical AINTC events 16 (MMC0) and 11 (EDMA completion) are acknowledged",
+              ],
+              "pio_uart": Path("/tmp/ev3-mmc-pio-uart.log").read_text().rstrip("\n"),
+              "edma_uart": Path("/tmp/ev3-mmc-edma-uart.log").read_text().rstrip("\n"),
+          }
+          Path("/tmp/ev3-mmc-receipt.json").write_text(
+              json.dumps(receipt, indent=2, sort_keys=True) + "\n"
+          )
+          PY
+          cat "$receipt" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload EV3 AM1808 MMC receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ev3-am1808-mmc
+          path: /tmp/ev3-mmc-receipt.json
 
       - name: Qualify unpaced EV3 ARM9 throughput
         shell: bash
