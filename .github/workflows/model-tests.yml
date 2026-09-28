@@ -89,7 +89,7 @@ jobs:
       - name: Build native translator libraries
         run: ./build.sh --net --no-gui --external-lib-only
 
-      - name: Run focused STM32 model tests
+      - name: Run focused STM32 and AM1808 model tests
         shell: bash
         run: |
           project=src/Infrastructure/src/Emulator/Peripherals/Test/PeripheralsTests/PeripheralsTests_NET.csproj
@@ -97,11 +97,30 @@ jobs:
           dotnet restore "$project" "${common[@]}"
           dotnet test "$project" --configuration Release --no-restore \
             "${common[@]}" \
-            --filter 'FullyQualifiedName~STM32DMATests|FullyQualifiedName~STM32SPITests|FullyQualifiedName~STM32_UARTTests|FullyQualifiedName~STM32F7I2CTests|FullyQualifiedName~TLC5955Tests|FullyQualifiedName~LSM6DS3TRCTests|FullyQualifiedName~LP50XXTests|FullyQualifiedName~GenericSpiFlashW25Q256Tests|FullyQualifiedName~LegoLpf2PortTests|FullyQualifiedName~BrickPowerControllerTests|FullyQualifiedName~PCMAudioSinkTests|FullyQualifiedName~SpikeFaultSoakTests|FullyQualifiedName~PrimeButtonLadderTests|FullyQualifiedName~STM32TimerBoardClockTests' \
+            --filter 'FullyQualifiedName~STM32DMATests|FullyQualifiedName~STM32SPITests|FullyQualifiedName~STM32_UARTTests|FullyQualifiedName~STM32F7I2CTests|FullyQualifiedName~TLC5955Tests|FullyQualifiedName~LSM6DS3TRCTests|FullyQualifiedName~LP50XXTests|FullyQualifiedName~GenericSpiFlashW25Q256Tests|FullyQualifiedName~LegoLpf2PortTests|FullyQualifiedName~BrickPowerControllerTests|FullyQualifiedName~PCMAudioSinkTests|FullyQualifiedName~SpikeFaultSoakTests|FullyQualifiedName~PrimeButtonLadderTests|FullyQualifiedName~STM32TimerBoardClockTests|FullyQualifiedName~TI_DA8xx_AINTCTests' \
             --logger 'console;verbosity=normal'
+
+      - name: Build the permissive EV3 ARM9 smoke image
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi
+          cd tests/platforms/LEGO_EV3
+          arm-none-eabi-gcc -mcpu=arm926ej-s -nostdlib \
+            -Wl,-T,am1808-smoke.ld -o am1808-smoke.elf am1808-smoke.S
+          test "$(arm-none-eabi-readelf -h am1808-smoke.elf | awk '/Entry point/{print $4}')" = 0xffff0000
 
       - name: Build source-only headless Renode
         run: ./build.sh --net --no-gui --skip-fetch
 
       - name: Load the source-only SPIKE Prime platform
         run: tests/platforms/spike-prime-platform-load-test.sh
+
+      - name: Execute the EV3 ARM9 UART and IRQ path
+        shell: bash
+        run: |
+          uart_log=/tmp/ev3-arm9-uart.log
+          rm -f "$uart_log"
+          dotnet output/bin/Release/Renode.dll --disable-gui --plain -e \
+            'mach create; machine LoadPlatformDescription @platforms/boards/lego-ev3.repl; sysbus LoadELF @tests/platforms/LEGO_EV3/am1808-smoke.elf; uart1 CreateFileBackend @/tmp/ev3-arm9-uart.log true; emulation RunFor "0.01"; q'
+          test "$(cat "$uart_log")" = "EV3 ARM9 IRQ"

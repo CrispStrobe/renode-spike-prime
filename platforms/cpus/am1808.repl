@@ -1,0 +1,44 @@
+// TI AM1808 subset required for a truthful ARM926/AINTC/UART boot boundary.
+// Addresses and interrupt numbers follow TI SPRUH82C and the AM1808 datasheet.
+
+cpu: CPU.ARMv7A @ sysbus
+    cpuType: "arm926"
+    init:
+        ModelID 0x41069265
+        ExceptionVectorAddress 0xFFFF0000
+        PC 0xFFFF0000
+
+aintc: IRQControllers.TI_DA8xx_AINTC @ sysbus 0xFFFEE000
+    IRQ -> cpu@0
+    FIQ -> cpu@1
+
+// AM1808 maps its 8 KiB ARM-local vector RAM at the high-vector address.
+armLocalRam: Memory.MappedMemory @ sysbus 0xFFFF0000
+    size: 0x2000
+
+// The boot ROM contents are deliberately absent; never substitute recovery
+// firmware. This mapping reserves the documented 64 KiB address window.
+armLocalRom: Memory.MappedMemory @ sysbus 0x11700000
+    size: 0x10000
+
+sharedRam: Memory.MappedMemory @ sysbus 0x80000000
+    size: 0x20000
+
+ddr: Memory.MappedMemory @ sysbus 0xC0000000
+    size: 0x4000000
+
+uart0: UART.NS16550 @ sysbus 0x01C42000
+    wideRegisters: true
+    -> aintc@25
+
+uart1: UART.NS16550 @ sysbus 0x01D0C000
+    wideRegisters: true
+    -> aintc@53
+
+uart2: UART.NS16550 @ sysbus 0x01D0D000
+    wideRegisters: true
+    -> aintc@61
+
+sysbus:
+    init:
+        Tag <0x01C00000, 0x01FFFFFF> "AM1808 peripheral configuration bus"

@@ -1,0 +1,6 @@
+// LEGO MINDSTORMS EV3 (AM1808) executable baseline.
+// The AM1808 CPU, RAM, interrupt controller and debug UART are functional.
+// LCD, GPIO, ADC/SPI motor/sensor front ends and PRU are intentionally not
+// claimed until their models are connected.
+
+using "platforms/cpus/am1808.repl"
