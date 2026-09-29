@@ -10,6 +10,7 @@ SCHEMA_VERSION = 1
 MAX_LINE_BYTES = 256 * 1024
 MAX_QUEUE_ITEMS = 256
 FIRMWARE_BY_BOARD = {
+    "ev3": {"brickwright-ev3-smoke"},
     "spike-prime": {"lego-prime-v2", "lego-prime-v3", "pybricks-prime",
                     "spike-nx", "brickwright-nuttx"},
     "spike-essential": {"lego-essential", "pybricks-essential"},
@@ -72,8 +73,19 @@ def validate_message(message: dict) -> None:
         if target.get("firmware") not in FIRMWARE_BY_BOARD.get(target.get("board"), set()):
             raise ProtocolError("unsupported board/firmware identity")
         display = message["display"]
-        if not isinstance(display, dict) or len(display.get("pixels", [])) > 4096:
+        max_pixels = 178 * 128 if target.get("board") == "ev3" else 4096
+        if not isinstance(display, dict) or len(display.get("pixels", [])) > max_pixels:
             raise ProtocolError("invalid display")
+        if target.get("board") == "ev3":
+            pixels = display.get("pixels")
+            dimensions = (display.get("width"), display.get("height"))
+            if target.get("transport") != "none" or not isinstance(pixels, list):
+                raise ProtocolError("invalid EV3 simulation display")
+            if dimensions == (178, 128):
+                if len(pixels) != 178 * 128 or any(not isinstance(v, int) or isinstance(v, bool) or not 0 <= v <= 255 for v in pixels):
+                    raise ProtocolError("invalid EV3 grayscale frame")
+            elif dimensions != (0, 0) or pixels:
+                raise ProtocolError("invalid EV3 display dimensions")
         for name in ("ports", "motors", "sensors"):
             if not isinstance(message[name], list) or len(message[name]) > 16:
                 raise ProtocolError(f"invalid {name}")

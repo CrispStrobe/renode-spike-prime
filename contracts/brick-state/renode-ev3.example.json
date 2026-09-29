@@ -1,0 +1,20 @@
+{
+  "identity": {"board": "ev3", "firmware": "brickwright-ev3-smoke", "transport": "none", "imageSha256": null},
+  "paths": {
+    "display": "machine:sysbus.spi1.ev3Lcd",
+    "adc": "machine:sysbus.spi0.ev3Adc",
+    "centerButton": "machine:sysbus.gpio.centerButton",
+    "leftButton": "machine:sysbus.gpio.leftButton",
+    "backButton": "machine:sysbus.gpio.backButton",
+    "rightButton": "machine:sysbus.gpio.rightButton",
+    "downButton": "machine:sysbus.gpio.downButton",
+    "upButton": "machine:sysbus.gpio.upButton",
+    "leftGreenLed": "machine:sysbus.gpio.leftGreenLed",
+    "leftRedLed": "machine:sysbus.gpio.leftRedLed",
+    "rightGreenLed": "machine:sysbus.gpio.rightGreenLed",
+    "rightRedLed": "machine:sysbus.gpio.rightRedLed"
+  },
+  "maxClients": 1,
+  "maxLineBytes": 262144,
+  "socketTimeoutSeconds": 5
+}
