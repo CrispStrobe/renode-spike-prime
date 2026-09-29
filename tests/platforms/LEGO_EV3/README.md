@@ -22,6 +22,10 @@ arm-none-eabi-gcc -mcpu=arm926ej-s -nostdlib -Wl,-T,am1808-smoke.ld \
 arm-none-eabi-gcc -mcpu=arm926ej-s -nostdlib -Wa,-defsym,MMC_EDMA=1 \
   -Wl,-T,am1808-smoke.ld -o am1808-mmc-edma-smoke.elf \
   am1808-mmc-smoke.S
+arm-none-eabi-gcc -mcpu=arm926ej-s -nostdlib -Wl,-T,am1808-smoke.ld \
+  -o am1808-gpio-smoke.elf am1808-gpio-smoke.S
+arm-none-eabi-gcc -mcpu=arm926ej-s -nostdlib -Wl,-T,am1808-smoke.ld \
+  -o am1808-spi-display-smoke.elf am1808-spi-display-smoke.S
 python3 generate-am1808-sd-image.py /tmp/ev3-am1808-sd.img
 ```
 
@@ -71,6 +75,27 @@ nonpersistently and verifies its SHA-256 after both runs; no image or firmware
 binary is committed. Both builds enable and verify PSC0 module 5 before MMC0
 access. The current controller boundary is read-only.
 
+The GPIO image enables PSC1 module 3, selects the center-button and status-LED
+GPIO pinmux functions, and proves the LED SET/CLR/readback path. After the
+guest has armed rising-edge detection, use `sysbus.gpio.centerButton Press`.
+The image requires GPIO29 input/status plus physical AINTC event 43 before it
+emits `EV3 GPIO BUTTON LED OK`; wrong power, pinmux, output, input and IRQ
+states have distinct failure lines.
+
+The display image enables PSC1 modules 3 and 10, selects SPI1 SIMO/CLK and GPIO43,
+GPIO44 and GPIO80, resets the ST7586 panel and writes a one-column authored
+pixel pattern in 10 MHz 8-bit SPI master mode. A final receive-buffer interrupt
+must arrive through physical AINTC event 56 before it emits
+`EV3 SPI DISPLAY IRQ OK`. CI separately requires the panel's pixel and bounded
+visible-frame checksum, so a disconnected child or ignored command/data GPIO
+cannot pass on controller behavior alone.
+
+After building, `python3 tests/tools/ev3_cp11_debugger_test.py` (from the repo
+root) executes both guests and reads their GPIO/SPI state through the real
+GDB server. It writes `/tmp/ev3-cp11-debugger-receipt.json`; the framebuffer
+pixel/checksum observations use the Renode monitor/video boundary.
+
 This is deliberately not described as full EV3 emulation. The next required
-models are GPIO, LCDC, SPI/ADC sensor and motor front ends, and
-optionally PRU.
+models are the SPI/ADC sensor and motor front ends, and optionally PRU. The EV3
+display is on SPI1 with GPIO control lines; AM1808 LCDC is not board display
+hardware.
