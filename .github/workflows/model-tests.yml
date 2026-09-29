@@ -117,19 +117,40 @@ jobs:
           grep -Fq 'EV3 MMC FAIL NBLC' tests/platforms/LEGO_EV3/am1808-mmc-smoke.S
           grep -Fq 'EV3 MMC FAIL POWER' tests/platforms/LEGO_EV3/am1808-mmc-smoke.S
           grep -Fq 'SPDX-License-Identifier: MIT' tests/platforms/LEGO_EV3/generate-am1808-sd-image.py
+          grep -Fq 'gpio: GPIOPort.TI_DA8xx_GPIO @ sysbus 0x01E26000' platforms/cpus/am1808.repl
+          bank=0
+          for event in 42 43 44 45 46 47 48 49 50; do
+            grep -Fq "Bank${bank}IRQ -> aintc@$event" platforms/cpus/am1808.repl
+            bank=$((bank + 1))
+          done
+          grep -Fq '43 -> ev3Lcd@1' platforms/boards/lego-ev3.repl
+          grep -Fq '44 -> ev3Lcd@0' platforms/boards/lego-ev3.repl
+          grep -Fq '80 -> ev3Lcd@2' platforms/boards/lego-ev3.repl
+          grep -Fq 'SPDX-License-Identifier: MIT' tests/platforms/LEGO_EV3/am1808-gpio-smoke.S
+          grep -Fq 'EV3 GPIO FAIL PINMUX' tests/platforms/LEGO_EV3/am1808-gpio-smoke.S
+          grep -Fq 'spi1: SPI.TI_DA8xx_SPI @ sysbus 0x01F0E000' platforms/cpus/am1808.repl
+          grep -Fq 'IRQ -> aintc@56' platforms/cpus/am1808.repl
+          grep -Fq 'ev3Lcd: Video.ST7586 @ spi1 0' platforms/boards/lego-ev3.repl
+          grep -Fq 'SPDX-License-Identifier: MIT' tests/platforms/LEGO_EV3/am1808-spi-display-smoke.S
+          grep -Fq 'EV3 SPI DISPLAY FAIL IRQ' tests/platforms/LEGO_EV3/am1808-spi-display-smoke.S
 
       - name: Build native translator libraries
         run: ./build.sh --net --no-gui --external-lib-only
+
+      - name: Build source-only headless Renode
+        run: ./build.sh --net --no-gui --skip-fetch
 
       - name: Run focused STM32 and AM1808 model tests
         shell: bash
         run: |
           project=src/Infrastructure/src/Emulator/Peripherals/Test/PeripheralsTests/PeripheralsTests_NET.csproj
-          common=(-p:TargetFrameworks=net8.0 -p:GUI_DISABLED=true -p:CurrentPlatform=Linux)
-          dotnet restore "$project" "${common[@]}"
-          dotnet test "$project" --configuration Release --no-restore \
+          # build.sh generated the root net8 target; analyzer projects retain
+          # their own netstandard2.0 target instead of inheriting a global TFM.
+          common=(-p:GUI_DISABLED=true -p:CurrentPlatform=Linux -p:NET=true)
+          # The solution built PeripheralsTests and the runtime together.
+          dotnet test "$project" --configuration Release --no-build --no-restore \
             "${common[@]}" \
-            --filter 'FullyQualifiedName~STM32DMATests|FullyQualifiedName~STM32SPITests|FullyQualifiedName~STM32_UARTTests|FullyQualifiedName~STM32F7I2CTests|FullyQualifiedName~TLC5955Tests|FullyQualifiedName~LSM6DS3TRCTests|FullyQualifiedName~LP50XXTests|FullyQualifiedName~GenericSpiFlashW25Q256Tests|FullyQualifiedName~LegoLpf2PortTests|FullyQualifiedName~BrickPowerControllerTests|FullyQualifiedName~PCMAudioSinkTests|FullyQualifiedName~SpikeFaultSoakTests|FullyQualifiedName~PrimeButtonLadderTests|FullyQualifiedName~STM32TimerBoardClockTests|FullyQualifiedName~TI_DA8xx_AINTCTests|FullyQualifiedName~TI_DA8xx_Timer64Tests|FullyQualifiedName~TI_DA8xx_PSCTests|FullyQualifiedName~TI_DA8xx_PLLCTests|FullyQualifiedName~TI_DA8xx_SYSCFG0Tests|FullyQualifiedName~TI_DA8xx_EDMA3CCTests|FullyQualifiedName~TI_DA8xx_EDMA3TCTests|FullyQualifiedName~TI_DA8xx_MMCSDTests' \
+            --filter 'FullyQualifiedName~STM32DMATests|FullyQualifiedName~STM32SPITests|FullyQualifiedName~STM32_UARTTests|FullyQualifiedName~STM32F7I2CTests|FullyQualifiedName~TLC5955Tests|FullyQualifiedName~LSM6DS3TRCTests|FullyQualifiedName~LP50XXTests|FullyQualifiedName~GenericSpiFlashW25Q256Tests|FullyQualifiedName~LegoLpf2PortTests|FullyQualifiedName~BrickPowerControllerTests|FullyQualifiedName~PCMAudioSinkTests|FullyQualifiedName~SpikeFaultSoakTests|FullyQualifiedName~PrimeButtonLadderTests|FullyQualifiedName~STM32TimerBoardClockTests|FullyQualifiedName~TI_DA8xx_AINTCTests|FullyQualifiedName~TI_DA8xx_Timer64Tests|FullyQualifiedName~TI_DA8xx_PSCTests|FullyQualifiedName~TI_DA8xx_PLLCTests|FullyQualifiedName~TI_DA8xx_SYSCFG0Tests|FullyQualifiedName~TI_DA8xx_EDMA3CCTests|FullyQualifiedName~TI_DA8xx_EDMA3TCTests|FullyQualifiedName~TI_DA8xx_MMCSDTests|FullyQualifiedName~TI_DA8xx_GPIOTests|FullyQualifiedName~TI_DA8xx_SPITests|FullyQualifiedName~ST7586Tests' \
             --logger 'console;verbosity=normal'
 
       - name: Build the permissive target qualification images
@@ -161,6 +182,12 @@ jobs:
             -Wa,-defsym,MMC_EDMA=1 -Wl,-T,am1808-smoke.ld \
             -o am1808-mmc-edma-smoke.elf am1808-mmc-smoke.S
           test "$(arm-none-eabi-readelf -h am1808-mmc-edma-smoke.elf | awk '/Entry point/{print $4}')" = 0xffff0000
+          arm-none-eabi-gcc -mcpu=arm926ej-s -nostdlib \
+            -Wl,-T,am1808-smoke.ld -o am1808-gpio-smoke.elf am1808-gpio-smoke.S
+          test "$(arm-none-eabi-readelf -h am1808-gpio-smoke.elf | awk '/Entry point/{print $4}')" = 0xffff0000
+          arm-none-eabi-gcc -mcpu=arm926ej-s -nostdlib \
+            -Wl,-T,am1808-smoke.ld -o am1808-spi-display-smoke.elf am1808-spi-display-smoke.S
+          test "$(arm-none-eabi-readelf -h am1808-spi-display-smoke.elf | awk '/Entry point/{print $4}')" = 0xffff0000
           python3 generate-am1808-sd-image.py /tmp/ev3-am1808-sd.img
           test "$(stat -c '%s' /tmp/ev3-am1808-sd.img)" = 1048576
           test "$(sha256sum /tmp/ev3-am1808-sd.img | awk '{print $1}')" = 8e8b458d4c0b8ee96c726f78962fd63fb109f78b1dc073da15a8fc53df28c637
@@ -170,9 +197,6 @@ jobs:
             stm32f413-throughput.S
           test "$(arm-none-eabi-readelf -h stm32f413-throughput.elf | awk '/Entry point/{print $4}')" = 0x8000009
 
-      - name: Build source-only headless Renode
-        run: ./build.sh --net --no-gui --skip-fetch
-
       - name: Load the source-only SPIKE Prime platform
         run: tests/platforms/spike-prime-platform-load-test.sh
 
@@ -181,7 +205,7 @@ jobs:
         run: |
           uart_log=/tmp/ev3-arm9-uart.log
           rm -f "$uart_log"
-          dotnet output/bin/Release/Renode.dll --disable-gui --plain -e \
+          timeout 120s dotnet output/bin/Release/Renode.dll --disable-gui --plain -e \
             'mach create; machine LoadPlatformDescription @platforms/boards/lego-ev3.repl; sysbus LoadELF @tests/platforms/LEGO_EV3/am1808-smoke.elf; uart1 CreateFileBackend @/tmp/ev3-arm9-uart.log true; emulation RunFor "0.01"; q'
           test "$(cat "$uart_log")" = "EV3 ARM9 IRQ"
 
@@ -190,7 +214,7 @@ jobs:
         run: |
           uart_log=/tmp/ev3-timer64-uart.log
           rm -f "$uart_log"
-          dotnet output/bin/Release/Renode.dll --disable-gui --plain -e \
+          timeout 120s dotnet output/bin/Release/Renode.dll --disable-gui --plain -e \
             'mach create; machine LoadPlatformDescription @platforms/boards/lego-ev3.repl; sysbus LoadELF @tests/platforms/LEGO_EV3/am1808-timer64-smoke.elf; uart1 CreateFileBackend @/tmp/ev3-timer64-uart.log true; emulation RunFor "0.05"; q'
           test "$(cat "$uart_log")" = "EV3 TIMER64 IRQ"
 
@@ -200,7 +224,7 @@ jobs:
           uart_log=/tmp/ev3-control-uart.log
           receipt=/tmp/ev3-control-receipt.json
           rm -f "$uart_log" "$receipt"
-          dotnet output/bin/Release/Renode.dll --disable-gui --plain -e \
+          timeout 120s dotnet output/bin/Release/Renode.dll --disable-gui --plain -e \
             'mach create; machine LoadPlatformDescription @platforms/boards/lego-ev3.repl; sysbus LoadELF @tests/platforms/LEGO_EV3/am1808-control-smoke.elf; uart1 CreateFileBackend @/tmp/ev3-control-uart.log true; emulation RunFor "0.01"; q'
           test "$(cat "$uart_log")" = "EV3 PSC PLL PINMUX OK"
           python3 - <<'PY'
@@ -238,10 +262,10 @@ jobs:
           hardware_log=/tmp/ev3-edma-hw16-uart.log
           receipt=/tmp/ev3-edma-receipt.json
           rm -f "$software_log" "$hardware_log" "$receipt"
-          dotnet output/bin/Release/Renode.dll --disable-gui --plain -e \
+          timeout 120s dotnet output/bin/Release/Renode.dll --disable-gui --plain -e \
             'mach create; machine LoadPlatformDescription @platforms/boards/lego-ev3.repl; sysbus LoadELF @tests/platforms/LEGO_EV3/am1808-edma-smoke.elf; uart1 CreateFileBackend @/tmp/ev3-edma-software-uart.log true; emulation RunFor "0.02"; q'
           test "$(cat "$software_log")" = "EV3 EDMA IRQ"
-          dotnet output/bin/Release/Renode.dll --disable-gui --plain -e \
+          timeout 120s dotnet output/bin/Release/Renode.dll --disable-gui --plain -e \
             'mach create; machine LoadPlatformDescription @platforms/boards/lego-ev3.repl; sysbus LoadELF @tests/platforms/LEGO_EV3/am1808-edma-hw16-smoke.elf; uart1 CreateFileBackend @/tmp/ev3-edma-hw16-uart.log true; edma0cc OnGPIO 16 true; edma0cc OnGPIO 16 false; emulation RunFor "0.02"; q'
           test "$(cat "$hardware_log")" = "EV3 EDMA HW16 IRQ"
           python3 - <<'PY'
@@ -281,10 +305,10 @@ jobs:
           edma_log=/tmp/ev3-mmc-edma-uart.log
           receipt=/tmp/ev3-mmc-receipt.json
           rm -f "$pio_log" "$edma_log" "$receipt"
-          dotnet output/bin/Release/Renode.dll --disable-gui --plain -e \
+          timeout 120s dotnet output/bin/Release/Renode.dll --disable-gui --plain -e \
             'mach create; machine LoadPlatformDescription @platforms/boards/lego-ev3.repl; machine SdCardFromFile @/tmp/ev3-am1808-sd.img mmcsd0 0x100000 false "ev3Sd"; sysbus LoadELF @tests/platforms/LEGO_EV3/am1808-mmc-pio-smoke.elf; uart1 CreateFileBackend @/tmp/ev3-mmc-pio-uart.log true; emulation RunFor "0.03"; q'
           test "$(cat "$pio_log")" = "EV3 MMC PIO READ OK"
-          dotnet output/bin/Release/Renode.dll --disable-gui --plain -e \
+          timeout 120s dotnet output/bin/Release/Renode.dll --disable-gui --plain -e \
             'mach create; machine LoadPlatformDescription @platforms/boards/lego-ev3.repl; machine SdCardFromFile @/tmp/ev3-am1808-sd.img mmcsd0 0x100000 false "ev3Sd"; sysbus LoadELF @tests/platforms/LEGO_EV3/am1808-mmc-edma-smoke.elf; uart1 CreateFileBackend @/tmp/ev3-mmc-edma-uart.log true; emulation RunFor "0.03"; q'
           test "$(cat "$edma_log")" = "EV3 MMC EDMA READ OK"
           test "$(sha256sum /tmp/ev3-am1808-sd.img | awk '{print $1}')" = 8e8b458d4c0b8ee96c726f78962fd63fb109f78b1dc073da15a8fc53df28c637
@@ -322,6 +346,113 @@ jobs:
         with:
           name: ev3-am1808-mmc
           path: /tmp/ev3-mmc-receipt.json
+
+      - name: Execute the EV3 GPIO button and status LED path
+        shell: bash
+        run: |
+          uart_log=/tmp/ev3-gpio-uart.log
+          receipt=/tmp/ev3-gpio-receipt.json
+          rm -f "$uart_log" "$receipt"
+          timeout 120s dotnet output/bin/Release/Renode.dll --disable-gui --plain -e \
+            'mach create; machine LoadPlatformDescription @platforms/boards/lego-ev3.repl; sysbus LoadELF @tests/platforms/LEGO_EV3/am1808-gpio-smoke.elf; uart1 CreateFileBackend @/tmp/ev3-gpio-uart.log true; emulation RunFor "0.002"; sysbus.gpio.centerButton Press; emulation RunFor "0.01"; q'
+          test "$(cat "$uart_log")" = "EV3 GPIO BUTTON LED OK"
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          receipt = {
+              "schema": "brickwright.ev3.am1808-gpio.v1",
+              "platform": "platforms/boards/lego-ev3.repl",
+              "payload": "MIT source-built ARM926EJ-S",
+              "injection": "sysbus.gpio.centerButton Press drives active-high GPIO29 after guest setup",
+              "proofs": [
+                  "PSC1 module 3 transitions to ENABLE before GPIO access",
+                  "PINMUX2 GP1[13] and PINMUX14 GP6[7] select GPIO functions",
+                  "GPIO103 status LED SET/CLR/OUT paths retain the expected state",
+                  "GPIO29 rising status raises bank 1 and physical AINTC event 43",
+                  "IRQ handler observes IN_DATA and clears INTSTAT W1C plus AINTC state",
+              ],
+              "uart": Path("/tmp/ev3-gpio-uart.log").read_text().rstrip("\n"),
+          }
+          Path("/tmp/ev3-gpio-receipt.json").write_text(
+              json.dumps(receipt, indent=2, sort_keys=True) + "\n"
+          )
+          PY
+          cat "$receipt" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload EV3 AM1808 GPIO receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ev3-am1808-gpio
+          path: /tmp/ev3-gpio-receipt.json
+
+      - name: Execute the EV3 SPI1 physical display path
+        shell: bash
+        run: |
+          uart_log=/tmp/ev3-spi-display-uart.log
+          monitor_log=/tmp/ev3-spi-display-monitor.log
+          receipt=/tmp/ev3-spi-display-receipt.json
+          rm -f "$uart_log" "$monitor_log" "$receipt"
+          timeout 120s dotnet output/bin/Release/Renode.dll --disable-gui --plain --console -e \
+            'mach create; machine LoadPlatformDescription @platforms/boards/lego-ev3.repl; sysbus LoadELF @tests/platforms/LEGO_EV3/am1808-spi-display-smoke.elf; uart1 CreateFileBackend @/tmp/ev3-spi-display-uart.log true; emulation RunFor "0.02"; echo "PIXEL_0_0"; sysbus.spi1.ev3Lcd GetPixel 0 0; echo "PIXEL_1_0"; sysbus.spi1.ev3Lcd GetPixel 1 0; sysbus.spi1.ev3Lcd FrameChecksum; q' \
+            | tee "$monitor_log"
+          test "$(cat "$uart_log")" = "EV3 SPI DISPLAY IRQ OK"
+          grep -Eq '3517680698|0x[Dd]1[Aa][Bb]8[Cc]3[Aa]' "$monitor_log"
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          monitor = Path('/tmp/ev3-spi-display-monitor.log').read_text()
+          assert re.search(r'PIXEL_0_0\s+(?:0|0x0+)\s', monitor), monitor
+          assert re.search(r'PIXEL_1_0\s+(?:255|0x[Ff]{2})\s', monitor), monitor
+          PY
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          receipt = {
+              "schema": "brickwright.ev3.am1808-spi-display.v1",
+              "platform": "platforms/boards/lego-ev3.repl",
+              "payload": "MIT source-built ARM926EJ-S",
+              "display": {
+                  "controller": "ST7586 functional subset",
+                  "height": 128,
+                  "pixel_0_0_l8": 0,
+                  "pixel_1_0_l8": 255,
+                  "visible_frame_fnv1a": "0xd1ab8c3a",
+                  "width": 178,
+              },
+              "proofs": [
+                  "PSC1 modules 3 and 10 transition to ENABLE before GPIO and SPI1 access",
+                  "PINMUX5 selects SPI1 SIMO/CLK and GPIO43/GPIO44; PINMUX12 selects GPIO80",
+                  "GPIO44 chip select, GPIO43 command/data and GPIO80 reset gate the real board panel path",
+                  "SPI1 RX completion raises physical AINTC event 56",
+                  "authored one-column frame changes only pixel (0,0) and matches the exact visible checksum",
+              ],
+              "uart": Path("/tmp/ev3-spi-display-uart.log").read_text().rstrip("\n"),
+          }
+          Path("/tmp/ev3-spi-display-receipt.json").write_text(
+              json.dumps(receipt, indent=2, sort_keys=True) + "\n"
+          )
+          PY
+          cat "$receipt" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload EV3 AM1808 SPI display receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ev3-am1808-spi-display
+          path: /tmp/ev3-spi-display-receipt.json
+
+      - name: Read EV3 GPIO and display state through the GDB server
+        run: |
+          python3 tests/tools/ev3_cp11_debugger_protocol_test.py
+          python3 tests/tools/ev3_cp11_debugger_test.py
+          cat /tmp/ev3-cp11-debugger-receipt.json >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload EV3 AM1808 debugger receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ev3-am1808-debugger
+          path: /tmp/ev3-cp11-debugger-receipt.json
 
       - name: Qualify unpaced EV3 ARM9 throughput
         shell: bash

@@ -91,6 +91,20 @@ pll1: Miscellaneous.TI_DA8xx_PLLC @ sysbus 0x01E1A000
     primary: false
     postBootloaderState: true
 
+// GPIO has one physical AINTC event for each 16-pin bank. Numbered GPIO
+// outputs remain available to board descriptions for LEDs and peripheral
+// control lines; external devices drive inputs through OnGPIO.
+gpio: GPIOPort.TI_DA8xx_GPIO @ sysbus 0x01E26000
+    Bank0IRQ -> aintc@42
+    Bank1IRQ -> aintc@43
+    Bank2IRQ -> aintc@44
+    Bank3IRQ -> aintc@45
+    Bank4IRQ -> aintc@46
+    Bank5IRQ -> aintc@47
+    Bank6IRQ -> aintc@48
+    Bank7IRQ -> aintc@49
+    Bank8IRQ -> aintc@50
+
 psc1: Miscellaneous.TI_DA8xx_PSC @ sysbus 0x01E27000
     moduleCount: 32
     initiallyEnabledModules: 0x80000040
@@ -107,6 +121,11 @@ edma1cc: DMA.TI_DA8xx_EDMA3CC @ sysbus 0x01E30000
     ErrorIRQ -> aintc@94
     init:
         AttachTransferController edma1tc0 0
+
+// EV3 uses SPI1 for its display. SPI0 and the SoC LCDC are not part of the
+// board display path and are intentionally absent from this checkpoint.
+spi1: SPI.TI_DA8xx_SPI @ sysbus 0x01F0E000
+    IRQ -> aintc@56
 
 sysbus:
     init:

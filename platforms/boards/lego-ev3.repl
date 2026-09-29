@@ -1,9 +1,46 @@
 // LEGO MINDSTORMS EV3 (AM1808) executable post-EEPROM baseline.
 // The AM1808 CPU, RAM, clock/power/pinmux controls, functional EDMA, interrupt
-// controller, Timer64 and debug UART are present. platforms/cpus/am1808.repl explicitly
+// controller, Timer64, GPIO, SPI1 display path and debug UART are present.
+// platforms/cpus/am1808.repl explicitly
 // selects the deterministic post-bootloader constructor preset because no
 // proprietary boot ROM or EEPROM image is executed or distributed.
-// LCD, GPIO, ADC/SPI motor/sensor front ends and PRU are intentionally not
-// claimed until their models are connected.
+// ADC/SPI motor/sensor front ends and PRU are intentionally not claimed until
+// their models are connected.
 
 using "platforms/cpus/am1808.repl"
+
+// The EV3 display is an ST7586-family SPI panel, not the AM1808 LCDC. Its
+// chip-select, command/data and reset controls are discrete GPIO outputs.
+ev3Lcd: Video.ST7586 @ spi1 0
+
+gpio:
+    43 -> ev3Lcd@1
+    44 -> ev3Lcd@0
+    80 -> ev3Lcd@2
+    103 -> leftGreenLed@0
+    108 -> rightRedLed@0
+    109 -> leftRedLed@0
+    110 -> rightGreenLed@0
+
+leftGreenLed: Miscellaneous.LED @ gpio 103
+rightRedLed: Miscellaneous.LED @ gpio 108
+leftRedLed: Miscellaneous.LED @ gpio 109
+rightGreenLed: Miscellaneous.LED @ gpio 110
+
+centerButton: Miscellaneous.Button @ gpio 29
+    -> gpio@29
+
+leftButton: Miscellaneous.Button @ gpio 102
+    -> gpio@102
+
+backButton: Miscellaneous.Button @ gpio 106
+    -> gpio@106
+
+rightButton: Miscellaneous.Button @ gpio 124
+    -> gpio@124
+
+downButton: Miscellaneous.Button @ gpio 126
+    -> gpio@126
+
+upButton: Miscellaneous.Button @ gpio 127
+    -> gpio@127
