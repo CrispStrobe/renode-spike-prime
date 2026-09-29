@@ -21,6 +21,7 @@ _tools = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "tools"))
 if _tools not in sys.path:
     sys.path.insert(0, _tools)
 from spike_state_monitor_protocol import split_frames, validate_command, validate_config
+import ev3_state_observer
 
 _state_server = None
 _MAX_LINE, _READ_SIZE = 256 * 1024, 16 * 1024
@@ -50,6 +51,9 @@ def _kind(device):
 
 
 def _snapshot(config, seq, generation):
+    if config["identity"]["board"] == "ev3":
+        clock = int(emulationManager.CurrentEmulation.MasterTimeSource.ElapsedVirtualTime.Ticks) * 100
+        return ev3_state_observer.observe(config, _resolve, seq, clock, generation)
     paths, ports, motors, sensors, topology = config["paths"], [], [], [], 0
     for port_id in "ABCDEF":
         port = _optional(paths, "port" + port_id)
@@ -93,6 +97,8 @@ def _snapshot(config, seq, generation):
 
 
 def _dispatch(config, command):
+    if config["identity"]["board"] == "ev3":
+        return ev3_state_observer.dispatch(config, _resolve, command)
     paths, name, args = config["paths"], command["command"], command["arguments"]
     if name == "power.set-battery-millivolts":
         value = args.get("value")

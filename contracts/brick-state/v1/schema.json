@@ -21,13 +21,18 @@
     "target": {
       "type": "object", "required": ["board", "firmware", "transport", "imageSha256", "capabilities", "limitations"],
       "properties": {
-        "board": {"enum": ["spike-prime", "spike-essential"]},
-        "firmware": {"enum": ["lego-prime-v2", "lego-prime-v3", "pybricks-prime", "spike-nx", "brickwright-nuttx", "lego-essential", "pybricks-essential"]},
+        "board": {"enum": ["spike-prime", "spike-essential", "ev3"]},
+        "firmware": {"enum": ["lego-prime-v2", "lego-prime-v3", "pybricks-prime", "spike-nx", "brickwright-nuttx", "lego-essential", "pybricks-essential", "brickwright-ev3-smoke"]},
         "transport": {"type": "string", "minLength": 1, "maxLength": 32},
         "imageSha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
         "capabilities": {"type": "array", "maxItems": 128, "items": {"type": "string", "maxLength": 64}, "uniqueItems": true},
         "limitations": {"type": "array", "maxItems": 128, "items": {"type": "string", "maxLength": 256}}
-      }, "additionalProperties": true
+      }, "additionalProperties": true,
+      "allOf": [
+        {"if": {"properties": {"board": {"const": "ev3"}}}, "then": {"properties": {"firmware": {"const": "brickwright-ev3-smoke"}, "transport": {"const": "none"}}}},
+        {"if": {"properties": {"board": {"const": "spike-prime"}}}, "then": {"properties": {"firmware": {"enum": ["lego-prime-v2", "lego-prime-v3", "pybricks-prime", "spike-nx", "brickwright-nuttx"]}}}},
+        {"if": {"properties": {"board": {"const": "spike-essential"}}}, "then": {"properties": {"firmware": {"enum": ["lego-essential", "pybricks-essential"]}}}}
+      ]
     },
     "snapshot": {
       "allOf": [{"$ref": "#/$defs/header"}, {"type": "object",
@@ -37,17 +42,24 @@
           "target": {"$ref": "#/$defs/target"},
           "lifecycle": {"type": "object", "required": ["phase", "generation"], "properties": {"phase": {"enum": ["off", "booting", "ready", "stopped", "fault"]}, "generation": {"type": "integer", "minimum": 0}}, "additionalProperties": true},
           "ports": {"type": "array", "maxItems": 16, "items": {"type": "object", "required": ["id", "attached", "kind"], "properties": {"id": {"type": "string", "maxLength": 8}, "attached": {"type": "boolean"}, "kind": {"type": ["string", "null"]}}, "additionalProperties": true}},
-          "motors": {"type": "array", "maxItems": 16, "items": {"type": "object", "required": ["port", "speed", "position"], "properties": {"port": {"type": "string"}, "speed": {"type": "number"}, "position": {"type": "number"}}, "additionalProperties": true}},
+          "motors": {"type": "array", "maxItems": 16, "items": {"type": "object", "required": ["port"], "anyOf": [{"required": ["speed", "position"]}, {"required": ["state", "direction", "dutyCycle", "tachometerCount", "emittedEdges"]}], "properties": {"port": {"type": "string"}, "speed": {"type": "number"}, "position": {"type": "number"}, "state": {"type": "string"}, "direction": {"type": "integer", "minimum": -1, "maximum": 1}, "dutyCycle": {"type": "number", "minimum": 0, "maximum": 1}, "tachometerCount": {"type": "integer"}, "emittedEdges": {"type": "integer", "minimum": 0}}, "additionalProperties": true}},
           "sensors": {"type": "array", "maxItems": 16, "items": {"type": "object", "required": ["port", "kind", "values"], "properties": {"port": {"type": "string"}, "kind": {"type": "string"}, "values": {"type": "object"}}, "additionalProperties": true}},
-          "display": {"type": "object", "required": ["width", "height", "pixels"], "properties": {"width": {"type": "integer", "minimum": 0, "maximum": 64}, "height": {"type": "integer", "minimum": 0, "maximum": 64}, "pixels": {"type": "array", "maxItems": 4096, "items": {"type": "number"}}}, "additionalProperties": true},
-          "buttons": {"type": "object", "additionalProperties": {"type": "boolean"}},
-          "battery": {"type": "object", "required": ["percent"], "properties": {"percent": {"type": "number", "minimum": 0, "maximum": 100}}, "additionalProperties": true},
+          "display": {"type": "object", "required": ["width", "height", "pixels"], "properties": {"width": {"type": "integer", "minimum": 0, "maximum": 178}, "height": {"type": "integer", "minimum": 0, "maximum": 128}, "pixels": {"type": "array", "maxItems": 22784, "items": {"type": "number"}}}, "additionalProperties": true},
+          "buttons": {"type": "object", "additionalProperties": {"type": ["boolean", "null"]}},
+          "battery": {"type": "object", "anyOf": [{"required": ["percent"]}, {"required": ["available"], "properties": {"available": {"const": false}}}], "properties": {"percent": {"type": "number", "minimum": 0, "maximum": 100}}, "additionalProperties": true},
           "power": {"type": "object", "required": ["state"], "properties": {"state": {"type": "string"}}, "additionalProperties": true},
-          "imu": {"type": "object", "required": ["acceleration", "angularVelocity"], "properties": {"acceleration": {"$ref": "#/$defs/vector3"}, "angularVelocity": {"$ref": "#/$defs/vector3"}}, "additionalProperties": true},
+          "imu": {"type": "object", "anyOf": [{"required": ["acceleration", "angularVelocity"]}, {"required": ["available"], "properties": {"available": {"const": false}}}], "properties": {"acceleration": {"$ref": "#/$defs/vector3"}, "angularVelocity": {"$ref": "#/$defs/vector3"}}, "additionalProperties": true},
           "audio": {"type": "object", "required": ["active"], "properties": {"active": {"type": "boolean"}}, "additionalProperties": true},
           "storage": {"type": "object", "required": ["ready"], "properties": {"ready": {"type": "boolean"}}, "additionalProperties": true},
           "bluetooth": {"type": "object", "required": ["state", "transport"], "properties": {"state": {"type": "string"}, "transport": {"type": "string"}}, "additionalProperties": true}
-        }, "additionalProperties": true}]
+        }, "additionalProperties": true}, {
+          "if": {"properties": {"target": {"properties": {"board": {"const": "ev3"}}}}},
+          "then": {"properties": {"display": {"oneOf": [
+            {"properties": {"width": {"const": 178}, "height": {"const": 128}, "pixels": {"minItems": 22784, "maxItems": 22784, "items": {"type": "integer", "minimum": 0, "maximum": 255}}}},
+            {"properties": {"width": {"const": 0}, "height": {"const": 0}, "pixels": {"maxItems": 0}}}
+          ]}}},
+          "else": {"properties": {"display": {"properties": {"width": {"maximum": 64}, "height": {"maximum": 64}, "pixels": {"maxItems": 4096}}}}}
+        }]
     },
     "command": {"allOf": [{"$ref": "#/$defs/header"}, {"type": "object", "required": ["requestId", "command", "arguments"], "properties": {"type": {"const": "command"}, "requestId": {"type": "string", "minLength": 1, "maxLength": 128}, "expectedSeq": {"type": "integer", "minimum": 0}, "command": {"type": "string", "minLength": 1, "maxLength": 64}, "arguments": {"type": "object"}}, "additionalProperties": true}]},
     "result": {"allOf": [{"$ref": "#/$defs/header"}, {"type": "object", "required": ["requestId", "accepted"], "properties": {"type": {"const": "result"}, "requestId": {"type": "string"}, "accepted": {"type": "boolean"}, "seq": {"type": "integer", "minimum": 0}, "error": {"type": "string"}}, "additionalProperties": true}]},

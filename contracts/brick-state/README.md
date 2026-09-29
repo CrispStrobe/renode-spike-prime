@@ -16,7 +16,8 @@ optimistic concurrency. Results echo the request ID.
 The version-1 identity vocabulary is board-qualified. Prime accepts
 `lego-prime-v2`, `lego-prime-v3`, `pybricks-prime`, `spike-nx`, and
 `brickwright-nuttx`. Essential accepts `lego-essential` and
-`pybricks-essential`. Unknown identities require a new contract version.
+`pybricks-essential`. EV3 accepts `brickwright-ev3-smoke` with transport `none`.
+Unknown identities fail closed; adding a family requires a reviewed contract extension.
 
 Unknown `schemaVersion` values and missing required fields fail closed.
 Unknown fields within version 1 are optional and ignored by consumers. Numbers
@@ -49,7 +50,7 @@ lines, clients, queues, reads, command replay memory, and socket
 timeouts are bounded; arbitrary monitor and host commands are never exposed.
 The monitor implementation intentionally accepts one active client; the
 reusable source-test service has a validated maximum of four.
-Before listening, the monitor validates the exact seven board/firmware pairs,
+Before listening, the monitor validates the board-qualified firmware pairs,
 required transport, and a null or lowercase SHA-256 image identity. Commands
 bound request IDs to 128 characters and names to 64, require object arguments,
 and reject negative or non-integer expected sequences. Framing applies the
@@ -67,3 +68,20 @@ machine with `include @scripts/single-node/spike-prime.resc`, include
 `spike_state_start 127.0.0.1 8765 @contracts/brick-state/renode-prime.example.json`.
 The boundary is raw loopback TCP, not WebSocket; an application broker must
 translate or forward canonical NDJSON without exposing Renode's monitor.
+
+EV3 uses `renode-ev3.example.json` and the same loopback service. Its observer
+reads actual public GPIO button/LED states, ST7586 grayscale framebuffer
+(178x128, exactly 22,784 integer luminances 0..255), ADS7957 raw channels
+(16 ten-bit samples), and configured PWM-driven motor electrical/tachometer
+state. Missing buttons are null; unavailable battery and IMU explicitly say
+`available:false`. No speed, physical sensor decoding, or mechanical position
+is fabricated. Missing motor ports, including C/D before their PWM sources
+exist, are explicit unattached ports and limitations.
+
+EV3 commands are only `state.sample` (empty arguments), `ev3.button.set`
+(`button`: center/left/back/right/down/up, boolean `pressed`), and
+`ev3.analog.set-channel` (integer channel0..15, value0..1023). Extra arguments,
+unknown commands, replayed requests and stale sequences are rejected. Samples
+are requested on demand under Renode's paused-state guard; there is no
+unbounded wall-clock publisher. Frame events are a separate video-model API;
+the neutral stream carries bounded defensive grayscale snapshots.
