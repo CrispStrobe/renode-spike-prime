@@ -16,9 +16,9 @@ from spike_state_bridge import parse_line
 
 def monitor_path(path):
     value = str(pathlib.Path(path).resolve())
-    if any(char in value for char in '\n\r"'):
+    if any(char in value for char in '\n\r\t;"'):
         raise ValueError("unsafe monitor path")
-    return '@"' + value + '"'
+    return '@' + value.replace(' ', '\\ ')
 
 
 def main():
@@ -38,7 +38,8 @@ def main():
         'spike_state_start "127.0.0.1" %d %s' % (port, monitor_path(ROOT / "contracts/brick-state/renode-ev3.example.json"))]
     with tempfile.TemporaryFile(mode="w+b") as log:
         process = subprocess.Popen([args.renode, "--disable-gui", "--plain", "--console"] +
-            [part for command in commands for part in ("-e", command)], stdout=log, stderr=subprocess.STDOUT)
+            [part for command in commands for part in ("-e", command)], stdin=subprocess.PIPE,
+            stdout=log, stderr=subprocess.STDOUT)
         try:
             deadline = time.monotonic() + 45
             while True:
