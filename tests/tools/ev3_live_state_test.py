@@ -26,14 +26,18 @@ def main():
     parser.add_argument("--renode", required=True)
     parser.add_argument("--platform", required=True)
     parser.add_argument("--payload", required=True)
+    parser.add_argument("--initial-payload", help="Optional source-built display initialization guest")
     parser.add_argument("--receipt", required=True)
     parser.add_argument("--expected-motors", default="")
     args = parser.parse_args()
     with socket.socket() as reservation:
         reservation.bind(("127.0.0.1", 0))
         port = reservation.getsockname()[1]
-    commands = ["mach create", "machine LoadPlatformDescription " + monitor_path(args.platform),
-        "sysbus LoadELF " + monitor_path(args.payload), "emulation RunFor \"0.1\"",
+    commands = ["mach create", "machine LoadPlatformDescription " + monitor_path(args.platform)]
+    if args.initial_payload:
+        commands += ["sysbus LoadELF " + monitor_path(args.initial_payload),
+                     "emulation RunFor \"0.01\""]
+    commands += ["sysbus LoadELF " + monitor_path(args.payload), "emulation RunFor \"0.1\"",
         "include " + monitor_path(ROOT / "scripts/spike-state-server.py"),
         'spike_state_start "127.0.0.1" %d %s' % (port, monitor_path(ROOT / "contracts/brick-state/renode-ev3.example.json"))]
     with tempfile.TemporaryFile(mode="w+b") as log:
