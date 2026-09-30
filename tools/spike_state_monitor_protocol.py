@@ -10,6 +10,7 @@ except NameError:
     integer_types = (int,)
 
 FIRMWARE_BY_BOARD = {
+    "ev3": ("brickwright-ev3-smoke",),
     "spike-prime": ("lego-prime-v2", "lego-prime-v3", "pybricks-prime",
                     "spike-nx", "brickwright-nuttx"),
     "spike-essential": ("lego-essential", "pybricks-essential"),
@@ -26,6 +27,8 @@ def validate_config(config):
     if firmware not in FIRMWARE_BY_BOARD.get(board, ()):
         raise ValueError("unsupported board/firmware identity")
     transport = identity.get("transport")
+    if board == "ev3" and transport != "none":
+        raise ValueError("EV3 simulation transport must be none")
     if not isinstance(transport, string_types) or not transport:
         raise ValueError("transport must be a nonempty string")
     if "imageSha256" not in identity:
