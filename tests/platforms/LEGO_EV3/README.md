@@ -95,7 +95,33 @@ root) executes both guests and reads their GPIO/SPI state through the real
 GDB server. It writes `/tmp/ev3-cp11-debugger-receipt.json`; the framebuffer
 pixel/checksum observations use the Renode monitor/video boundary.
 
-This is deliberately not described as full EV3 emulation. The next required
-models are the SPI/ADC sensor and motor front ends, and optionally PRU. The EV3
-display is on SPI1 with GPIO control lines; AM1808 LCDC is not board display
-hardware.
+### Raw analog and ideal motor fixtures
+
+`am1808-adc-smoke.S` executes SPI0 CS3 manual ADS7957 conversions. The host
+injects a channel6 raw level and writes the expected code to `0xffff1800`.
+The guest checks the two-frame conversion pipeline, channel tag, left-aligned
+10-bit sample and physical SPI0 AINTC event20, then stores the observed word at
+`0xffff1804` and emits `EV3 ADC SPI IRQ OK`. Run
+`tests/tools/ev3_adc_guest_test.py --help` for the three-level executable proof.
+Raw ADC channel inputs are not decoded color/touch/ultrasonic sensor protocols.
+
+`am1808-motor-smoke.S` configures both eHRPWM1 channels and eCAP0/eCAP1 at 1kHz,
+50% duty. All four bridge/encoder pairs use physical EV3 GPIO routing. The
+host selects forward/reverse/brake/coast with mailbox `0xffff1810` values0..3;
+`0xffff1818` acknowledges the applied phase. Actual GPIO encoder interrupts
+47/48 latch a four-port seen mask at `0xffff1814`. The board fixtures emit at
+most100 quadrature edges/second at full duty: signed counts are edges, not
+shaft degrees. These ideal fixtures do not simulate inertia, load or a motor
+controller firmware. Source register bus-width tests also cover native
+halfword access and debugger byte/doubleword lanes.
+
+The live neutral-state test initializes the authored display guest, then runs
+the motor guest and observes all four models, the 178x128 grayscale frame,
+buttons/LEDs and16 raw ADC channels. Named button/ADC controls retain bounded
+messages, sequence checks and replay rejection; no arbitrary monitor commands
+are accepted from the state socket.
+
+This is deliberately not full EV3 emulation. UART/I2C sensor protocols, ADC
+automatic modes and PRU remain missing; the motor model is an ideal fixture.
+The display is on SPI1 with GPIO controls, not AM1808 LCDC hardware. All new
+guest/model sources are independently authored MIT, with no recovery firmware.

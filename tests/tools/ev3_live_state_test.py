@@ -36,7 +36,14 @@ def main():
     commands = ["mach create", "machine LoadPlatformDescription " + monitor_path(args.platform)]
     if args.initial_payload:
         commands += ["sysbus LoadELF " + monitor_path(args.initial_payload),
-                     "emulation RunFor \"0.01\""]
+                     "emulation RunFor \"0.01\"",
+                     # Loading a second ELF at the same RAM address is not a
+                     # CPU reset. Keep panel state, but discard the old guest's
+                     # translated code/CPU state and restore the platform's
+                     # high-vector handoff before starting the motor guest.
+                     "cpu Reset", "cpu ModelID 0x41069265",
+                     "cpu ExceptionVectorAddress 0xffff0000",
+                     "sysbus WriteDoubleWord 0x01f0e008 0", "aintc Reset"]
     commands += ["sysbus LoadELF " + monitor_path(args.payload), "emulation RunFor \"0.1\"",
         "include " + monitor_path(ROOT / "scripts/spike-state-server.py"),
         'spike_state_start "127.0.0.1" %d %s' % (port, monitor_path(ROOT / "contracts/brick-state/renode-ev3.example.json"))]
@@ -86,7 +93,7 @@ def main():
                 assert len(initial["sensors"][0]["values"]["channels"]) == 16
                 if args.expected_motors:
                     assert {motor["port"] for motor in initial["motors"]} == set(args.expected_motors)
-                    assert any(motor["emittedEdges"] > 0 for motor in initial["motors"])
+                    assert all(motor["emittedEdges"] > 0 for motor in initial["motors"])
                 pressed = command("press", "ev3.button.set", {"button":"center","pressed":True})
                 assert pressed["buttons"]["center"] is True
                 released = command("release", "ev3.button.set", {"button":"center","pressed":False})

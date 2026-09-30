@@ -1,11 +1,13 @@
 // LEGO MINDSTORMS EV3 (AM1808) executable post-EEPROM baseline.
 // The AM1808 CPU, RAM, clock/power/pinmux controls, functional EDMA, interrupt
-// controller, Timer64, GPIO, SPI1 display path and debug UART are present.
+// controller, Timer64, GPIO, SPI display/ADC paths, ideal motor fixtures and
+// debug UART are present.
 // platforms/cpus/am1808.repl explicitly
 // selects the deterministic post-bootloader constructor preset because no
 // proprietary boot ROM or EEPROM image is executed or distributed.
-// ADC/SPI motor/sensor front ends and PRU are intentionally not claimed until
-// their models are connected.
+// Only raw analog channels and ideal PWM/bridge/quadrature motors are modeled.
+// UART/I2C sensor protocols, ADC automatic modes, PRU and physical motor
+// inertia/load/calibration are not claimed.
 
 using "platforms/cpus/am1808.repl"
 
@@ -13,7 +15,45 @@ using "platforms/cpus/am1808.repl"
 // chip-select, command/data and reset controls are discrete GPIO outputs.
 ev3Lcd: Video.ST7586 @ spi1 0
 
+ev3Adc: Analog.ADS7957 @ spi0 3
+
+// Ideal, bounded motor fixtures: counts are quadrature edges, not calibrated
+// shaft degrees. Source routing and bridge/encoder pins match the EV3 board.
+motorA: Miscellaneous.PWMDrivenMotor @ gpio 63
+    pwm: ehrpwm1
+    channel: 1
+    maximumEdgesPerSecond: 100
+    TachoA -> gpio@91
+    TachoB -> gpio@4
+
+motorB: Miscellaneous.PWMDrivenMotor @ gpio 33
+    pwm: ehrpwm1
+    channel: 0
+    maximumEdgesPerSecond: 100
+    TachoA -> gpio@88
+    TachoB -> gpio@41
+
+motorC: Miscellaneous.PWMDrivenMotor @ gpio 104
+    pwm: ecap0
+    maximumEdgesPerSecond: 100
+    TachoA -> gpio@93
+    TachoB -> gpio@62
+
+motorD: Miscellaneous.PWMDrivenMotor @ gpio 83
+    pwm: ecap1
+    maximumEdgesPerSecond: 100
+    TachoA -> gpio@105
+    TachoB -> gpio@40
+
 gpio:
+    63 -> motorA@0
+    54 -> motorA@1
+    33 -> motorB@0
+    3 -> motorB@1
+    104 -> motorC@0
+    89 -> motorC@1
+    83 -> motorD@0
+    90 -> motorD@1
     43 -> ev3Lcd@1
     44 -> ev3Lcd@0
     80 -> ev3Lcd@2

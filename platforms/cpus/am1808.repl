@@ -60,6 +60,10 @@ mmcsd0: SD.TI_DA8xx_MMCSD @ sysbus 0x01C40000
     RxDMARequest -> edma0cc@16
     TxDMARequest -> edma0cc@17
 
+spi0: SPI.TI_DA8xx_SPI @ sysbus 0x01C41000
+    externalChipSelect: false
+    IRQ -> aintc@20
+
 // AM1808 maps its 8 KiB ARM-local vector RAM at the high-vector address.
 armLocalRam: Memory.MappedMemory @ sysbus 0xFFFF0000
     size: 0x2000
@@ -126,6 +130,19 @@ edma1cc: DMA.TI_DA8xx_EDMA3CC @ sysbus 0x01E30000
 // board display path and are intentionally absent from this checkpoint.
 spi1: SPI.TI_DA8xx_SPI @ sysbus 0x01F0E000
     IRQ -> aintc@56
+
+ehrpwm1: Timers.TI_DA8xx_EHRPWM @ sysbus 0x01F02000
+    frequency: 150000000
+    IRQ -> aintc@65
+    TripIRQ -> aintc@66
+
+ecap0: Timers.TI_DA8xx_ECAP @ sysbus 0x01F06000
+    frequency: 150000000
+    IRQ -> aintc@69
+
+ecap1: Timers.TI_DA8xx_ECAP @ sysbus 0x01F07000
+    frequency: 150000000
+    IRQ -> aintc@70
 
 sysbus:
     init:
