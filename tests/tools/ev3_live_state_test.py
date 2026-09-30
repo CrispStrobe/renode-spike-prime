@@ -33,7 +33,7 @@ def main():
         reservation.bind(("127.0.0.1", 0))
         port = reservation.getsockname()[1]
     commands = ["mach create", "machine LoadPlatformDescription " + monitor_path(args.platform),
-        "sysbus LoadELF " + monitor_path(args.payload), "emulation RunFor \"0.01\"",
+        "sysbus LoadELF " + monitor_path(args.payload), "emulation RunFor \"0.1\"",
         "include " + monitor_path(ROOT / "scripts/spike-state-server.py"),
         'spike_state_start "127.0.0.1" %d %s' % (port, monitor_path(ROOT / "contracts/brick-state/renode-ev3.example.json"))]
     with tempfile.TemporaryFile(mode="w+b") as log:
