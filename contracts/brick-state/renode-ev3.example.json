@@ -3,6 +3,10 @@
   "paths": {
     "display": "machine:sysbus.spi1.ev3Lcd",
     "adc": "machine:sysbus.spi0.ev3Adc",
+    "motorA": "machine:sysbus.gpio.motorA",
+    "motorB": "machine:sysbus.gpio.motorB",
+    "motorC": "machine:sysbus.gpio.motorC",
+    "motorD": "machine:sysbus.gpio.motorD",
     "centerButton": "machine:sysbus.gpio.centerButton",
     "leftButton": "machine:sysbus.gpio.leftButton",
     "backButton": "machine:sysbus.gpio.backButton",
