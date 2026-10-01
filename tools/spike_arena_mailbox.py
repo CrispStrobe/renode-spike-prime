@@ -52,7 +52,7 @@ def write_inputs(arguments, read_word, write_word):
 
 def snapshot(data, identity, seq, generation):
     target = dict(identity)
-    target['capabilities'] = ['arena-inputs/v1', 'arena-clock/v1', 'guest-motor-output/v1']
+    target['capabilities'] = ['arena-inputs/v1', 'arena-clock/v1', 'guest-motor-output/v1', 'state-sample/v1']
     target['limitations'] = ['bounded ARM arena demonstration, not full NuttX or SPIKE API compatibility',
                              'synthetic motor and sensor units, not physical calibration']
     return {'schemaVersion': 1, 'type': 'snapshot', 'seq': seq, 'clockNs': data[2] * 1000000,

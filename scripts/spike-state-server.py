@@ -96,7 +96,7 @@ def _snapshot(config, seq, generation):
     power = _optional(paths, "power")
     millivolts = int(power.BatteryMillivolts) if power is not None else 0
     identity = dict(config["identity"])
-    identity["capabilities"] = ["model-observation", "bounded-command-dispatch"]
+    identity["capabilities"] = ["model-observation", "bounded-command-dispatch", "state-sample/v1"]
     if identity.get("firmware") == "brickwright-nuttx" and identity.get("transport") == "none" and any(_optional(paths, "port" + p) is not None for p in "ABCDEF"):
         identity["capabilities"].append("arena-inputs/v1")
     identity["limitations"] = ["state is model output, not physical hardware"]

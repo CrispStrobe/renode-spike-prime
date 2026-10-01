@@ -235,7 +235,7 @@ class RenodeModelObserver:
         def i16(offset):
             return int.from_bytes(bytes(registers[offset:offset + 2]), "little", signed=True) if len(registers) > offset + 1 else 0
         display_state = self._display_state(display)
-        capabilities = ["model-observation", "bounded-command-dispatch"]
+        capabilities = ["model-observation", "bounded-command-dispatch", "state-sample/v1"]
         limitations = ["display values are deterministic model output, not optical light physics"]
         if not any(self._get("port" + p) for p in "ABCDEF"):
             limitations.append("LPF2 ports are not present in this platform overlay")
