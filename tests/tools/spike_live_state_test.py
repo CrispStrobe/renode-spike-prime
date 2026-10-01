@@ -11,6 +11,8 @@ from spike_state_bridge import LiveStateSession, ProtocolError, RenodeModelObser
 class Device:
     SpeedPercent = 25
     EncoderDegrees = 90
+    AngularVelocityDegreesPerSecond = 277
+    Stalled = False
 
 
 class DistanceDevice:
@@ -62,7 +64,7 @@ class LiveStateTests(unittest.TestCase):
         self.session.connect()
         snapshot = self.session.sample(100)
         self.assertEqual(snapshot["battery"]["millivolts"], 7200)
-        self.assertEqual(snapshot["motors"][0], {"port": "A", "speed": 25.0, "position": 90.0})
+        self.assertEqual(snapshot["motors"][0], {"port": "A", "speed": 25.0, "position": 90.0, "speedDps": 277.0, "stalled": False})
         self.assertEqual(snapshot["lifecycle"]["generation"], 3)
         self.assertEqual(snapshot["ports"][0]["kind"], "motor")
         self.assertEqual(snapshot["display"], {"width": 5, "height": 5,

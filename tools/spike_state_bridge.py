@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 from collections import deque
+from spike_arena_inputs import apply_arena_inputs
 
 SCHEMA_VERSION = 1
 MAX_LINE_BYTES = 256 * 1024
@@ -12,7 +13,7 @@ MAX_QUEUE_ITEMS = 256
 FIRMWARE_BY_BOARD = {
     "ev3": {"brickwright-ev3-smoke"},
     "spike-prime": {"lego-prime-v2", "lego-prime-v3", "pybricks-prime",
-                    "spike-nx", "brickwright-nuttx"},
+                    "spike-nx", "brickwright-nuttx", "brickwright-arena-demo"},
     "spike-essential": {"lego-essential", "pybricks-essential"},
 }
 
@@ -214,10 +215,19 @@ class RenodeModelObserver:
             ports.append({"id": port_id, "attached": device is not None, "kind": kind})
             if kind == "motor":
                 motors.append({"port": port_id, "speed": float(device.SpeedPercent),
-                               "position": float(device.EncoderDegrees)})
+                               "position": float(device.EncoderDegrees),
+                               "speedDps": float(device.AngularVelocityDegreesPerSecond),
+                               "stalled": bool(device.Stalled)})
             elif kind == "distance":
                 sensors.append({"port": port_id, "kind": kind,
                                 "values": {"distanceMillimeters": int(device.DistanceMillimeters)}})
+            elif kind == "color":
+                sensors.append({"port": port_id, "kind": kind, "values": {
+                    "colorId": int(device.ColorId), "reflectionPercent": int(device.ReflectionPercent),
+                    "ambientPercent": int(device.AmbientPercent)}})
+            elif kind == "force":
+                sensors.append({"port": port_id, "kind": kind, "values": {
+                    "forcePercent": int(device.ForcePercent), "pressed": bool(device.Pressed)}})
             elif kind is not None:
                 sensors.append({"port": port_id, "kind": kind, "values": {}})
         self.generation = max(topology, default=self.generation)
@@ -225,11 +235,13 @@ class RenodeModelObserver:
         def i16(offset):
             return int.from_bytes(bytes(registers[offset:offset + 2]), "little", signed=True) if len(registers) > offset + 1 else 0
         display_state = self._display_state(display)
-        capabilities = ["model-observation", "bounded-command-dispatch"]
+        capabilities = ["model-observation", "bounded-command-dispatch", "state-sample/v1"]
         limitations = ["display values are deterministic model output, not optical light physics"]
         if not any(self._get("port" + p) for p in "ABCDEF"):
             limitations.append("LPF2 ports are not present in this platform overlay")
         target = dict(self.identity)
+        if self.identity.get("firmware") == "brickwright-nuttx" and self.identity.get("transport") == "none" and any(self._get("port" + p) for p in "ABCDEF"):
+            capabilities.append("arena-inputs/v1")
         target["capabilities"] = capabilities
         target["limitations"] = limitations
         millivolts = int(getattr(power, "BatteryMillivolts", 0))
@@ -251,6 +263,14 @@ class RenodeModelObserver:
                               "transport": target["transport"]}}
 
     def dispatch(self, command: str, arguments: dict) -> None:
+        if command == "state.sample":
+            if arguments: raise ProtocolError("state.sample takes no arguments")
+            return
+        if command == "arena.inputs":
+            if self.identity.get("firmware") != "brickwright-nuttx" or self.identity.get("transport") != "none":
+                raise ProtocolError("arena input requires our simulation firmware")
+            apply_arena_inputs(arguments, lambda port: self._require("port" + port).Device)
+            return
         if command == "power.set-battery-millivolts":
             value = self._bounded_int(arguments, "value", 0, 20000)
             self._require("power").SetBatteryMillivolts(value)
@@ -262,7 +282,7 @@ class RenodeModelObserver:
             self._require("imu").AdvanceSample()
         elif command == "lpf2.attach":
             device = arguments.get("device")
-            if device not in {"none", "ultrasonic", "medium-motor", "motor"}:
+            if device not in {"none", "ultrasonic", "medium-motor", "motor", "color", "force"}:
                 raise ProtocolError("unsupported LPF2 device")
             self._require_port(arguments).Attach("motor" if device == "medium-motor" else device)
         elif command == "lpf2.detach":
@@ -291,6 +311,10 @@ class RenodeModelObserver:
             return None
         if hasattr(device, "SpeedPercent") and hasattr(device, "EncoderDegrees"):
             return "motor"
+        if hasattr(device, "ColorId"):
+            return "color"
+        if hasattr(device, "ForcePercent"):
+            return "force"
         if hasattr(device, "DistanceMillimeters"):
             return "distance"
         get_type = getattr(device, "GetType", None)
