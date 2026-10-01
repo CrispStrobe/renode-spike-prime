@@ -20,6 +20,9 @@ def stage(root, firmware, executable, destination):
         raise ValueError('expected bounded little-endian ARM ELF32 from our arena demo')
     destination.mkdir(parents=True)
     (destination/'scripts').mkdir(); (destination/'tools').mkdir()
+    (destination/'licenses').mkdir()
+    shutil.copy2(root/'LICENSE', destination/'licenses/renode-MIT.txt')
+    shutil.copy2(root/'licenses/arena-BSD-3-Clause.txt', destination/'licenses/arena-BSD-3-Clause.txt')
     files = ['scripts/spike-state-server.py', 'tools/spike_state_monitor_protocol.py',
              'tools/ev3_state_observer.py', 'tools/spike_arena_inputs.py', 'tools/spike_arena_mailbox.py']
     for name in files: shutil.copy2(root/name, destination/name)

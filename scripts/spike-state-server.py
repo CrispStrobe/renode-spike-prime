@@ -191,6 +191,10 @@ class _Server(object):
             stream.Write(wire, 0, wire.Length)
 
     def _synchronized(self, callback):
+        # The demo mailbox's sequence protocol provides coherent frames without
+        # pausing guest time or adding asynchronous GDB stop notifications.
+        if self.config["identity"].get("firmware") == "brickwright-arena-demo":
+            with self.state_lock: return callback()
         paused = monitor.Machine.ObtainPausedState(True)
         try:
             return callback()

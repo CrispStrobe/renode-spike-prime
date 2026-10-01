@@ -25,7 +25,7 @@ class MailboxTests(unittest.TestCase):
         self.assertEqual(frame['motors'][1]['demandDirection'], 1)
         self.assertEqual(frame['lifecycle']['connectionGeneration'], 7)
     def test_invalid_and_torn_frames_are_rejected(self):
-        for index, value in [(0,0), (1,2), (2,3601001), (18,3)]:
+        for index, value in [(0,0), (1,2), (2,3601001), (18,3), (3,1)]:
             old=self.words[index]; self.words[index]=value
             with self.assertRaises(ValueError): m.read_state(self.raw,self.read)
             self.words[index]=old

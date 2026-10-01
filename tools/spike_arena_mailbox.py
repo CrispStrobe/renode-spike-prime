@@ -11,11 +11,13 @@ SIGNATURE = 0x42574152
 
 def read_state(read_bytes, read_word):
     for unused in range(3):
+        inputs_before = int(read_word(BASE + 12))
         before = int(read_word(BASE + 72))
         raw = bytearray(read_bytes(BASE, SIZE))
         data = struct.unpack('<21i', bytes(raw) if sys.version_info[0] >= 3 else str(raw))
         after = int(read_word(BASE + 72))
-        if not (before & 1) and before == after == data[18]:
+        inputs_after = int(read_word(BASE + 12))
+        if not ((before | inputs_before) & 1) and before == after == data[18] and inputs_before == inputs_after == data[3]:
             if data[0] != SIGNATURE or data[1] != 1:
                 raise ValueError('arena guest has not initialized its mailbox')
             if not 0 <= data[2] <= 3601000:
