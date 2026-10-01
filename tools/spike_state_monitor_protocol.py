@@ -12,7 +12,7 @@ except NameError:
 FIRMWARE_BY_BOARD = {
     "ev3": ("brickwright-ev3-smoke",),
     "spike-prime": ("lego-prime-v2", "lego-prime-v3", "pybricks-prime",
-                    "spike-nx", "brickwright-nuttx"),
+                    "spike-nx", "brickwright-nuttx", "brickwright-arena-demo"),
     "spike-essential": ("lego-essential", "pybricks-essential"),
 }
 

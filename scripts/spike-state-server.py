@@ -22,6 +22,8 @@ if _tools not in sys.path:
     sys.path.insert(0, _tools)
 from spike_state_monitor_protocol import split_frames, validate_command, validate_config
 import ev3_state_observer
+from spike_arena_inputs import apply_arena_inputs
+import spike_arena_mailbox
 
 _state_server = None
 _MAX_LINE, _READ_SIZE = 256 * 1024, 16 * 1024
@@ -45,12 +47,20 @@ def _kind(device):
         return None
     if hasattr(device, "SpeedPercent") and hasattr(device, "EncoderDegrees"):
         return "motor"
+    if hasattr(device, "ColorId"):
+        return "color"
+    if hasattr(device, "ForcePercent"):
+        return "force"
     if hasattr(device, "DistanceMillimeters"):
         return "distance"
     return "unknown:" + device.GetType().Name[:48]
 
 
 def _snapshot(config, seq, generation):
+    if config["identity"].get("firmware") == "brickwright-arena-demo":
+        bus = monitor.Machine.SystemBus
+        data = spike_arena_mailbox.read_state(lambda address, count: bus.ReadBytes(address, count), bus.ReadDoubleWord)
+        return spike_arena_mailbox.snapshot(data, config["identity"], seq, generation)
     if config["identity"]["board"] == "ev3":
         clock = int(emulationManager.CurrentEmulation.MasterTimeSource.ElapsedVirtualTime.Ticks) * 100
         return ev3_state_observer.observe(config, _resolve, seq, clock, generation)
@@ -64,10 +74,18 @@ def _snapshot(config, seq, generation):
         ports.append({"id": port_id, "attached": device is not None, "kind": kind})
         if kind == "motor":
             motors.append({"port": port_id, "speed": float(device.SpeedPercent),
-                           "position": float(device.EncoderDegrees)})
+                           "position": float(device.EncoderDegrees),
+                           "speedDps": float(device.AngularVelocityDegreesPerSecond), "stalled": bool(device.Stalled)})
         elif kind == "distance":
             sensors.append({"port": port_id, "kind": kind,
                             "values": {"distanceMillimeters": int(device.DistanceMillimeters)}})
+        elif kind == "color":
+            sensors.append({"port": port_id, "kind": kind, "values": {
+                "colorId": int(device.ColorId), "reflectionPercent": int(device.ReflectionPercent),
+                "ambientPercent": int(device.AmbientPercent)}})
+        elif kind == "force":
+            sensors.append({"port": port_id, "kind": kind, "values": {
+                "forcePercent": int(device.ForcePercent), "pressed": bool(device.Pressed)}})
     display, pixels, width, height, semantics = _optional(paths, "display"), [], 0, 0, "unavailable"
     if display is not None and hasattr(display, "Matrix"):
         pixels, width, height, semantics = [int(value) for value in display.Matrix], 5, 5, "grayscale-16bit"
@@ -79,6 +97,8 @@ def _snapshot(config, seq, generation):
     millivolts = int(power.BatteryMillivolts) if power is not None else 0
     identity = dict(config["identity"])
     identity["capabilities"] = ["model-observation", "bounded-command-dispatch"]
+    if identity.get("firmware") == "brickwright-nuttx" and identity.get("transport") == "none" and any(_optional(paths, "port" + p) is not None for p in "ABCDEF"):
+        identity["capabilities"].append("arena-inputs/v1")
     identity["limitations"] = ["state is model output, not physical hardware"]
     clock = int(emulationManager.CurrentEmulation.MasterTimeSource.ElapsedVirtualTime.Ticks) * 100
     return {"schemaVersion": 1, "type": "snapshot", "seq": seq, "clockNs": clock,
@@ -100,6 +120,15 @@ def _dispatch(config, command):
     if config["identity"]["board"] == "ev3":
         return ev3_state_observer.dispatch(config, _resolve, command)
     paths, name, args = config["paths"], command["command"], command["arguments"]
+    if name == "arena.inputs":
+        if config["identity"].get("firmware") == "brickwright-arena-demo" and config["identity"].get("transport") == "none":
+            bus = monitor.Machine.SystemBus
+            spike_arena_mailbox.write_inputs(args, bus.ReadDoubleWord, bus.WriteDoubleWord)
+            return
+        if config["identity"].get("firmware") != "brickwright-nuttx" or config["identity"].get("transport") != "none":
+            raise ValueError("arena input requires our simulation firmware")
+        apply_arena_inputs(args, lambda port: _resolve(paths["port" + port]).Device)
+        return
     if name == "power.set-battery-millivolts":
         value = args.get("value")
         if not isinstance(value, (int, long)) or isinstance(value, bool) or not 0 <= value <= 20000:
@@ -120,7 +149,7 @@ def _dispatch(config, command):
             model.Detach()
         elif name == "lpf2.attach":
             device = args.get("device")
-            if device not in ("none", "ultrasonic", "medium-motor", "motor"):
+            if device not in ("none", "ultrasonic", "medium-motor", "motor", "color", "force"):
                 raise ValueError("unsupported LPF2 device")
             model.Attach("motor" if device == "medium-motor" else device)
         else:
