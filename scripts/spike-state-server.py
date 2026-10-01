@@ -120,6 +120,9 @@ def _dispatch(config, command):
     if config["identity"]["board"] == "ev3":
         return ev3_state_observer.dispatch(config, _resolve, command)
     paths, name, args = config["paths"], command["command"], command["arguments"]
+    if name == "state.sample":
+        if args: raise ValueError("state.sample takes no arguments")
+        return
     if name == "arena.inputs":
         if config["identity"].get("firmware") == "brickwright-arena-demo" and config["identity"].get("transport") == "none":
             bus = monitor.Machine.SystemBus

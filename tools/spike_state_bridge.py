@@ -263,6 +263,9 @@ class RenodeModelObserver:
                               "transport": target["transport"]}}
 
     def dispatch(self, command: str, arguments: dict) -> None:
+        if command == "state.sample":
+            if arguments: raise ProtocolError("state.sample takes no arguments")
+            return
         if command == "arena.inputs":
             if self.identity.get("firmware") != "brickwright-nuttx" or self.identity.get("transport") != "none":
                 raise ProtocolError("arena input requires our simulation firmware")

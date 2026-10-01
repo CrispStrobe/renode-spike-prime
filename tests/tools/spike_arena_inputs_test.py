@@ -59,6 +59,11 @@ class ArenaInputsTests(unittest.TestCase):
                        lambda f: f['sensors'][0].update({'port': 'Z'})]:
             frame = copy.deepcopy(self.frame); mutate(frame)
             with self.assertRaises(ValueError): validate_arena_inputs(frame)
+    def test_sample_is_read_only_and_has_no_arguments(self):
+        observer = RenodeModelObserver({}, {'firmware': 'brickwright-nuttx', 'transport': 'none'}, {})
+        observer.dispatch('state.sample', {})
+        with self.assertRaises(ValueError): observer.dispatch('state.sample', {'clock': 1})
+
     def test_observer_refuses_input_for_other_firmware_even_when_models_exist(self):
         observer = RenodeModelObserver({}, {'firmware': 'lego-prime-v3', 'transport': 'none'}, {})
         with self.assertRaises(ValueError): observer.dispatch('arena.inputs', self.frame)

@@ -11,7 +11,7 @@ import shutil
 def stage(root, firmware, executable, destination):
     # No download or arbitrary monitor command. Inputs are local build artifacts.
     firmware, executable, destination = [pathlib.Path(p).resolve() for p in (firmware, executable, destination)]
-    if any(char in str(destination) for char in '\n\r"@'):
+    if any(char in str(destination) for char in '\n\r\t;"@'):
         raise ValueError('output path is not a supported monitor path')
     if destination.exists():
         raise ValueError('choose a new output directory; existing packages are never overwritten')
@@ -25,9 +25,9 @@ def stage(root, firmware, executable, destination):
     for name in files: shutil.copy2(root/name, destination/name)
     shutil.copy2(firmware, destination/'arena-demo.elf')
     (destination/'arena-demo.repl').write_text('using "platforms/cpus/stm32f4.repl"\nsramUpper: Memory.MappedMemory @ sysbus 0x20040000\n    size: 0x10000\n')
-    if any(char in str(destination) for char in '\n\r"@'):
+    if any(char in str(destination) for char in '\n\r\t;"@'):
         raise ValueError('output path is not a supported monitor path')
-    (destination/'arena-demo.resc').write_text('mach create\nmachine LoadPlatformDescription @"'+str(destination/'arena-demo.repl')+'"\n')
+    (destination/'arena-demo.resc').write_text('mach create\nmachine LoadPlatformDescription @'+str(destination/'arena-demo.repl').replace(' ', '\\ ')+'\n')
     digest = lambda p: hashlib.sha256(p.read_bytes()).hexdigest()
     (destination/'state-config.json').write_text(json.dumps({'identity': {'board':'spike-prime',
         'firmware':'brickwright-arena-demo','transport':'none','imageSha256':digest(destination/'arena-demo.elf')}, 'paths':{}}, indent=2)+'\n')
