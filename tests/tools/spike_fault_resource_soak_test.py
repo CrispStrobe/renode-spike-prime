@@ -53,9 +53,9 @@ class FaultResourceSoakTests(unittest.TestCase):
             SOAK.available_targets("unused", manifest)
 
     def test_command_has_fixed_repeat_and_isolated_results(self):
-        command = SOAK.test_command("pybricks-prime", 5, pathlib.Path("results"))
+        command = SOAK.test_command("lego-prime-v3", 5, pathlib.Path("results"))
         self.assertEqual(command[command.index("--repeat") + 1], "5")
-        self.assertEqual(command[command.index("--fixture") + 1], SOAK.FIXTURES["pybricks-prime"])
+        self.assertEqual(command[command.index("--fixture") + 1], SOAK.FIXTURES["lego-prime-v3"])
         self.assertIn("--stop-on-error", command)
 
     @unittest.skipUnless(pathlib.Path("/proc/self/status").exists(), "requires Linux procfs")

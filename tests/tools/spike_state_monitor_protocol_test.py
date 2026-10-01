@@ -32,9 +32,9 @@ class MonitorProtocolTest(unittest.TestCase):
         with self.assertRaises(ValueError): split_frames("", "x\n" * 257, 8, 1024)
 
     def test_exact_identity_vocabulary_and_hash_shape(self):
-        pairs = {"spike-prime": ("lego-prime-v2", "lego-prime-v3", "pybricks-prime",
-                 "spike-nx", "brickwright-nuttx"),
-                 "spike-essential": ("lego-essential", "pybricks-essential")}
+        pairs = {"spike-prime": ("lego-prime-v2", "lego-prime-v3",
+                 "spike-nx", "brickwright-nuttx", "brickwright-arena-demo"),
+                 "spike-essential": ("lego-essential",)}
         for board, firmwares in pairs.items():
             for firmware in firmwares: validate_config(config(board, firmware))
         with self.assertRaises(ValueError): validate_config(config("spike-essential", "spike-nx"))

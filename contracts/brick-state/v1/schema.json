@@ -22,7 +22,7 @@
       "type": "object", "required": ["board", "firmware", "transport", "imageSha256", "capabilities", "limitations"],
       "properties": {
         "board": {"enum": ["spike-prime", "spike-essential", "ev3"]},
-        "firmware": {"enum": ["lego-prime-v2", "lego-prime-v3", "pybricks-prime", "spike-nx", "brickwright-nuttx", "lego-essential", "pybricks-essential", "brickwright-ev3-smoke"]},
+        "firmware": {"enum": ["lego-prime-v2", "lego-prime-v3", "spike-nx", "brickwright-nuttx", "brickwright-arena-demo", "lego-essential", "brickwright-ev3-smoke"]},
         "transport": {"type": "string", "minLength": 1, "maxLength": 32},
         "imageSha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
         "capabilities": {"type": "array", "maxItems": 128, "items": {"type": "string", "maxLength": 64}, "uniqueItems": true},
@@ -30,8 +30,8 @@
       }, "additionalProperties": true,
       "allOf": [
         {"if": {"properties": {"board": {"const": "ev3"}}}, "then": {"properties": {"firmware": {"const": "brickwright-ev3-smoke"}, "transport": {"const": "none"}}}},
-        {"if": {"properties": {"board": {"const": "spike-prime"}}}, "then": {"properties": {"firmware": {"enum": ["lego-prime-v2", "lego-prime-v3", "pybricks-prime", "spike-nx", "brickwright-nuttx"]}}}},
-        {"if": {"properties": {"board": {"const": "spike-essential"}}}, "then": {"properties": {"firmware": {"enum": ["lego-essential", "pybricks-essential"]}}}}
+        {"if": {"properties": {"board": {"const": "spike-prime"}}}, "then": {"properties": {"firmware": {"enum": ["lego-prime-v2", "lego-prime-v3", "spike-nx", "brickwright-nuttx", "brickwright-arena-demo"]}}}},
+        {"if": {"properties": {"board": {"const": "spike-essential"}}}, "then": {"properties": {"firmware": {"enum": ["lego-essential"]}}}}
       ]
     },
     "snapshot": {

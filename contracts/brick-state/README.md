@@ -14,9 +14,8 @@ state. Commands carry a unique `requestId` and may carry `expectedSeq` for
 optimistic concurrency. Results echo the request ID.
 
 The version-1 identity vocabulary is board-qualified. Prime accepts
-`lego-prime-v2`, `lego-prime-v3`, `pybricks-prime`, `spike-nx`, and
-`brickwright-nuttx`. Essential accepts `lego-essential` and
-`pybricks-essential`. EV3 accepts `brickwright-ev3-smoke` with transport `none`.
+`lego-prime-v2`, `lego-prime-v3`, `spike-nx`,
+`brickwright-nuttx`, and the simulation-only `brickwright-arena-demo`. Essential accepts `lego-essential`. EV3 accepts `brickwright-ev3-smoke` with transport `none`.
 Unknown identities fail closed; adding a family requires a reviewed contract extension.
 
 Unknown `schemaVersion` values and missing required fields fail closed.

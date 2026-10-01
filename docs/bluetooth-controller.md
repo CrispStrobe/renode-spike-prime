@@ -38,7 +38,7 @@ Reset clears protocol and connection state without changing configured limits.
 Adapters must preserve byte order and may not inject controller policy. Tests
 must use deterministic inputs and may not depend on RF or wall-clock timing.
 
-The implementation is MIT-licensed and contains no LEGO, Pybricks, or TI
+The implementation is MIT-licensed and contains no LEGO or TI
 firmware. Its deterministic behavior is a software test model, not evidence of
 RF, timing, electrical, or physical-controller fidelity.
 

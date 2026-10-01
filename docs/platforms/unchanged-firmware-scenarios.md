@@ -1,7 +1,7 @@
 # Unchanged firmware scenarios
 
-The scenario catalog covers LEGO Prime v2, LEGO Prime v3, Pybricks Prime,
-spike-nx, Brickwright NuttX, LEGO Essential, and Pybricks Essential. Firmware
+The scenario catalog covers LEGO Prime v2, LEGO Prime v3,
+spike-nx, Brickwright NuttX, and LEGO Essential. Firmware
 bytes remain local and unchanged. The catalog is versioned separately from
 input manifests so incompatible contract changes require a new version.
 
@@ -35,14 +35,14 @@ board's controller setup. `daemon-ready` proves that the dedicated Renode
 firmware profile auto-started `btsensor` through its permissive in-process HCI
 controller. This path does not use USART2, the CC2564C, or a TI service pack.
 
-The present opaque LEGO and Pybricks images have no public symbol contract, and
+The present opaque LEGO images have no public symbol contract, and
 the device models do not yet expose stable transaction counters to Robot tests.
 They therefore claim only vector and CPU progress. Loading a port, display,
 storage, or Bluetooth model is not evidence that firmware exercised it. Those
 milestones remain pending until observable counters or an equivalent public
 contract exists.
 
-With local inputs present, Prime v2, Prime v3, and Pybricks Prime pass this
+With local inputs present, Prime v2 and Prime v3 pass this
 bounded vector/progress gate; spike-nx passes its protected two-ELF boot-symbol
 gate. These results do not imply full peripheral compatibility.
 

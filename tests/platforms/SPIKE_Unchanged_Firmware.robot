@@ -18,9 +18,6 @@ LEGO Prime v2 unchanged image progresses
 LEGO Prime v3 unchanged image progresses
     Run Opaque Scenario    lego-prime-v3
 
-Pybricks Prime unchanged image progresses
-    Run Opaque Scenario    pybricks-prime
-
 spike-nx unchanged protected image reaches boot boundaries
     Run Protected Scenario    spike-nx    ${False}
 
@@ -29,9 +26,6 @@ Brickwright NuttX Renode profile reaches daemon and state boundaries
 
 LEGO Essential unchanged image progresses
     Run Opaque Scenario    lego-essential
-
-Pybricks Essential unchanged image progresses
-    Run Opaque Scenario    pybricks-essential
 
 *** Keywords ***
 Verify Before Creating Machine

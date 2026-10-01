@@ -25,15 +25,22 @@ class BridgeTest(unittest.TestCase):
     def test_every_board_qualified_firmware_identity(self):
         snapshot = self.fixture("snapshot.ndjson")
         identities = {
-            "spike-prime": ("lego-prime-v2", "lego-prime-v3", "pybricks-prime",
-                            "spike-nx", "brickwright-nuttx"),
-            "spike-essential": ("lego-essential", "pybricks-essential"),
+            "spike-prime": ("lego-prime-v2", "lego-prime-v3",
+                            "spike-nx", "brickwright-nuttx", "brickwright-arena-demo"),
+            "spike-essential": ("lego-essential",),
         }
         for board, firmwares in identities.items():
             for firmware in firmwares:
                 candidate = {**snapshot, "target": {**snapshot["target"],
                                                      "board": board, "firmware": firmware}}
                 canonical_bytes(candidate)
+
+    def test_simulation_guest_identity_is_in_the_published_contract(self):
+        target = json.loads((ROOT / "contracts/brick-state/v1/schema.json").read_text())["$defs"]["target"]
+        self.assertIn("brickwright-arena-demo", target["properties"]["firmware"]["enum"])
+        prime = next(rule["then"] for rule in target["allOf"]
+                     if rule["if"]["properties"]["board"]["const"] == "spike-prime")
+        self.assertIn("brickwright-arena-demo", prime["properties"]["firmware"]["enum"])
 
     def test_version_and_malformed_input_fail_closed(self):
         with self.assertRaises(ProtocolError):

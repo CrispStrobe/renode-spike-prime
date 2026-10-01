@@ -45,7 +45,7 @@ python3 tests/platforms/spike-firmware-scenario-manifest-test.py
 python3 -m unittest discover -s tests/tools -p 'bluetooth_controller*_test.py'
 ```
 
-Official LEGO, Pybricks, and TI binaries are neither included nor downloaded.
+Official LEGO and TI binaries are neither included nor downloaded.
 Local firmware tests require an ignored SHA-256 manifest documented in the
 Essential platform guide. Public CI remains source-only.
 

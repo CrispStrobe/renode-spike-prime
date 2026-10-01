@@ -2,7 +2,7 @@
 set -euo pipefail
 
 usage() {
-    echo "usage: $0 {official|pybricks} IMAGE {raw|elf} VECTOR_ADDRESS" >&2
+    echo "usage: $0 official IMAGE {raw|elf} VECTOR_ADDRESS" >&2
     exit 2
 }
 
@@ -12,7 +12,7 @@ source_image=$2
 format=$3
 load_address=${4:-}
 
-[[ $kind == official || $kind == pybricks ]] || usage
+[[ $kind == official ]] || usage
 [[ $format == raw || $format == elf ]] || usage
 [[ -f $source_image ]] || { echo "image not found: $source_image" >&2; exit 1; }
 
