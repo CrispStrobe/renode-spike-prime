@@ -37,9 +37,11 @@ def stage(root, firmware, executable, destination):
     pins = {'BW_RENODE_EXECUTABLE':str(executable),'BW_RENODE_SHA256':digest(executable), 'BW_RENODE_SPIKE_ROOT':str(destination)}
     for name, file in [('SCENARIO','arena-demo.resc'),('FIRMWARE','arena-demo.elf'),('STATE_SCRIPT','scripts/spike-state-server.py'),('STATE_CONFIG','state-config.json')]:
         p=destination/file; pins['BW_RENODE_SPIKE_'+name]=str(p);pins['BW_RENODE_SPIKE_'+name+'_SHA256']=digest(p)
-    (destination/'pins.json').write_text(json.dumps(pins,indent=2)+'\n')
     (destination/'manifest.json').write_text(json.dumps({str(p.relative_to(destination)):digest(p)
         for p in sorted(destination.rglob('*')) if p.is_file()},indent=2)+'\n')
+    pins['BW_RENODE_SPIKE_MANIFEST'] = str(destination/'manifest.json')
+    pins['BW_RENODE_SPIKE_MANIFEST_SHA256'] = digest(destination/'manifest.json')
+    (destination/'pins.json').write_text(json.dumps(pins,indent=2)+'\n')
     return pins
 
 if __name__ == '__main__':
