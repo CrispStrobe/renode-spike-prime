@@ -17,12 +17,12 @@ class ScenarioManifestTests(unittest.TestCase):
             text=True, capture_output=True, check=False,
         )
 
-    def test_catalog_contains_the_seven_required_targets(self):
+    def test_catalog_contains_only_supported_targets(self):
         result = self.run_tool("unused", "list", "--json")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(set(json.loads(result.stdout)), {
-            "lego-prime-v2", "lego-prime-v3", "pybricks-prime", "spike-nx",
-            "brickwright-nuttx", "lego-essential", "pybricks-essential",
+            "lego-prime-v2", "lego-prime-v3", "spike-nx",
+            "brickwright-nuttx", "lego-essential",
         })
 
     def test_absent_input_is_an_explicit_skip(self):
@@ -47,10 +47,10 @@ class ScenarioManifestTests(unittest.TestCase):
             root = pathlib.Path(temporary)
             image = root / "input.bin"
             image.write_bytes(b"original")
-            prepared = self.run_tool(root, "prepare", "pybricks-prime", "--artifact", f"firmware=raw=0x08008000={image}")
+            prepared = self.run_tool(root, "prepare", "lego-prime-v3", "--artifact", f"firmware=raw=0x08008000={image}")
             self.assertEqual(prepared.returncode, 0, prepared.stderr)
-            (root / "pybricks-prime/firmware.raw").write_bytes(b"changed")
-            verified = self.run_tool(root, "verify", "pybricks-prime")
+            (root / "lego-prime-v3/firmware.raw").write_bytes(b"changed")
+            verified = self.run_tool(root, "verify", "lego-prime-v3")
             self.assertEqual(verified.returncode, 1)
             self.assertRegex(verified.stderr, "size mismatch|SHA-256 mismatch")
 

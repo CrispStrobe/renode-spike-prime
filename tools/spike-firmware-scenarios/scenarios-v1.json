@@ -13,12 +13,6 @@
       "artifacts": ["firmware"],
       "milestones": ["vectors-valid", "cpu-progress"]
     },
-    "pybricks-prime": {
-      "board": "prime",
-      "firmware": "Pybricks SPIKE Prime",
-      "artifacts": ["firmware"],
-      "milestones": ["vectors-valid", "cpu-progress"]
-    },
     "spike-nx": {
       "board": "prime",
       "firmware": "spike-nx",
@@ -34,12 +28,6 @@
     "lego-essential": {
       "board": "essential",
       "firmware": "LEGO SPIKE Essential",
-      "artifacts": ["firmware"],
-      "milestones": ["vectors-valid", "cpu-progress"]
-    },
-    "pybricks-essential": {
-      "board": "essential",
-      "firmware": "Pybricks SPIKE Essential",
       "artifacts": ["firmware"],
       "milestones": ["vectors-valid", "cpu-progress"]
     }

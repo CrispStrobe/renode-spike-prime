@@ -26,11 +26,9 @@ POLL_SECONDS = 0.02
 FIXTURES = {
     "lego-prime-v2": "LEGO Prime v2 unchanged image progresses",
     "lego-prime-v3": "LEGO Prime v3 unchanged image progresses",
-    "pybricks-prime": "Pybricks Prime unchanged image progresses",
     "spike-nx": "spike-nx unchanged protected image reaches boot boundaries",
     "brickwright-nuttx": "Brickwright NuttX Renode profile reaches daemon and state boundaries",
     "lego-essential": "LEGO Essential unchanged image progresses",
-    "pybricks-essential": "Pybricks Essential unchanged image progresses",
 }
 
 

@@ -8,11 +8,6 @@ User supplied official Essential image has valid vectors and progresses
     Verify Local Image And Progress    official
     Reset Emulation
 
-User supplied Pybricks Essential image has valid vectors and progresses
-    Create Essential Machine
-    Verify Local Image And Progress    pybricks
-    Reset Emulation
-
 *** Keywords ***
 Create Essential Machine
     Execute Command    mach create

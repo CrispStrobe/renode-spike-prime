@@ -25,9 +25,9 @@ class BridgeTest(unittest.TestCase):
     def test_every_board_qualified_firmware_identity(self):
         snapshot = self.fixture("snapshot.ndjson")
         identities = {
-            "spike-prime": ("lego-prime-v2", "lego-prime-v3", "pybricks-prime",
+            "spike-prime": ("lego-prime-v2", "lego-prime-v3",
                             "spike-nx", "brickwright-nuttx"),
-            "spike-essential": ("lego-essential", "pybricks-essential"),
+            "spike-essential": ("lego-essential",),
         }
         for board, firmwares in identities.items():
             for firmware in firmwares:

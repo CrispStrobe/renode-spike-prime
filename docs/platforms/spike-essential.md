@@ -47,10 +47,9 @@ borrowed from Prime.
 No firmware is downloaded, tracked, or uploaded. Prepare a user-supplied image:
 
 ```sh
-tools/spike-essential/prepare-local-image.sh pybricks path/to/firmware.bin raw 0x08008000
 tools/spike-essential/prepare-local-image.sh official path/to/firmware.bin raw 0x08000000
 # ELF input also requires the address of its vector table:
-tools/spike-essential/prepare-local-image.sh pybricks path/to/firmware.elf elf 0x08008000
+tools/spike-essential/prepare-local-image.sh official path/to/firmware.elf elf 0x08008000
 ```
 
 The loader copies it beneath ignored `.local/spike-essential-images/`, records

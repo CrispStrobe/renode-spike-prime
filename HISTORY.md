@@ -32,8 +32,8 @@
   service now loads its .NET networking assemblies explicitly and serializes
   model numeric values safely under IronPython.
 
-- Locally supplied, hash-manifested LEGO Prime v2, LEGO Prime v3, Pybricks
-  Prime, and spike-nx images now pass their deliberately bounded unchanged-image
+- Locally supplied, hash-manifested LEGO Prime v2, LEGO Prime v3,
+  and spike-nx images now pass their deliberately bounded unchanged-image
   gates. An initial stack pointer exactly at the top of SRAM is accepted as the
   valid ARM one-past-end stack convention. Essential inputs remain absent.
 
@@ -56,8 +56,8 @@
   paces the DAC sink and DMA requests on Renode's virtual clock. Stable board
   ADC sources replace queued fixtures and survive peripheral reset.
 - A distinct SPIKE Essential platform, local hash-manifest image loaders and
-  bounded official/Pybricks execution gates were added.
-- A versioned unchanged-firmware matrix now covers seven Prime and Essential
+  bounded official-image execution gates were added.
+- A versioned unchanged-firmware matrix now covers five Prime and Essential
   targets. It verifies every local artifact before machine creation, skips
   absent inputs explicitly, and declares target-specific vector, progress,
   symbol, device-initialization, controller-daemon, and state boundaries. Public
