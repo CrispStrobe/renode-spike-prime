@@ -27,6 +27,7 @@ gpioPortB:
     12 -> primeStorageMux@0
 
 spi2:
+    DMAReceive -> dma1@3
     DMATransmit -> dma1@4
 
 spi1:

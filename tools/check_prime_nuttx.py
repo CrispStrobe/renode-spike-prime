@@ -54,11 +54,17 @@ def main():
     match = re.search(r'^([a-fA-F0-9]+)\s+\w\s+g_bw_program_debug$', symbols, re.M)
     if not match: raise ValueError('our firmware program mailbox was not found')
     base = validate_base(int(match.group(1), 16))
+    kernel_symbols = subprocess.check_output(['arm-none-eabi-nm', '-S', str(kernel)], text=True)
+    ramlog = re.search(r'^([a-fA-F0-9]+)\s+([a-fA-F0-9]+)\s+\w\s+g_sysbuffer$', kernel_symbols, re.M)
+    if not ramlog: raise ValueError('qualification requires our kernel RAM log')
+    ramlog_base, ramlog_size = (int(value, 16) for value in ramlog.groups())
+    if ramlog_size > 32768 or not 0x20000000 <= ramlog_base < ramlog_base + ramlog_size <= 0x20020000:
+        raise ValueError('kernel RAM log exceeds the protected kernel memory')
     output.mkdir(mode=0o700, parents=True)
     runtime = output / 'runtime'
     stage(args.infrastructure.resolve(), runtime, True)
     config = output / 'config.json'
-    config.write_text(json.dumps({'tools': str(root / 'tools'), 'programMailbox': base, 'result': str(output / 'result.json')}))
+    config.write_text(json.dumps({'tools': str(root / 'tools'), 'programMailbox': base, 'ramlogBase': ramlog_base, 'ramlogSize': ramlog_size, 'result': str(output / 'result.json')}))
     config.chmod(0o600)
     scenario = output / 'check.resc'
     scenario.write_text('\n'.join((
