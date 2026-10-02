@@ -101,3 +101,15 @@ write phase and both fresh-process restart phases for native and completed
 Python programs. The full robot suite also passed after the lifecycle change
 that retains the Python language flag while waiting for motors to stop.
 These observations qualify only the scenarios above.
+
+The zero-compare timer regression also has a source-only mutation check:
+
+```sh
+python3 tools/check_prime_timer_mutation.py \
+  --infrastructure /path/to/renode-infrastructure-spike-prime \
+  --renode /path/to/renode \
+  --output /private/new-timer-mutation-check
+```
+
+It removes the rollover flag update from a staged copy and requires the
+fixture to fail with the missing interrupt count. It does not load firmware.
