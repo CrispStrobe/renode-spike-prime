@@ -12,7 +12,9 @@ class MailboxTests(unittest.TestCase):
         self.words = [m.SIGNATURE, 1, 200, 0, 1000, 255, 0, 0, 0, 0, 0, 0,
                       -30000, 30000, -300, 300, 0, 0, 2, -300, 300]
         self.writes = []
-    def read(self, address): return self.words[(address-m.BASE)//4] & 0xffffffff
+    def read(self, address):
+        if address >= m.PROGRAM_BASE: return 0
+        return self.words[(address-m.BASE)//4] & 0xffffffff
     def raw(self, address, size): return struct.pack('<21i', *self.words)
     def write(self, address, value):
         self.writes.append((address, value))

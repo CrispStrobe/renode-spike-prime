@@ -59,7 +59,18 @@ def _kind(device):
 def _snapshot(config, seq, generation):
     if config["identity"].get("firmware") == "brickwright-arena-demo":
         bus = monitor.Machine.SystemBus
-        data = spike_arena_mailbox.read_state(lambda address, count: bus.ReadBytes(address, count), bus.ReadDoubleWord)
+        try:
+            data = spike_arena_mailbox.read_state(lambda address, count: bus.ReadBytes(address, count), bus.ReadDoubleWord)
+        except ValueError as error:
+            if str(error) != 'arena guest frame changed during observation': raise
+            # Timer-driven programs can change during all bounded optimistic reads.
+            # Retry once under the emulator's paused-state scope; guest time is
+            # preserved and this never becomes a GDB halt or a mixed frame.
+            paused = monitor.Machine.ObtainPausedState(True)
+            try:
+                data = spike_arena_mailbox.read_state(lambda address, count: bus.ReadBytes(address, count), bus.ReadDoubleWord)
+            finally:
+                paused.Dispose()
         return spike_arena_mailbox.snapshot(data, config["identity"], seq, generation)
     if config["identity"]["board"] == "ev3":
         clock = int(emulationManager.CurrentEmulation.MasterTimeSource.ElapsedVirtualTime.Ticks) * 100
@@ -122,6 +133,16 @@ def _dispatch(config, command):
     paths, name, args = config["paths"], command["command"], command["arguments"]
     if name == "state.sample":
         if args: raise ValueError("state.sample takes no arguments")
+        return
+    if name == "arena.program.load":
+        if config["identity"].get("firmware") != "brickwright-arena-demo" or config["identity"].get("transport") != "none":
+            raise ValueError("arena program requires our simulation guest")
+        paused = monitor.Machine.ObtainPausedState(True)
+        try:
+            bus = monitor.Machine.SystemBus
+            spike_arena_mailbox.write_program(args, bus.ReadDoubleWord, bus.WriteDoubleWord)
+        finally:
+            paused.Dispose()
         return
     if name == "arena.inputs":
         if config["identity"].get("firmware") == "brickwright-arena-demo" and config["identity"].get("transport") == "none":
