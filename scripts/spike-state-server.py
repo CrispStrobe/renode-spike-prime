@@ -24,6 +24,7 @@ from spike_state_monitor_protocol import split_frames, validate_command, validat
 import ev3_state_observer
 from spike_arena_inputs import apply_arena_inputs
 import spike_arena_mailbox
+import spike_nuttx_mailbox
 
 _state_server = None
 _MAX_LINE, _READ_SIZE = 256 * 1024, 16 * 1024
@@ -93,8 +94,9 @@ def _snapshot(config, seq, generation):
         ports.append({"id": port_id, "attached": device is not None, "kind": kind})
         if kind == "motor":
             motors.append({"port": port_id, "speed": float(device.SpeedPercent),
-                           "position": float(device.EncoderDegrees),
-                           "speedDps": float(device.AngularVelocityDegreesPerSecond), "stalled": bool(device.Stalled)})
+                           "position": float(device.PositionDegrees if hasattr(device, "PositionDegrees") else device.EncoderDegrees),
+                           "speedDps": float(device.AngularVelocityDegreesPerSecond), "stalled": bool(device.Stalled),
+                           "demandDirection": -1 if device.Power < 0 else int(device.Power > 0)})
         elif kind == "distance":
             sensors.append({"port": port_id, "kind": kind,
                             "values": {"distanceMillimeters": int(device.DistanceMillimeters)}})
@@ -118,11 +120,25 @@ def _snapshot(config, seq, generation):
     identity["capabilities"] = ["model-observation", "bounded-command-dispatch", "state-sample/v1"]
     if identity.get("firmware") == "brickwright-nuttx" and identity.get("transport") == "none" and any(_optional(paths, "port" + p) is not None for p in "ABCDEF"):
         identity["capabilities"].append("arena-inputs/v1")
+    lifecycle = {"phase": "ready", "generation": topology, "connectionGeneration": generation}
+    if identity.get("firmware") == "brickwright-nuttx" and identity.get("transport") == "none":
+        if "arena-inputs/v1" in identity["capabilities"]:
+            identity["capabilities"].extend(["arena-clock/v1", "guest-motor-output/v1"])
+        if "programMailbox" in config:
+            bus = monitor.Machine.SystemBus
+            base = config["programMailbox"]
+            if int(bus.ReadDoubleWord(base + 60)) != 0:
+                lifecycle["nuttxProgram"] = spike_nuttx_mailbox.status(base, bus.ReadDoubleWord, bus.ReadBytes)
+                sequence = int(bus.ReadDoubleWord(base + 36))
+                if sequence:
+                    lifecycle["nuttxProgramReply"] = spike_nuttx_mailbox.reply(base, sequence, bus.ReadDoubleWord, bus.ReadBytes)
+                if "pythonOutputMailbox" in config:
+                    lifecycle["nuttxProgramOutput"] = spike_nuttx_mailbox.output(config["pythonOutputMailbox"], bus.ReadDoubleWord, bus.ReadBytes)
+                identity["capabilities"].append("nuttx-program/v1")
     identity["limitations"] = ["state is model output, not physical hardware"]
     clock = int(emulationManager.CurrentEmulation.MasterTimeSource.ElapsedVirtualTime.Ticks) * 100
     return {"schemaVersion": 1, "type": "snapshot", "seq": seq, "clockNs": clock,
-            "target": identity, "lifecycle": {"phase": "ready", "generation": topology,
-            "connectionGeneration": generation}, "ports": ports, "motors": motors,
+            "target": identity, "lifecycle": lifecycle, "ports": ports, "motors": motors,
             "sensors": sensors, "display": {"width": width, "height": height,
             "pixels": pixels, "semantics": semantics}, "buttons": {},
             "battery": {"percent": max(0, min(100, round((millivolts - 6000) / 24))),
@@ -142,6 +158,24 @@ def _dispatch(config, command):
     if name == "state.sample":
         if args: raise ValueError("state.sample takes no arguments")
         return
+    if name == "nuttx.program.packet":
+        if config["identity"].get("firmware") != "brickwright-nuttx" or config["identity"].get("transport") != "none" or "programMailbox" not in config:
+            raise ValueError("program packet requires our full simulation firmware")
+        if set(args) != set(("bytes",)):
+            raise ValueError("program packet takes bytes only")
+        bus = monitor.Machine.SystemBus
+        paused = monitor.Machine.ObtainPausedState(True)
+        try:
+            sequence = spike_nuttx_mailbox.submit(config["programMailbox"], args["bytes"], bus.ReadDoubleWord, bus.WriteDoubleWord)
+        finally:
+            paused.Dispose()
+        # The existing running firmware acknowledges the request. Never execute
+        # client instructions in the monitor or advance its simulated time here.
+        for unused in range(1500):
+            if spike_nuttx_mailbox.reply(config["programMailbox"], sequence, bus.ReadDoubleWord, bus.ReadBytes) is not None:
+                return
+            Thread.Sleep(1)
+        raise ValueError("full firmware did not acknowledge program packet")
     if name == "arena.program.load":
         if config["identity"].get("firmware") != "brickwright-arena-demo" or config["identity"].get("transport") != "none":
             raise ValueError("arena program requires our simulation guest")
@@ -224,11 +258,16 @@ class _Server(object):
         # pausing guest time or adding asynchronous GDB stop notifications.
         if self.config["identity"].get("firmware") == "brickwright-arena-demo":
             with self.state_lock: return callback()
-        paused = monitor.Machine.ObtainPausedState(True)
-        try:
-            return callback()
-        finally:
-            paused.Dispose()
+        for attempt in range(4):
+            paused = monitor.Machine.ObtainPausedState(True)
+            try:
+                return callback()
+            except ValueError as error:
+                if str(error) != "full-firmware publication is not ready or changed" or attempt == 3:
+                    raise
+            finally:
+                paused.Dispose()
+            Thread.Sleep(1)
 
     def sample(self):
         with self.state_lock:
@@ -282,7 +321,11 @@ class _Server(object):
                     if accepted:
                         seen.append(request)
                         if len(seen) > 256: seen.pop(0)
-                        try: self._synchronized(lambda: _dispatch(self.config, command))
+                        try:
+                            if command["command"] == "nuttx.program.packet":
+                                _dispatch(self.config, command)
+                            else:
+                                self._synchronized(lambda: _dispatch(self.config, command))
                         except Exception as exception: accepted, error = False, str(exception)
                 result = {"schemaVersion": 1, "type": "result", "requestId": request, "accepted": accepted, "seq": self.seq - 1}
                 if error is not None: result["error"] = error
