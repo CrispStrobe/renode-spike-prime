@@ -90,5 +90,8 @@ try:
         if motor(p).Power!=0 or abs(motor(p).AngularVelocityDegreesPerSecond)>1:raise Exception('Python STOP left motor active: '+str(p))
     result={'passed':True,'observations':observations}
 except Exception as error:
-    result={'passed':False,'error':str(error),'observations':observations}
+    result={'passed':False,'error':str(error),'observations':observations,
+            'resetBreadcrumb':[int(bus.ReadDoubleWord(0x2001ffc0+4*i)) for i in range(16)],
+            'ramlog':bytearray(bus.ReadBytes(_bw_nuttx_config['ramlogBase'],_bw_nuttx_config['ramlogSize'])).decode('latin-1'),
+            'motors':{chr(65+p):{'position':float(motor(p).PositionDegrees),'speed':float(motor(p).AngularVelocityDegreesPerSecond),'power':int(motor(p).Power)} for p in range(6)}}
 f=open(_bw_nuttx_config['result'],'w');json.dump(result,f);f.close()
