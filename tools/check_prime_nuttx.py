@@ -40,6 +40,7 @@ def main():
     parser.add_argument('--infrastructure', type=Path, required=True)
     parser.add_argument('--renode', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--storage-test', action='store_true', help='Save native/Python programs and restore flash in fresh processes')
     parser.add_argument('--timeout-seconds', type=int, default=600)
     args = parser.parse_args()
     if not 60 <= args.timeout_seconds <= 1800: raise ValueError('qualification timeout must be 60-1800 seconds')
@@ -63,26 +64,37 @@ def main():
     output.mkdir(mode=0o700, parents=True)
     runtime = output / 'runtime'
     stage(args.infrastructure.resolve(), runtime, True)
-    config = output / 'config.json'
-    config.write_text(json.dumps({'tools': str(root / 'tools'), 'programMailbox': base, 'ramlogBase': ramlog_base, 'ramlogSize': ramlog_size, 'result': str(output / 'result.json')}))
-    config.chmod(0o600)
-    scenario = output / 'check.resc'
-    scenario.write_text('\n'.join((
-        'include @' + str(runtime / 'models.cs'), 'mach create',
-        'machine LoadPlatformDescription @' + str(runtime / 'platforms/boards/spike-prime.repl'),
-        'emulation CreatePrimeElectricalPorts "machine-0"', 'sysbus LoadELF @' + str(kernel),
-        'sysbus LoadELF @' + str(user), 'cpu VectorTableOffset 0x08008000',
-        'cpu SP ' + str(sp), 'cpu PC ' + str(pc), 'emulation RunFor "1.0"',
-        'python "import json; _bw_nuttx_config=json.load(open(\'' + str(config) + '\'))"',
-        'python "execfile(\'' + str(root / 'tests/firmware/nuttx-robot-fixture.py') + '\')"', 'quit', '')))
-    with (output / 'run.log').open('wb') as log:
-        result = subprocess.run([str(args.renode.resolve()), '--disable-xwt', '--console', '--plain', str(scenario)],
-                                stdout=log, stderr=subprocess.STDOUT, timeout=args.timeout_seconds)
-    report = output / 'result.json'
-    if result.returncode or not report.exists() or json.loads(report.read_text()).get('passed') is not True:
-        raise SystemExit('Full NuttX robot scenarios failed; inspect private output')
-    report.chmod(0o600)
-    print('Full protected NuttX robot program scenarios passed.')
+    phases = ('write', 'native', 'python') if args.storage_test else ('robot',)
+    for phase in phases:
+        config = output / (phase + '-config.json' if args.storage_test else 'config.json')
+        report = output / (phase + '-result.json') if args.storage_test else output / 'result.json'
+        settings = {'tools': str(root / 'tools'), 'programMailbox': base,
+                    'ramlogBase': ramlog_base, 'ramlogSize': ramlog_size,
+                    'result': str(report), 'phase': phase, 'output': str(output)}
+        config.write_text(json.dumps(settings))
+        config.chmod(0o600)
+        lines = ['include @' + str(runtime / 'models.cs'), 'mach create',
+            'machine LoadPlatformDescription @' + str(runtime / 'platforms/boards/spike-prime.repl'),
+            'emulation CreatePrimeElectricalPorts "machine-0"', 'sysbus LoadELF @' + str(kernel),
+            'sysbus LoadELF @' + str(user), 'cpu VectorTableOffset 0x08008000',
+            'cpu SP ' + str(sp), 'cpu PC ' + str(pc),
+            'python "import json; _bw_nuttx_config=json.load(open(\'' + str(config) + '\'))"']
+        if args.storage_test and phase != 'write':
+            lines += ['python "from System.IO import File; storage=self.Machine[\'sysbus.spi2.primeStorageMux.primeStorage\']; storage.UnderlyingMemory.WriteBytes(0,File.ReadAllBytes(\'' + str(output / (phase + '-flash.bin')) + '\'))"']
+        fixture = 'nuttx-storage-fixture.py' if args.storage_test else 'nuttx-robot-fixture.py'
+        lines += ['emulation RunFor "1.0"',
+            'python "execfile(\'' + str(root / 'tests/firmware' / fixture) + '\')"', 'quit', '']
+        scenario = output / (phase + '.resc' if args.storage_test else 'check.resc')
+        scenario.write_text('\n'.join(lines))
+        scenario.chmod(0o600)
+        with (output / (phase + '-run.log' if args.storage_test else 'run.log')).open('wb') as log:
+            result = subprocess.run([str(args.renode.resolve()), '--disable-xwt', '--console', '--plain', str(scenario)],
+                                    stdout=log, stderr=subprocess.STDOUT, timeout=args.timeout_seconds)
+        if result.returncode or not report.exists() or json.loads(report.read_text()).get('passed') is not True:
+            raise SystemExit('Full NuttX ' + phase + ' scenarios failed; inspect private output')
+        report.chmod(0o600)
+        for snapshot in output.glob('*-flash.bin'): snapshot.chmod(0o600)
+    print('Full protected NuttX ' + ('restart persistence' if args.storage_test else 'robot program') + ' scenarios passed.')
 
 
 if __name__ == '__main__':

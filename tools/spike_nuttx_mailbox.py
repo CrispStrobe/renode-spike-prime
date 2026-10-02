@@ -36,7 +36,7 @@ def validate_packet(packet):
     if packet[0] != 0x70 or packet[1] != 1 or packet[3] != 0:
         raise ValueError('unsupported program packet header')
     op = packet[2]
-    if op not in range(8) or (op in (0, 7) and len(packet) != 16) or (op == 1 and not 11 <= len(packet) <= 20) or (op in (2, 3, 4, 5, 6) and len(packet) != 8):
+    if op not in range(10) or (op in (0, 7) and len(packet) != 16) or (op == 1 and not 11 <= len(packet) <= 20) or (op in (2, 3, 4, 5, 6, 8, 9) and len(packet) != 8):
         raise ValueError('unsupported program packet operation/length')
     if not any(packet[4:8]) and op != 5:
         raise ValueError('program id must be nonzero')
@@ -71,7 +71,7 @@ def reply(base, sequence, read_word, read_bytes):
     packet = [int(v) for v in read_bytes(base + 40, 20)]
     if int(read_word(base + 36)) != sequence:
         return None
-    if len(packet) != 20 or packet[0] != 0x71 or packet[1] != 1 or packet[2] > 7 or packet[3] > 5:
+    if len(packet) != 20 or packet[0] != 0x71 or packet[1] != 1 or packet[2] > 9 or packet[3] > 5:
         raise ValueError('invalid full-firmware program reply')
     return packet
 
