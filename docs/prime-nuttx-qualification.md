@@ -159,3 +159,14 @@ two-second guard; startup remains bounded to 60 seconds and the process to
 means its final storage outcome is unknown, and does not roll back firmware
 I/O. No arbitrary path, memory address, firmware instruction or auto-run is
 accepted by this operation.
+
+## Timer rollover qualification
+
+The source-model runner checks exact ascending edge-aligned counter values at
+ARR and after rollover for both 16-bit and 32-bit timers. It checks compare at
+zero and ARR with update interrupts enabled or masked, plus reset, preload and
+mode transitions. The ARR compare precedes overflow by one timer tick. This
+avoids the missed maximum-count compare observed during full-firmware control.
+Descending and center-aligned counting retain their existing behavior and are
+not qualified for complete hardware accuracy. The Renode submodule pins the
+reviewed model fix; no firmware timing tolerance is widened.

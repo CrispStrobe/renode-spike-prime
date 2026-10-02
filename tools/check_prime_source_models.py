@@ -18,9 +18,9 @@ def prepare(infrastructure, output):
     stage(infrastructure, output, True)
     source_root = infrastructure / 'src/Emulator/Peripherals/Test/PeripheralsTests'
     imports, bodies = set(), []
-    for name in ('STM32TLCClockTests.cs', 'LegoLpf2ElectricalPortTests.cs', 'STM32F4I2CStreamTests.cs', 'STM32ADCTriggerTests.cs', 'STM32SPIDmaReadTests.cs', 'STM32TimerRolloverTests.cs', 'STM32TimerSoftwareEventTests.cs'):
+    for name in ('STM32TLCClockTests.cs', 'LegoLpf2ElectricalPortTests.cs', 'STM32F4I2CStreamTests.cs', 'STM32ADCTriggerTests.cs', 'STM32SPIDmaReadTests.cs', 'STM32TimerRolloverTests.cs', 'STM32TimerSoftwareEventTests.cs', 'STM32TimerInclusivePeriodTests.cs'):
         source = (source_root / name).read_text().replace('using NUnit.Framework;', '')
-        source = re.sub(r'\[(?:TestFixture|NonParallelizable|SetUp|TearDown|Test|TestCase\(\d+\))\]', '', source)
+        source = re.sub(r'\[(?:TestFixture|NonParallelizable|SetUp|TearDown|Test|TestCase\([^\]]+\))\]', '', source)
         source = source.replace('Assert.', 'SourceAssert.')
         for original in CORE.values():
             source = re.sub(r'\b' + original + r'\b', 'Brickwright' + original, source)
@@ -35,7 +35,7 @@ public static class SourceAssert {
         try { return System.Convert.ToDecimal(a)==System.Convert.ToDecimal(b); }
         catch(System.Exception) { return false; }
     }
-    public static void AreEqual(object a,object b) { if(!Equal(a,b))throw new System.Exception("source fixture equality failed: "+a+" / "+b); }
+    public static void AreEqual(object a,object b,string message=null) { if(!Equal(a,b))throw new System.Exception("source fixture equality failed: "+a+" / "+b+" "+message); }
     public static void IsTrue(bool value) { if(!value)throw new System.Exception("source fixture expected true"); }
     public static void IsFalse(bool value) { if(value)throw new System.Exception("source fixture expected false"); }
     public static void AreNotEqual(object a,object b) { if(Equal(a,b))throw new System.Exception("source fixture inequality failed"); }
@@ -61,8 +61,19 @@ public static class PrimeSourceFixtureRunner {
         software.SetUp();try { software.ShouldKeepUpdateGenerationSeparateFromCompareGeneration(); } finally { software.TearDown(); }
         software.SetUp();try { software.ShouldLatchNaturalOutputCompareWhileInterruptMasked(); } finally { software.TearDown(); }
         software.SetUp();try { software.ShouldLatchZeroOutputCompareAtRolloverWhileInterruptMasked(); } finally { software.TearDown(); }
+        var inclusive=new Antmicro.Renode.PeripheralsTests.STM32TimerInclusivePeriodTests();
+        foreach(var arr in new[]{65535u,uint.MaxValue}) {
+            inclusive.SetUp();try { inclusive.ShouldCountThroughArrBeforeWrapping(arr); } finally { inclusive.TearDown(); }
+            foreach(var compareZero in new[]{false,true}) {
+                foreach(var updateEnabled in new[]{false,true}) {
+                    inclusive.SetUp();try { inclusive.ShouldDeliverBoundaryCompare(arr,compareZero,updateEnabled); } finally { inclusive.TearDown(); }
+                }
+            }
+        }
+        inclusive.SetUp();try { inclusive.ShouldKeepPreloadedArrUntilRolloverAcrossControlWrites(); } finally { inclusive.TearDown(); }
+        inclusive.SetUp();try { inclusive.ShouldRetainLegacyDescendingAndCenterAlignedPeriods(); } finally { inclusive.TearDown(); }
         var electrical=ElectricalTests.RunElectricalTests(emulation);
-        return "PASS ''' + str(len(clock_methods)) + ''' display-clock fixtures; 4 I2C stream fixtures; ADC trigger/halfword fixture; repeated SPI DMA read fixture; 3 timer rollover fixtures; 9 timer software-event fixtures; "+electrical;
+        return "PASS ''' + str(len(clock_methods)) + ''' display-clock fixtures; 4 I2C stream fixtures; ADC trigger/halfword fixture; repeated SPI DMA read fixture; 3 timer rollover fixtures; 9 timer software-event fixtures; 12 inclusive-period fixtures; "+electrical;
     }
     public static string CheckPrimeWiring(this Antmicro.Renode.Core.Emulation emulation) {
         Antmicro.Renode.Core.IMachine machine;
@@ -148,6 +159,6 @@ if __name__ == '__main__':
     with (output / 'test.log').open('wb') as log:
         result = subprocess.run([str(args.renode.resolve()), '--disable-xwt', '--console', '--plain', str(output / 'test.resc')], stdout=log, stderr=subprocess.STDOUT, timeout=180)
     transcript = (output / 'test.log').read_text(errors='replace')
-    if result.returncode or 'PASS 9 display-clock fixtures; 4 I2C stream fixtures; ADC trigger/halfword fixture; repeated SPI DMA read fixture; 3 timer rollover fixtures; 9 timer software-event fixtures; PASS 29 electrical' not in transcript or 'PASS 6 Prime UART endpoint' not in transcript or 'There was an error' in transcript:
+    if result.returncode or 'PASS 9 display-clock fixtures; 4 I2C stream fixtures; ADC trigger/halfword fixture; repeated SPI DMA read fixture; 3 timer rollover fixtures; 9 timer software-event fixtures; 12 inclusive-period fixtures; PASS 29 electrical' not in transcript or 'PASS 6 Prime UART endpoint' not in transcript or 'There was an error' in transcript:
         raise SystemExit('Prime source model checks failed; inspect test.log')
     print('Prime source model and wiring checks passed.')
