@@ -40,6 +40,7 @@ def main():
     parser.add_argument('--infrastructure', type=Path, required=True)
     parser.add_argument('--renode', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--trace-scheduler', action='store_true', help='Log TIM9 register access for private diagnosis')
     parser.add_argument('--storage-test', action='store_true', help='Save native/Python programs and restore flash in fresh processes')
     parser.add_argument('--timeout-seconds', type=int, default=600)
     args = parser.parse_args()
@@ -82,14 +83,25 @@ def main():
         if args.storage_test and phase != 'write':
             lines += ['python "from System.IO import File; storage=self.Machine[\'sysbus.spi2.primeStorageMux.primeStorage\']; storage.UnderlyingMemory.WriteBytes(0,File.ReadAllBytes(\'' + str(output / (phase + '-flash.bin')) + '\'))"']
         fixture = 'nuttx-storage-fixture.py' if args.storage_test else 'nuttx-robot-fixture.py'
+        if args.trace_scheduler:
+            lines += ['sysbus LogPeripheralAccess timer9 true']
         lines += ['emulation RunFor "1.0"',
-            'python "execfile(\'' + str(root / 'tests/firmware' / fixture) + '\')"', 'quit', '']
+            'python "execfile(\'' + str(root / 'tests/firmware' / fixture) + '\')"']
+        if args.storage_test:
+            lines += ['cpu PC', 'sysbus ReadDoubleWord 0xe000ed04',
+                      'sysbus ReadDoubleWord 0xe000ed28', 'sysbus ReadDoubleWord 0xe000ed34',
+                      'sysbus ReadDoubleWord 0x40014000', 'sysbus ReadDoubleWord 0x4001400c',
+                      'sysbus ReadDoubleWord 0x40014010', 'sysbus ReadDoubleWord 0x40014024',
+                      'sysbus ReadDoubleWord 0x40014028', 'sysbus ReadDoubleWord 0x4001402c',
+                      'sysbus ReadDoubleWord 0x40014034']
+        lines += ['quit', '']
         scenario = output / (phase + '.resc' if args.storage_test else 'check.resc')
         scenario.write_text('\n'.join(lines))
         scenario.chmod(0o600)
         with (output / (phase + '-run.log' if args.storage_test else 'run.log')).open('wb') as log:
             result = subprocess.run([str(args.renode.resolve()), '--disable-xwt', '--console', '--plain', str(scenario)],
                                     stdout=log, stderr=subprocess.STDOUT, timeout=args.timeout_seconds)
+        if report.exists(): report.chmod(0o600)
         if result.returncode or not report.exists() or json.loads(report.read_text()).get('passed') is not True:
             raise SystemExit('Full NuttX ' + phase + ' scenarios failed; inspect private output')
         report.chmod(0o600)

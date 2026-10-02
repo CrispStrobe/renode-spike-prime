@@ -21,7 +21,7 @@ def exchange(packet,expected=0):
             reply=bytearray(reply);rc=struct.unpack('<i',str(reply[8:12]))[0]
             if rc!=expected:raise Exception('unexpected result '+str(rc)+' expected '+str(expected))
             return reply
-    raise Exception('packet timeout')
+    raise Exception('packet timeout: op='+str(ord(packet[2]))+' length='+str(len(packet))+' seq='+str(seq)+' prefix='+repr(packet[:10])+' state='+str(mb.status(base,bus.ReadDoubleWord,bus.ReadBytes)))
 def crc(data):
     value=0xffffffff
     for byte in bytearray(data):
@@ -47,10 +47,13 @@ try:
     if status('boot-empty')['state']!=0:raise Exception('unexpected automatic execution/load')
     if phase=='write':
         exchange(header(9,301),-2)
-        upload(301,struct.pack('<8i',2,50,0,0,0,0,0,0)+'\x00'*(254*16))
+        payload=struct.pack('<4i',2,50,0,0)
+        for row in range(1,255):payload+=struct.pack('<4i',4,row+1,0,0)
+        payload+=struct.pack('<4i',0,0,0,0)
+        upload(301,payload)
         exchange(header(8,301));snapshot('native')
         exchange(header(3,301));exchange(header(8,301),-16)
-        run(100)
+        run(200)
         if status('native-complete')['state']!=3:raise Exception('native failed')
         source='assert sum(range(11)) == 55\n#'
         upload(302,source+' '*(4095-len(source)),True)
@@ -62,10 +65,15 @@ try:
         if status('wrong-id-preserved')['id']!=302:raise Exception('failed load replaced committed program')
     else:
         ident=301 if phase=='native' else 302
-        exchange(header(9,ident))
+        reply=exchange(header(9,ident))
+        count=struct.unpack('<H',str(reply[14:16]))[0]
+        if count!=(256 if phase=='native' else 4095):raise Exception('restored program count mismatch: '+str(count))
+        observations.append({'scenario':'restored-count','count':count})
         if status('restored-ready')['state']!=1:raise Exception('load did not leave READY')
-        exchange(header(3,ident));run(100)
+        exchange(header(3,ident));run(200)
         if status('restored-complete')['state']!=3:raise Exception('restored execution failed')
     result={'passed':True,'observations':observations}
-except Exception as error:result={'passed':False,'error':str(error),'observations':observations}
+except Exception as error:
+    result={'passed':False,'error':str(error),'observations':observations}
+    result['ramlog']=''.join(chr(int(b)) for b in bus.ReadBytes(_bw_nuttx_config['ramlogBase'],_bw_nuttx_config['ramlogSize']))
 f=open(_bw_nuttx_config['result'],'w');json.dump(result,f);f.close()
