@@ -43,6 +43,16 @@ class MailboxTests(unittest.TestCase):
                 mailbox.validate_base(base)
         self.assertEqual(self.writes, [])
 
+    def test_storage_operations_have_no_path_or_extra_payload(self):
+        for op in (8, 9):
+            packet = [0x70, 1, op, 0, 42, 0, 0, 0]
+            self.assertEqual(list(mailbox.validate_packet(packet)), packet)
+            for bad in (packet + [0], packet[:7], packet[:4] + [0]*4):
+                with self.assertRaises(ValueError):
+                    mailbox.validate_packet(bad)
+        with self.assertRaises(ValueError):
+            mailbox.validate_packet([0x70, 1, 10, 0, 42, 0, 0, 0])
+
     def test_transaction_and_reply_correlation(self):
         packet = [0x70, 1, 5, 0, 0, 0, 0, 0]
         seq = mailbox.submit(self.base, packet, self.read, self.write)

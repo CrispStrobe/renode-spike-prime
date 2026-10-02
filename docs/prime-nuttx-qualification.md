@@ -64,8 +64,8 @@ byte-width SPI path used by this firmware. General FIFO packing across unequal
 memory/peripheral widths and memory bursts are not qualified.
 
 These tests do not establish physical accuracy or complete firmware/API
-compatibility. USB OTG, a working BLE radio/link, filesystem file operations
-and persistence across emulator restarts, and runtime MPU isolation need
+compatibility. USB OTG, a working BLE radio/link, power-loss durability and wider filesystem
+operations, and runtime MPU isolation need
 further qualification. Cold full-image startup
 is expensive on a busy host; desktop launch retains its existing hard limits.
 
@@ -73,3 +73,43 @@ is expensive on a busy host; desktop launch retains its existing hard limits.
 user-supplied local image. It does not download or package images, and a CPU
 probe does not qualify robot-program execution, peripherals or an arena
 backend. Original firmware inputs and their run records stay private.
+
+## Program file and restart qualification
+
+With a source-built firmware implementing SAVE (8) and LOAD (9), run:
+
+```sh
+python3 tools/check_prime_nuttx.py \
+  --firmware-root /path/to/brickwright-spike-prime-fw \
+  --infrastructure /path/to/renode-infrastructure-spike-prime \
+  --renode /path/to/renode \
+  --storage-test --output /private/new-program-persistence-check
+```
+
+This writes maximum-size native (256 rows) and completed Python (4095 source
+bytes) programs through the firmware's
+packet service, snapshots only the synthetic external flash, and starts
+separate emulator processes to restore, load and execute each program. It
+checks missing/wrong IDs, upload/execution busy rejection, READY after load
+and no automatic load on boot. Generated flash snapshots are private local
+test artifacts; the launcher does not accept client-selected storage paths.
+A passing test establishes the tested clean-restart cases, not power-loss
+durability, physical flash timing or full filesystem compatibility.
+
+On 2026-10-02, the source-built protected firmware passed the SAVE/LOAD
+write phase and both fresh-process restart phases for native and completed
+Python programs. The full robot suite also passed after the lifecycle change
+that retains the Python language flag while waiting for motors to stop.
+These observations qualify only the scenarios above.
+
+The zero-compare timer regression also has a source-only mutation check:
+
+```sh
+python3 tools/check_prime_timer_mutation.py \
+  --infrastructure /path/to/renode-infrastructure-spike-prime \
+  --renode /path/to/renode \
+  --output /private/new-timer-mutation-check
+```
+
+It removes the rollover flag update from a staged copy and requires the
+fixture to fail with the missing interrupt count. It does not load firmware.
