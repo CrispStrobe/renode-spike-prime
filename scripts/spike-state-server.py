@@ -83,7 +83,7 @@ def _snapshot(config, seq, generation):
                 Thread.Sleep(1)
         return spike_arena_mailbox.snapshot(data, config["identity"], seq, generation)
     if config["identity"]["board"] == "ev3":
-        clock = int(emulationManager.CurrentEmulation.MasterTimeSource.ElapsedVirtualTime.Ticks) * 100
+        clock = int(emulationManager.CurrentEmulation.MasterTimeSource.ElapsedVirtualTime.TotalNanoseconds)
         return ev3_state_observer.observe(config, _resolve, seq, clock, generation)
     paths, ports, motors, sensors, topology = config["paths"], [], [], [], 0
     for port_id in "ABCDEF":
@@ -144,7 +144,7 @@ def _snapshot(config, seq, generation):
                     if storage_request is not None:
                         lifecycle["nuttxProgramStorage"] = storage_request
     identity["limitations"] = ["state is model output, not physical hardware"]
-    clock = int(emulationManager.CurrentEmulation.MasterTimeSource.ElapsedVirtualTime.Ticks) * 100
+    clock = int(emulationManager.CurrentEmulation.MasterTimeSource.ElapsedVirtualTime.TotalNanoseconds)
     return {"schemaVersion": 1, "type": "snapshot", "seq": seq, "clockNs": clock,
             "target": identity, "lifecycle": lifecycle, "ports": ports, "motors": motors,
             "sensors": sensors, "display": {"width": width, "height": height,
