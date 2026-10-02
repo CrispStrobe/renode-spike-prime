@@ -88,6 +88,16 @@ try:
     if observe('python-six-cancelled')['state']!=4:raise Exception('Python STOP not retained')
     for p in range(6):
         if motor(p).Power!=0 or abs(motor(p).AngularVelocityDegreesPerSecond)>1:raise Exception('Python STOP left motor active: '+str(p))
+    # Keep running beyond the former unattended-radio reset point.
+    state=observe('six-port-long-run-start')
+    wait=max(1000,12000-state['clockMs'])
+    upload(270,struct.pack('<8i',2,wait,0,0,0,0,0,0))
+    for attempt in range(150):
+        run(100)
+        state=observe('six-port-long-run')
+        if state['state'] in (3,5):break
+    complete('long-lived six-port firmware',state)
+    if state['clockMs']<12000:raise Exception('long-run did not cross reset regression boundary')
     result={'passed':True,'observations':observations}
 except Exception as error:
     result={'passed':False,'error':str(error),'observations':observations,
