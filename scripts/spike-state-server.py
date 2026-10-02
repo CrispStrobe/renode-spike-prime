@@ -59,7 +59,26 @@ def _kind(device):
 def _snapshot(config, seq, generation):
     if config["identity"].get("firmware") == "brickwright-arena-demo":
         bus = monitor.Machine.SystemBus
-        data = spike_arena_mailbox.read_state(lambda address, count: bus.ReadBytes(address, count), bus.ReadDoubleWord)
+        try:
+            data = spike_arena_mailbox.read_state(lambda address, count: bus.ReadBytes(address, count), bus.ReadDoubleWord)
+        except ValueError as error:
+            if str(error) != 'arena guest frame changed during observation': raise
+            # Timer-driven programs can change during all bounded optimistic reads.
+            # A pause can land inside the guest's publication interrupt, with
+            # its output sequence still odd. Release between bounded attempts
+            # so normal execution can finish publishing. Never step guest time,
+            # issue a GDB halt, or accept an incomplete/mixed frame.
+            for attempt in range(3):
+                paused = monitor.Machine.ObtainPausedState(True)
+                try:
+                    try:
+                        data = spike_arena_mailbox.read_state(lambda address, count: bus.ReadBytes(address, count), bus.ReadDoubleWord)
+                        break
+                    except ValueError as retry_error:
+                        if str(retry_error) != 'arena guest frame changed during observation' or attempt == 2: raise
+                finally:
+                    paused.Dispose()
+                Thread.Sleep(1)
         return spike_arena_mailbox.snapshot(data, config["identity"], seq, generation)
     if config["identity"]["board"] == "ev3":
         clock = int(emulationManager.CurrentEmulation.MasterTimeSource.ElapsedVirtualTime.Ticks) * 100
@@ -122,6 +141,16 @@ def _dispatch(config, command):
     paths, name, args = config["paths"], command["command"], command["arguments"]
     if name == "state.sample":
         if args: raise ValueError("state.sample takes no arguments")
+        return
+    if name == "arena.program.load":
+        if config["identity"].get("firmware") != "brickwright-arena-demo" or config["identity"].get("transport") != "none":
+            raise ValueError("arena program requires our simulation guest")
+        paused = monitor.Machine.ObtainPausedState(True)
+        try:
+            bus = monitor.Machine.SystemBus
+            spike_arena_mailbox.write_program(args, bus.ReadDoubleWord, bus.WriteDoubleWord)
+        finally:
+            paused.Dispose()
         return
     if name == "arena.inputs":
         if config["identity"].get("firmware") == "brickwright-arena-demo" and config["identity"].get("transport") == "none":

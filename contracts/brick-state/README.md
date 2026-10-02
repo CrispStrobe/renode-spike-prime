@@ -84,3 +84,26 @@ unknown commands, replayed requests and stale sequences are rejected. Samples
 are requested on demand under Renode's paused-state guard; there is no
 unbounded wall-clock publisher. Frame events are a separate video-model API;
 the neutral stream carries bounded defensive grayscale snapshots.
+
+The simulation-only arena guest can advertise `arena-program/v1` alongside
+`arena-inputs/v1`, `arena-clock/v1`, `guest-motor-output/v1` and
+`state-sample/v1`. Only that capability permits `arena.program.load` on the
+local semantic stream. The arguments contain exactly `version: 1` and
+`instructions`, a list of 1–256 four-integer instructions. The last instruction
+is END. Every opcode, port, value and branch target is validated before any
+write; see `tools/spike_arena_mailbox.py` and our firmware's
+`simulation/arena-demo/README.md` for the ABI. These are data instructions for
+our guest, never memory addresses, executable uploads or monitor text.
+
+Program-capable snapshots include `lifecycle.arenaProgram` with integer
+`status` (0 unloaded, 1 running, 2 stationary completion, 3 fault), `pc` and
+`error`. Encoders remain degrees, `speedDps` is degrees/second, and `speed`
+is percentage of the synthetic medium motor's 1110 degrees/second. Older
+demo-only frames retain their published 300 degrees/second percentage scale.
+The upload is single-use per owned session and commits under a paused-state
+scope. Optimistic motor/sensor observations still use the sequence protocol;
+a torn frame retries at most three times under disposed paused-state scopes.
+If a pause lands inside the publication interrupt, a 1 ms host yield between
+attempts lets normal guest execution finish publishing. No guest-time step or
+GDB halt is injected. Uninitialized/invalid frames never retry or become
+accepted state.
