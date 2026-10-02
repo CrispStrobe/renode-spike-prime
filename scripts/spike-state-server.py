@@ -64,13 +64,21 @@ def _snapshot(config, seq, generation):
         except ValueError as error:
             if str(error) != 'arena guest frame changed during observation': raise
             # Timer-driven programs can change during all bounded optimistic reads.
-            # Retry once under the emulator's paused-state scope; guest time is
-            # preserved and this never becomes a GDB halt or a mixed frame.
-            paused = monitor.Machine.ObtainPausedState(True)
-            try:
-                data = spike_arena_mailbox.read_state(lambda address, count: bus.ReadBytes(address, count), bus.ReadDoubleWord)
-            finally:
-                paused.Dispose()
+            # A pause can land inside the guest's publication interrupt, with
+            # its output sequence still odd. Release between bounded attempts
+            # so normal execution can finish publishing. Never step guest time,
+            # issue a GDB halt, or accept an incomplete/mixed frame.
+            for attempt in range(3):
+                paused = monitor.Machine.ObtainPausedState(True)
+                try:
+                    try:
+                        data = spike_arena_mailbox.read_state(lambda address, count: bus.ReadBytes(address, count), bus.ReadDoubleWord)
+                        break
+                    except ValueError as retry_error:
+                        if str(retry_error) != 'arena guest frame changed during observation' or attempt == 2: raise
+                finally:
+                    paused.Dispose()
+                Thread.Sleep(1)
         return spike_arena_mailbox.snapshot(data, config["identity"], seq, generation)
     if config["identity"]["board"] == "ev3":
         clock = int(emulationManager.CurrentEmulation.MasterTimeSource.ElapsedVirtualTime.Ticks) * 100

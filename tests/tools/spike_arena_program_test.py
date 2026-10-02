@@ -34,7 +34,7 @@ class ProgramTests(unittest.TestCase):
     def test_boundary_sensor_and_jump_instructions(self):
         m.validate_program({'version':1,'instructions':[[3,1,65535,0],[3,4,255,0],[5,3,1,4],[6,0,-36000,1110],[4,0,0,0],[0,0,0,0]]})
 class SnapshotTests(unittest.TestCase):
-    def test_torn_observation_retries_once_paused_and_releases_scope(self):
+    def test_torn_observation_has_bounded_recovery_and_releases_every_scope(self):
         root=pathlib.Path(__file__).resolve().parents[2]
         tree=ast.parse((root/'scripts/spike-state-server.py').read_text())
         fn=next(node for node in tree.body if isinstance(node,ast.FunctionDef) and node.name=='_snapshot')
@@ -47,10 +47,28 @@ class SnapshotTests(unittest.TestCase):
             if len(calls)==1: raise ValueError('arena guest frame changed during observation')
             return 'coherent'
         mailbox=types.SimpleNamespace(read_state=read,snapshot=lambda data,*args:data)
-        namespace={'monitor':types.SimpleNamespace(Machine=machine),'spike_arena_mailbox':mailbox}
+        namespace={'monitor':types.SimpleNamespace(Machine=machine),'spike_arena_mailbox':mailbox,
+                   'Thread':types.SimpleNamespace(Sleep=lambda value:calls.append('yield'))}
         exec(compile(ast.Module(body=[fn],type_ignores=[]),'monitor-snapshot-test','exec'),namespace)
         self.assertEqual(namespace['_snapshot']({'identity':{'firmware':'brickwright-arena-demo'}},1,1),'coherent')
         self.assertEqual(calls,['read','pause','read','release'])
+        calls.clear()
+        remaining=[2]
+        def interrupted(*args):
+            calls.append('read')
+            if remaining[0]:
+                remaining[0]-=1
+                raise ValueError('arena guest frame changed during observation')
+            return 'coherent'
+        mailbox.read_state=interrupted
+        self.assertEqual(namespace['_snapshot']({'identity':{'firmware':'brickwright-arena-demo'}},1,1),'coherent')
+        self.assertEqual(calls,['read','pause','read','release','yield','pause','read','release'])
+        calls.clear()
+        remaining[0]=10
+        with self.assertRaisesRegex(ValueError,'changed'):namespace['_snapshot']({'identity':{'firmware':'brickwright-arena-demo'}},1,1)
+        self.assertEqual(calls.count('pause'),3)
+        self.assertEqual(calls.count('release'),3)
+        self.assertEqual(calls.count('yield'),2)
         calls.clear()
         mailbox.read_state=lambda *args:(_ for _ in ()).throw(ValueError('arena guest has not initialized its mailbox'))
         with self.assertRaisesRegex(ValueError,'initialized'):namespace['_snapshot']({'identity':{'firmware':'brickwright-arena-demo'}},1,1)

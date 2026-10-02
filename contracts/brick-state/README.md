@@ -102,5 +102,8 @@ is percentage of the synthetic medium motor's 1110 degrees/second. Older
 demo-only frames retain their published 300 degrees/second percentage scale.
 The upload is single-use per owned session and commits under a paused-state
 scope. Optimistic motor/sensor observations still use the sequence protocol;
-a torn frame retries once under a paused-state scope without advancing guest
-time. Uninitialized/invalid frames do not retry or become accepted state.
+a torn frame retries at most three times under disposed paused-state scopes.
+If a pause lands inside the publication interrupt, a 1 ms host yield between
+attempts lets normal guest execution finish publishing. No guest-time step or
+GDB halt is injected. Uninitialized/invalid frames never retry or become
+accepted state.
