@@ -55,8 +55,13 @@ blocks after CPU command reads in both direct and FIFO modes, LPF2 discovery/ele
 motor drive, display-clock behavior and actual UART endpoint wiring. A
 mutation disconnecting the ADC trigger is detected by its scan fixture.
 
-Storage qualification requires the source-built firmware to format and mount
-a blank W25Q256 model as LittleFS before running robot programs. SPI2 receive
+Routine qualification seeds the synthetic W25Q256 filesystem partition at
+`0x100000` with an 8192-byte empty LittleFS prefix generated from the reviewed
+retained filesystem source. The formatter verifies a read-only mount and empty
+root before creating its output; remaining flash stays erased. This avoids a
+lengthy initial scan without changing firmware preservation checks. Use
+`--blank-flash-test` to exercise erased-flash initialization separately. A seeded
+boot result does not establish blank-flash first-boot performance. SPI2 receive
 DMA is connected to DMA1 stream 3. Receive requests are withdrawn when CPU
 reads drain RXNE; each peripheral request transfers one peripheral data unit,
 even when a memory-side FIFO threshold is configured. These checks cover the

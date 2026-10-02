@@ -46,6 +46,19 @@ def upload(ident,payload,python=False):
 def complete(label,state):
     if state['state']!=3 or state['error']!=0:raise Exception(label+' did not complete: '+str(state))
 try:
+    # Board and shell startup can outlast filesystem mounting. Bound this
+    # qualification-only wait; production launch/packet limits are unchanged.
+    for boot_attempt in range(300):
+        try:
+            mb.status(base,bus.ReadDoubleWord,bus.ReadBytes)
+            break
+        except ValueError as error:
+            if str(error) not in ('full-firmware publication is not ready or changed',
+                                  'our full firmware has not initialized its packet mailbox'):
+                raise
+            run(10)
+    else:
+        raise Exception('program worker was not ready within 3 simulated seconds')
     def motor(port):return externals['port'+chr(65+port)].Device
     for port in range(6):
         initial=float(motor(port).PositionDegrees)

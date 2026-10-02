@@ -46,10 +46,23 @@ def upload(ident,payload,python=False):
 def complete(label,state):
     if state['state']!=3 or state['error']!=0:raise Exception(label+' did not complete: '+str(state))
 try:
+    # Board and shell startup can outlast filesystem mounting. Bound this
+    # qualification-only wait; production launch/packet limits are unchanged.
+    for boot_attempt in range(300):
+        try:
+            mb.status(base,bus.ReadDoubleWord,bus.ReadBytes)
+            break
+        except ValueError as error:
+            if str(error) not in ('full-firmware publication is not ready or changed',
+                                  'our full firmware has not initialized its packet mailbox'):
+                raise
+            run(10)
+    else:
+        raise Exception('program worker was not ready within 3 simulated seconds')
     bootlog=''.join(chr(int(byte)) for byte in bus.ReadBytes(_bw_nuttx_config['ramlogBase'],_bw_nuttx_config['ramlogSize']))
     if 'W25Q256: LittleFS mounted at /mnt/flash' not in bootlog:
         raise Exception('source-built firmware did not format and mount LittleFS')
-    observations.append({'scenario':'littlefs-blank-flash-mounted','passed':True})
+    observations.append({'scenario':('littlefs-source-generated-empty-mounted' if _bw_nuttx_config.get('sourceGeneratedEmptyFlash') else 'littlefs-blank-flash-mounted'),'passed':True})
     start=observe('boot-ready')
     payload=struct.pack('<8i',2,50,0,0,0,0,0,0)
     upload(101,payload)
@@ -106,5 +119,5 @@ try:
     apply_arena_inputs({'sensors':[],'loads':[{'port':'A','percent':0}]},device)
     result={'passed':True,'observations':observations}
 except Exception as error:
-    result={'passed':False,'error':str(error),'observations':observations, 'ports':{name:{'state':str(externals['port'+name].State),'time':int(externals['port'+name].EmulatedTimeMicroseconds),'frames':int(externals['port'+name].TransmittedFrames),'received':int(externals['port'+name].ReceivedFrames),'invalid':int(externals['port'+name].InvalidFrames)} for name in 'ABCDE'}}
+    result={'passed':False,'error':str(error),'observations':observations, 'ramlog':''.join(chr(int(byte)) for byte in bus.ReadBytes(_bw_nuttx_config['ramlogBase'],_bw_nuttx_config['ramlogSize'])), 'mailboxWords':[int(bus.ReadDoubleWord(base+offset)) for offset in range(0,112,4)], 'ports':{name:{'state':str(externals['port'+name].State),'time':int(externals['port'+name].EmulatedTimeMicroseconds),'frames':int(externals['port'+name].TransmittedFrames),'received':int(externals['port'+name].ReceivedFrames),'invalid':int(externals['port'+name].InvalidFrames)} for name in 'ABCDE'}}
 f=open(_bw_nuttx_config['result'],'w');json.dump(result,f);f.close()

@@ -12,6 +12,7 @@ from pathlib import Path
 import re
 import struct
 import subprocess
+import sys
 from stage_prime_runtime import stage
 from spike_nuttx_mailbox import validate_base
 
@@ -41,6 +42,7 @@ def main():
     parser.add_argument('--renode', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--trace-scheduler', action='store_true', help='Log TIM9 register access for private diagnosis')
+    parser.add_argument('--blank-flash-test', action='store_true', help='Qualify slow first-boot erased-flash scanning instead of a source-generated empty filesystem')
     parser.add_argument('--all-motors-test', action='store_true', help='Exercise native/Python control and cancellation on six attached motors')
     parser.add_argument('--storage-test', action='store_true', help='Save native/Python programs and restore flash in fresh processes')
     parser.add_argument('--timeout-seconds', type=int, default=600)
@@ -65,6 +67,14 @@ def main():
     if ramlog_size > 32768 or not 0x20000000 <= ramlog_base < ramlog_base + ramlog_size <= 0x20020000:
         raise ValueError('kernel RAM log exceeds the protected kernel memory')
     output.mkdir(mode=0o700, parents=True)
+    seed_tool = firmware / 'tools/make_simulation_littlefs_seed.py'
+    seed = None
+    if not args.blank_flash_test and seed_tool.is_file():
+        seed = output / 'initial-flash.bin'
+        subprocess.run([sys.executable, str(seed_tool), str(seed)], check=True)
+        if seed.stat().st_size != 8192: raise ValueError('empty filesystem seed exceeds its fixed size')
+    elif not args.blank_flash_test and (firmware / 'policy/nuttx-backports.json').exists():
+        raise ValueError('hardened firmware requires its source-generated empty filesystem tool')
     runtime = output / 'runtime'
     stage(args.infrastructure.resolve(), runtime, True)
     phases = ('write', 'native', 'python') if args.storage_test else ('robot',)
@@ -73,7 +83,8 @@ def main():
         report = output / (phase + '-result.json') if args.storage_test else output / 'result.json'
         settings = {'tools': str(root / 'tools'), 'programMailbox': base,
                     'ramlogBase': ramlog_base, 'ramlogSize': ramlog_size,
-                    'result': str(report), 'phase': phase, 'output': str(output)}
+                    'result': str(report), 'phase': phase, 'output': str(output),
+                    'sourceGeneratedEmptyFlash': seed is not None}
         config.write_text(json.dumps(settings))
         config.chmod(0o600)
         lines = ['include @' + str(runtime / 'models.cs'), 'mach create',
@@ -82,6 +93,8 @@ def main():
             'sysbus LoadELF @' + str(user), 'cpu VectorTableOffset 0x08008000',
             'cpu SP ' + str(sp), 'cpu PC ' + str(pc),
             'python "import json; _bw_nuttx_config=json.load(open(\'' + str(config) + '\'))"']
+        if seed is not None and (not args.storage_test or phase == 'write'):
+            lines += ['python "from System.IO import File; storage=self.Machine[\'sysbus.spi2.primeStorageMux.primeStorage\']; storage.UnderlyingMemory.WriteBytes(0x100000,File.ReadAllBytes(\'' + str(seed) + '\'))"']
         if args.all_motors_test:
             lines += ['port'+name+' Attach "motor"' for name in 'CDEF']
         if args.storage_test and phase != 'write':
