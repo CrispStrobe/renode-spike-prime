@@ -51,5 +51,15 @@ class MonitorProtocolTest(unittest.TestCase):
         for changes in invalid:
             with self.assertRaises(ValueError): validate_command(command(**changes))
 
+    def test_storage_marker_requires_full_firmware_and_flash_bounds(self):
+        value = config()
+        value.update(programMailbox=0x20021000, programStorageAbiAddress=0x08061234)
+        validate_config(value)
+        for address in (True, 0x20021000, 0x08061235, 0x08100000):
+            bad = dict(value, programStorageAbiAddress=address)
+            with self.assertRaises(ValueError): validate_config(bad)
+        del value['programMailbox']
+        with self.assertRaises(ValueError): validate_config(value)
+
 
 if __name__ == "__main__": unittest.main()

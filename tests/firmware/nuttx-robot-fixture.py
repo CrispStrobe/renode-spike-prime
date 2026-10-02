@@ -12,7 +12,13 @@ observations=[]
 def run(ms):
     emu.RunFor(TimeInterval.FromMilliseconds(ms))
 def observe(label):
-    state=mb.status(base,bus.ReadDoubleWord,bus.ReadBytes)
+    for attempt in range(10):
+        try:
+            state=mb.status(base,bus.ReadDoubleWord,bus.ReadBytes)
+            break
+        except ValueError as error:
+            if str(error)!='full-firmware publication is not ready or changed' or attempt==9:raise
+            run(1)
     observations.append({'scenario':label,'status':state})
     return state
 def exchange(packet):

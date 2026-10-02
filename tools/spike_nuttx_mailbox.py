@@ -23,6 +23,20 @@ def validate_base(base):
     return base
 
 
+def validate_storage_abi_address(address):
+    if isinstance(address, bool) or not isinstance(address, integer_types) or address % 4 or not 0x08060000 <= address <= 0x08100000 - 4:
+        raise ValueError('invalid full-firmware storage ABI marker')
+    return address
+
+
+def supports_storage(base, address, read_word):
+    if address is None:
+        return False
+    validate_storage_abi_address(address)
+    _header(base, read_word)
+    return int(read_word(address)) == 1
+
+
 def _header(base, read_word):
     validate_base(base)
     if int(read_word(base)) != MAGIC or int(read_word(base + 4)) != 1:

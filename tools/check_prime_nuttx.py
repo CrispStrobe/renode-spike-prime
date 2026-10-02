@@ -41,9 +41,11 @@ def main():
     parser.add_argument('--renode', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--trace-scheduler', action='store_true', help='Log TIM9 register access for private diagnosis')
+    parser.add_argument('--all-motors-test', action='store_true', help='Exercise native/Python control and cancellation on six attached motors')
     parser.add_argument('--storage-test', action='store_true', help='Save native/Python programs and restore flash in fresh processes')
     parser.add_argument('--timeout-seconds', type=int, default=600)
     args = parser.parse_args()
+    if args.storage_test and args.all_motors_test: raise ValueError('choose one qualification profile')
     if not 60 <= args.timeout_seconds <= 1800: raise ValueError('qualification timeout must be 60-1800 seconds')
     root = Path(__file__).resolve().parents[1]
     output, firmware = args.output.resolve(), args.firmware_root.resolve()
@@ -80,9 +82,11 @@ def main():
             'sysbus LoadELF @' + str(user), 'cpu VectorTableOffset 0x08008000',
             'cpu SP ' + str(sp), 'cpu PC ' + str(pc),
             'python "import json; _bw_nuttx_config=json.load(open(\'' + str(config) + '\'))"']
+        if args.all_motors_test:
+            lines += ['port'+name+' Attach "motor"' for name in 'CDEF']
         if args.storage_test and phase != 'write':
             lines += ['python "from System.IO import File; storage=self.Machine[\'sysbus.spi2.primeStorageMux.primeStorage\']; storage.UnderlyingMemory.WriteBytes(0,File.ReadAllBytes(\'' + str(output / (phase + '-flash.bin')) + '\'))"']
-        fixture = 'nuttx-storage-fixture.py' if args.storage_test else 'nuttx-robot-fixture.py'
+        fixture = 'nuttx-storage-fixture.py' if args.storage_test else ('nuttx-six-motor-fixture.py' if args.all_motors_test else 'nuttx-robot-fixture.py')
         if args.trace_scheduler:
             lines += ['sysbus LogPeripheralAccess timer9 true']
         lines += ['emulation RunFor "1.0"',

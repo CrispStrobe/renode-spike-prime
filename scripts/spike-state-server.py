@@ -135,6 +135,8 @@ def _snapshot(config, seq, generation):
                 if "pythonOutputMailbox" in config:
                     lifecycle["nuttxProgramOutput"] = spike_nuttx_mailbox.output(config["pythonOutputMailbox"], bus.ReadDoubleWord, bus.ReadBytes)
                 identity["capabilities"].append("nuttx-program/v1")
+                if spike_nuttx_mailbox.supports_storage(base, config.get("programStorageAbiAddress"), bus.ReadDoubleWord):
+                    identity["capabilities"].append("nuttx-program-storage/v1")
     identity["limitations"] = ["state is model output, not physical hardware"]
     clock = int(emulationManager.CurrentEmulation.MasterTimeSource.ElapsedVirtualTime.Ticks) * 100
     return {"schemaVersion": 1, "type": "snapshot", "seq": seq, "clockNs": clock,
@@ -164,6 +166,9 @@ def _dispatch(config, command):
         if set(args) != set(("bytes",)):
             raise ValueError("program packet takes bytes only")
         bus = monitor.Machine.SystemBus
+        packet = spike_nuttx_mailbox.validate_packet(args["bytes"])
+        if packet[2] in (8, 9) and not spike_nuttx_mailbox.supports_storage(config["programMailbox"], config.get("programStorageAbiAddress"), bus.ReadDoubleWord):
+            raise ValueError("program storage is not supported by this firmware")
         paused = monitor.Machine.ObtainPausedState(True)
         try:
             sequence = spike_nuttx_mailbox.submit(config["programMailbox"], args["bytes"], bus.ReadDoubleWord, bus.WriteDoubleWord)

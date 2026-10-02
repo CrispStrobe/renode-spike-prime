@@ -113,3 +113,25 @@ python3 tools/check_prime_timer_mutation.py \
 
 It removes the rollover flag update from a staged copy and requires the
 fixture to fail with the missing interrupt count. It does not load firmware.
+
+## Six motor connectors and storage discovery
+
+The electrical-port installer registers A–F. Its normal layout remains two
+motors, color, distance and force sensors, and an empty F connector. Motor
+bridge wiring is available on every connector when an explicit motor profile
+is attached. TIM3/TIM4 use AF2 and F spans GPIO banks C and B. The source
+fixtures check forward, reverse and braking against the actual installed
+bridge definitions on all six ports.
+
+Run firmware qualification with `--all-motors-test` and a new private output
+directory. It checks native speed and relative position on every port,
+concurrent activity, and native and embedded-Python cancellation. This
+profile changes virtual attachments before boot. The firmware debug mailbox
+retains its two-motor ABI; C–F motion is observed through the shared arena's
+port models.
+
+A packaged full firmware advertises `nuttx-program-storage/v1` only when
+its own ELF provides a read-only userspace-flash marker whose live ABI word
+is one and the program mailbox is initialized. Older packages stay
+unadvertised. Storage packets are checked again at the state service,
+and cannot supply memory addresses or file paths.

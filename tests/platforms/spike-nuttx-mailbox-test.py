@@ -53,6 +53,24 @@ class MailboxTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             mailbox.validate_packet([0x70, 1, 10, 0, 42, 0, 0, 0])
 
+    def test_storage_capability_requires_live_marker_and_own_mailbox(self):
+        marker = 0x08061234
+        value = [1]
+        read = lambda address: value[0] if address == marker else self.read(address)
+        self.assertFalse(mailbox.supports_storage(self.base, None, read))
+        self.assertTrue(mailbox.supports_storage(self.base, marker, read))
+        for unsupported in (0, 2, 0xffffffff):
+            value[0] = unsupported
+            self.assertFalse(mailbox.supports_storage(self.base, marker, read))
+        value[0] = 1
+        self.put(0, 0)
+        with self.assertRaises(ValueError):
+            mailbox.supports_storage(self.base, marker, read)
+        for address in (True, marker+1, 0x0805fffc, 0x08100000, "0x08061234"):
+            with self.assertRaises(ValueError):
+                mailbox.validate_storage_abi_address(address)
+        self.assertEqual(self.writes, [])
+
     def test_transaction_and_reply_correlation(self):
         packet = [0x70, 1, 5, 0, 0, 0, 0, 0]
         seq = mailbox.submit(self.base, packet, self.read, self.write)

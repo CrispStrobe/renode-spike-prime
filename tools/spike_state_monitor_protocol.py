@@ -47,6 +47,11 @@ def validate_config(config):
             raise ValueError("Python output requires our full program firmware")
         import spike_nuttx_mailbox
         spike_nuttx_mailbox.validate_output_base(config["pythonOutputMailbox"])
+    if "programStorageAbiAddress" in config:
+        if "programMailbox" not in config:
+            raise ValueError("storage ABI marker requires our full program firmware")
+        import spike_nuttx_mailbox
+        spike_nuttx_mailbox.validate_storage_abi_address(config["programStorageAbiAddress"])
     return config
 
 
