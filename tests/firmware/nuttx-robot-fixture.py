@@ -40,6 +40,10 @@ def upload(ident,payload,python=False):
 def complete(label,state):
     if state['state']!=3 or state['error']!=0:raise Exception(label+' did not complete: '+str(state))
 try:
+    bootlog=''.join(chr(int(byte)) for byte in bus.ReadBytes(_bw_nuttx_config['ramlogBase'],_bw_nuttx_config['ramlogSize']))
+    if 'W25Q256: LittleFS mounted at /mnt/flash' not in bootlog:
+        raise Exception('source-built firmware did not format and mount LittleFS')
+    observations.append({'scenario':'littlefs-blank-flash-mounted','passed':True})
     start=observe('boot-ready')
     payload=struct.pack('<8i',2,50,0,0,0,0,0,0)
     upload(101,payload)
