@@ -17,6 +17,7 @@ def main():
     parser.add_argument('--infrastructure', type=Path, required=True)
     parser.add_argument('--renode', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--software-events', action='store_true', help='Remove software compare flag delivery instead of rollover delivery')
     args = parser.parse_args()
     output = args.output.resolve()
     if output.exists():
@@ -24,13 +25,19 @@ def main():
     prepare(args.infrastructure.resolve(), output)
     models = output / 'models.cs'
     source = models.read_text()
-    target = """                    if(Direction == Direction.Ascending && ccTimers[i].Limit == 0 && ccInterruptEnable[i])
+    target = """                    if(Direction == Direction.Ascending && ccTimers[i].Limit == 0 && IsInterruptOrOutputEnabled(i))
                     {
                         ccInterruptFlag[i] = true;
                     }"""
+    if args.software_events:
+        import re
+        match = re.search(r'private void GenerateCaptureCompareEvent\(int i\)\s*\{[^}]+\}', source)
+        if not match or match.group(0).count('ccInterruptFlag[i] = true;') != 1:
+            raise ValueError('software-compare mutation target no longer matches')
+        target = match.group(0)
     if source.count(target) != 1:
         raise ValueError('zero-compare mutation target no longer matches')
-    models.write_text(source.replace(target, ''))
+    models.write_text(source.replace(target, 'private void GenerateCaptureCompareEvent(int i) {}' if args.software_events else ''))
     log_path = output / 'mutation.log'
     with log_path.open('wb') as log:
         result = subprocess.run(
@@ -40,7 +47,7 @@ def main():
     transcript = log_path.read_text(errors='replace')
     if result.returncode == 0 or 'source fixture equality failed: 2 / 0' not in transcript:
         raise SystemExit('missing zero compare was not detected as expected')
-    print('Detected timer fault: missing rollover zero compare')
+    print('Detected timer fault: ' + ('missing software compare' if args.software_events else 'missing rollover zero compare'))
 
 
 if __name__ == '__main__':

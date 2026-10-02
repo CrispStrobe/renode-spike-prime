@@ -47,6 +47,17 @@ def validate_config(config):
             raise ValueError("Python output requires our full program firmware")
         import spike_nuttx_mailbox
         spike_nuttx_mailbox.validate_output_base(config["pythonOutputMailbox"])
+    if "programStorageAbiAddress" in config:
+        if "programMailbox" not in config:
+            raise ValueError("storage ABI marker requires our full program firmware")
+        import spike_nuttx_mailbox
+        spike_nuttx_mailbox.validate_storage_abi_address(config["programStorageAbiAddress"])
+    if "motorPorts" in config:
+        value = config["motorPorts"]
+        if (not isinstance(value, integer_types) or isinstance(value, bool) or value != 6 or
+                board != "spike-prime" or firmware != "brickwright-nuttx" or
+                transport != "none" or "programMailbox" not in config or image_hash is None):
+            raise ValueError("six motor ports require our verified full simulation firmware")
     return config
 
 

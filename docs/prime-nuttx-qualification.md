@@ -55,8 +55,13 @@ blocks after CPU command reads in both direct and FIFO modes, LPF2 discovery/ele
 motor drive, display-clock behavior and actual UART endpoint wiring. A
 mutation disconnecting the ADC trigger is detected by its scan fixture.
 
-Storage qualification requires the source-built firmware to format and mount
-a blank W25Q256 model as LittleFS before running robot programs. SPI2 receive
+Routine qualification seeds the synthetic W25Q256 filesystem partition at
+`0x100000` with an 8192-byte empty LittleFS prefix generated from the reviewed
+retained filesystem source. The formatter verifies a read-only mount and empty
+root before creating its output; remaining flash stays erased. This avoids a
+lengthy initial scan without changing firmware preservation checks. Use
+`--blank-flash-test` to exercise erased-flash initialization separately. A seeded
+boot result does not establish blank-flash first-boot performance. SPI2 receive
 DMA is connected to DMA1 stream 3. Receive requests are withdrawn when CPU
 reads drain RXNE; each peripheral request transfers one peripheral data unit,
 even when a memory-side FIFO threshold is configured. These checks cover the
@@ -113,3 +118,55 @@ python3 tools/check_prime_timer_mutation.py \
 
 It removes the rollover flag update from a staged copy and requires the
 fixture to fail with the missing interrupt count. It does not load firmware.
+
+## Six motor connectors and storage discovery
+
+The electrical-port installer registers A–F. Its normal layout remains two
+motors, color, distance and force sensors, and an empty F connector. Motor
+bridge wiring is available on every connector when an explicit motor profile
+is attached. TIM3/TIM4 use AF2 and F spans GPIO banks C and B. The source
+fixtures check forward, reverse and braking against the actual installed
+bridge definitions on all six ports.
+
+Run firmware qualification with `--all-motors-test` and a new private output
+directory. It checks native speed and relative position on every port,
+concurrent activity, and native and embedded-Python cancellation. This
+profile changes virtual attachments before boot. The firmware debug mailbox
+retains its two-motor ABI; C–F motion is observed through the shared arena's
+port models.
+
+A packaged full firmware advertises `nuttx-program-storage/v1` only when
+its own ELF provides a read-only userspace-flash marker whose live ABI word
+is one and the program mailbox is initialized. Older packages stay
+unadvertised. Storage packets are checked again at the state service,
+and cannot supply memory addresses or file paths.
+
+## Deferred desktop storage requests
+
+A server with `nuttx-program-storage-deferred/v1` accepts only an eight-byte
+SAVE/LOAD packet through `nuttx.program.storage.submit`, after verifying our
+full-firmware storage marker. Submission queues the unchanged firmware ABI and
+returns without waiting for filesystem I/O. Snapshots expose
+`lifecycle.nuttxProgramStorage` with `requestSeq`, `replySeq`, `operation`,
+`programId` and `pending`. A client must match the submitted sequence and the
+reply's operation and program ID before accepting completion or its signed
+errno. READY/COMPLETE program state alone does not establish storage success.
+An already pending mailbox request rejects another submission.
+
+The GUI polls through the existing state-read path. Each IPC retains its
+two-second guard; startup remains bounded to 60 seconds and the process to
+120 seconds. A storage job has a separate bounded completion wait; a timeout
+means its final storage outcome is unknown, and does not roll back firmware
+I/O. No arbitrary path, memory address, firmware instruction or auto-run is
+accepted by this operation.
+
+## Timer rollover qualification
+
+The source-model runner checks exact ascending edge-aligned counter values at
+ARR and after rollover for both 16-bit and 32-bit timers. It checks compare at
+zero and ARR with update interrupts enabled or masked, plus reset, preload and
+mode transitions. The ARR compare precedes overflow by one timer tick. This
+avoids the missed maximum-count compare observed during full-firmware control.
+Descending and center-aligned counting retain their existing behavior and are
+not qualified for complete hardware accuracy. The Renode submodule pins the
+reviewed model fix; no firmware timing tolerance is widened.

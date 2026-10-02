@@ -23,6 +23,20 @@ def validate_base(base):
     return base
 
 
+def validate_storage_abi_address(address):
+    if isinstance(address, bool) or not isinstance(address, integer_types) or address % 4 or not 0x08060000 <= address <= 0x08100000 - 4:
+        raise ValueError('invalid full-firmware storage ABI marker')
+    return address
+
+
+def supports_storage(base, address, read_word):
+    if address is None:
+        return False
+    validate_storage_abi_address(address)
+    _header(base, read_word)
+    return int(read_word(address)) == 1
+
+
 def _header(base, read_word):
     validate_base(base)
     if int(read_word(base)) != MAGIC or int(read_word(base + 4)) != 1:
@@ -74,6 +88,36 @@ def reply(base, sequence, read_word, read_bytes):
     if len(packet) != 20 or packet[0] != 0x71 or packet[1] != 1 or packet[2] > 9 or packet[3] > 5:
         raise ValueError('invalid full-firmware program reply')
     return packet
+
+
+def storage_request(base, read_word, read_bytes):
+    """Observe a storage submission; callers hold the machine paused.
+
+    Completion is sequence equality, never the program's READY/COMPLETE state.
+    This does not submit work or interpret any client program.
+    """
+    _header(base, read_word)
+    request = int(read_word(base + 8))
+    acknowledged = int(read_word(base + 36))
+    if request == 0:
+        return None
+    if request & 1 or acknowledged & 1:
+        raise ValueError('full-firmware publication is not ready or changed')
+    length = int(read_word(base + 12))
+    raw = [int(value) for value in read_bytes(base + 16, 20)]
+    if request != int(read_word(base + 8)) or acknowledged != int(read_word(base + 36)):
+        raise ValueError('full-firmware publication is not ready or changed')
+    if len(raw) != 20:
+        raise ValueError('invalid full-firmware storage request')
+    if raw[2] not in (8, 9):
+        return None
+    if length != 8:
+        raise ValueError('invalid full-firmware storage request')
+    packet = validate_packet(raw[:8])
+    ident = sum(int(packet[4 + i]) << (8 * i) for i in range(4))
+    return {'requestSeq': request, 'replySeq': acknowledged,
+            'operation': int(packet[2]), 'programId': ident,
+            'pending': request != acknowledged}
 
 
 def status(base, read_word, read_bytes):

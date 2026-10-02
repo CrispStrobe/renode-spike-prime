@@ -15,6 +15,7 @@ from System.Net import IPAddress
 from System.Net.Sockets import SocketOptionLevel, SocketOptionName, TcpListener
 from System.Text import Encoding
 from System.Threading import Thread, ThreadStart
+from System.Diagnostics import Stopwatch
 from threading import Lock, RLock
 
 _tools = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "tools"))
@@ -135,6 +136,13 @@ def _snapshot(config, seq, generation):
                 if "pythonOutputMailbox" in config:
                     lifecycle["nuttxProgramOutput"] = spike_nuttx_mailbox.output(config["pythonOutputMailbox"], bus.ReadDoubleWord, bus.ReadBytes)
                 identity["capabilities"].append("nuttx-program/v1")
+                if config.get("motorPorts") == 6:
+                    identity["capabilities"].append("nuttx-six-motors/v1")
+                if spike_nuttx_mailbox.supports_storage(base, config.get("programStorageAbiAddress"), bus.ReadDoubleWord):
+                    identity["capabilities"].extend(["nuttx-program-storage/v1", "nuttx-program-storage-deferred/v1"])
+                    storage_request = spike_nuttx_mailbox.storage_request(base, bus.ReadDoubleWord, bus.ReadBytes)
+                    if storage_request is not None:
+                        lifecycle["nuttxProgramStorage"] = storage_request
     identity["limitations"] = ["state is model output, not physical hardware"]
     clock = int(emulationManager.CurrentEmulation.MasterTimeSource.ElapsedVirtualTime.Ticks) * 100
     return {"schemaVersion": 1, "type": "snapshot", "seq": seq, "clockNs": clock,
@@ -158,20 +166,31 @@ def _dispatch(config, command):
     if name == "state.sample":
         if args: raise ValueError("state.sample takes no arguments")
         return
-    if name == "nuttx.program.packet":
+    if name in ("nuttx.program.packet", "nuttx.program.storage.submit"):
         if config["identity"].get("firmware") != "brickwright-nuttx" or config["identity"].get("transport") != "none" or "programMailbox" not in config:
             raise ValueError("program packet requires our full simulation firmware")
         if set(args) != set(("bytes",)):
             raise ValueError("program packet takes bytes only")
         bus = monitor.Machine.SystemBus
+        packet = spike_nuttx_mailbox.validate_packet(args["bytes"])
+        deferred = name == "nuttx.program.storage.submit"
+        if deferred and (len(packet) != 8 or packet[2] not in (8, 9)):
+            raise ValueError("storage submit requires a SAVE or LOAD packet")
+        if packet[2] in (8, 9) and not spike_nuttx_mailbox.supports_storage(config["programMailbox"], config.get("programStorageAbiAddress"), bus.ReadDoubleWord):
+            raise ValueError("program storage is not supported by this firmware")
         paused = monitor.Machine.ObtainPausedState(True)
         try:
             sequence = spike_nuttx_mailbox.submit(config["programMailbox"], args["bytes"], bus.ReadDoubleWord, bus.WriteDoubleWord)
         finally:
             paused.Dispose()
+        if deferred:
+            # Typed storage submissions return promptly; firmware completion is
+            # exposed separately with the exact mailbox sequence and packet ID.
+            return
         # The existing running firmware acknowledges the request. Never execute
         # client instructions in the monitor or advance its simulated time here.
-        for unused in range(1500):
+        deadline = Stopwatch.StartNew()
+        while deadline.ElapsedMilliseconds < 1500:
             if spike_nuttx_mailbox.reply(config["programMailbox"], sequence, bus.ReadDoubleWord, bus.ReadBytes) is not None:
                 return
             Thread.Sleep(1)
@@ -322,7 +341,7 @@ class _Server(object):
                         seen.append(request)
                         if len(seen) > 256: seen.pop(0)
                         try:
-                            if command["command"] == "nuttx.program.packet":
+                            if command["command"] in ("nuttx.program.packet", "nuttx.program.storage.submit"):
                                 _dispatch(self.config, command)
                             else:
                                 self._synchronized(lambda: _dispatch(self.config, command))

@@ -18,9 +18,9 @@ def prepare(infrastructure, output):
     stage(infrastructure, output, True)
     source_root = infrastructure / 'src/Emulator/Peripherals/Test/PeripheralsTests'
     imports, bodies = set(), []
-    for name in ('STM32TLCClockTests.cs', 'LegoLpf2ElectricalPortTests.cs', 'STM32F4I2CStreamTests.cs', 'STM32ADCTriggerTests.cs', 'STM32SPIDmaReadTests.cs', 'STM32TimerRolloverTests.cs'):
+    for name in ('STM32TLCClockTests.cs', 'LegoLpf2ElectricalPortTests.cs', 'STM32F4I2CStreamTests.cs', 'STM32ADCTriggerTests.cs', 'STM32SPIDmaReadTests.cs', 'STM32TimerRolloverTests.cs', 'STM32TimerSoftwareEventTests.cs', 'STM32TimerInclusivePeriodTests.cs'):
         source = (source_root / name).read_text().replace('using NUnit.Framework;', '')
-        source = re.sub(r'\[(?:TestFixture|NonParallelizable|SetUp|TearDown|Test|TestCase\(\d+\))\]', '', source)
+        source = re.sub(r'\[(?:TestFixture|NonParallelizable|SetUp|TearDown|Test|TestCase\([^\]]+\))\]', '', source)
         source = source.replace('Assert.', 'SourceAssert.')
         for original in CORE.values():
             source = re.sub(r'\b' + original + r'\b', 'Brickwright' + original, source)
@@ -35,7 +35,9 @@ public static class SourceAssert {
         try { return System.Convert.ToDecimal(a)==System.Convert.ToDecimal(b); }
         catch(System.Exception) { return false; }
     }
-    public static void AreEqual(object a,object b) { if(!Equal(a,b))throw new System.Exception("source fixture equality failed: "+a+" / "+b); }
+    public static void AreEqual(object a,object b,string message=null) { if(!Equal(a,b))throw new System.Exception("source fixture equality failed: "+a+" / "+b+" "+message); }
+    public static void IsTrue(bool value) { if(!value)throw new System.Exception("source fixture expected true"); }
+    public static void IsFalse(bool value) { if(value)throw new System.Exception("source fixture expected false"); }
     public static void AreNotEqual(object a,object b) { if(Equal(a,b))throw new System.Exception("source fixture inequality failed"); }
 }
 public static class PrimeSourceFixtureRunner {
@@ -50,16 +52,62 @@ public static class PrimeSourceFixtureRunner {
         rollover.SetUp();try { rollover.ShouldWakeOnZeroCompareAcrossRepeatedRollover(); } finally { rollover.TearDown(); }
         rollover.SetUp();try { rollover.ShouldWakeOnNonzeroCompareAfterRollover(); } finally { rollover.TearDown(); }
         rollover.SetUp();try { rollover.ShouldExposeOverflowAndZeroCompareTogetherOnInterrupt(); } finally { rollover.TearDown(); }
+        var software=new Antmicro.Renode.PeripheralsTests.STM32TimerSoftwareEventTests();
+        foreach(var channel in new[]{1,2,3,4}) {
+            software.SetUp();try { software.ShouldLatchSoftwareCompareWhileInterruptDisabled(channel); } finally { software.TearDown(); }
+        }
+        software.SetUp();try { software.ShouldGenerateEnabledCompareWithoutResettingRunningCounter(); } finally { software.TearDown(); }
+        software.SetUp();try { software.ShouldKeepIndependentChannelFlagsAndMask(); } finally { software.TearDown(); }
+        software.SetUp();try { software.ShouldKeepUpdateGenerationSeparateFromCompareGeneration(); } finally { software.TearDown(); }
+        software.SetUp();try { software.ShouldLatchNaturalOutputCompareWhileInterruptMasked(); } finally { software.TearDown(); }
+        software.SetUp();try { software.ShouldLatchZeroOutputCompareAtRolloverWhileInterruptMasked(); } finally { software.TearDown(); }
+        var inclusive=new Antmicro.Renode.PeripheralsTests.STM32TimerInclusivePeriodTests();
+        foreach(var arr in new[]{65535u,uint.MaxValue}) {
+            inclusive.SetUp();try { inclusive.ShouldCountThroughArrBeforeWrapping(arr); } finally { inclusive.TearDown(); }
+            foreach(var compareZero in new[]{false,true}) {
+                foreach(var updateEnabled in new[]{false,true}) {
+                    inclusive.SetUp();try { inclusive.ShouldDeliverBoundaryCompare(arr,compareZero,updateEnabled); } finally { inclusive.TearDown(); }
+                }
+            }
+        }
+        inclusive.SetUp();try { inclusive.ShouldKeepPreloadedArrUntilRolloverAcrossControlWrites(); } finally { inclusive.TearDown(); }
+        inclusive.SetUp();try { inclusive.ShouldRetainLegacyDescendingAndCenterAlignedPeriods(); } finally { inclusive.TearDown(); }
         var electrical=ElectricalTests.RunElectricalTests(emulation);
-        return "PASS ''' + str(len(clock_methods)) + ''' display-clock fixtures; 4 I2C stream fixtures; ADC trigger/halfword fixture; repeated SPI DMA read fixture; 3 timer rollover fixtures; "+electrical;
+        return "PASS ''' + str(len(clock_methods)) + ''' display-clock fixtures; 4 I2C stream fixtures; ADC trigger/halfword fixture; repeated SPI DMA read fixture; 3 timer rollover fixtures; 9 timer software-event fixtures; 12 inclusive-period fixtures; "+electrical;
     }
     public static string CheckPrimeWiring(this Antmicro.Renode.Core.Emulation emulation) {
         Antmicro.Renode.Core.IMachine machine;
         if(!emulation.TryGetMachineByName("source-fixture",out machine))throw new System.Exception("fixture machine absent");
-        foreach(var name in new[]{"A","B","C","D","E"}) {
+        foreach(var name in new[]{"A","B","C","D","E","F"}) {
             Antmicro.Renode.Peripherals.UART.LegoLpf2ElectricalPort port;
             if(!emulation.ExternalsManager.TryGetByName("port"+name,out port) || port.GetMachine()!=machine)
                 throw new System.Exception("UART endpoint must belong to the fixture machine");
+        }
+        // Expected physical bridge pins, independent of the installed definitions.
+        var names=new[]{"A","B","C","D","E","F"};
+        var banks1=new[]{"E","E","B","B","C","C"};
+        var banks2=new[]{"E","E","B","B","C","B"};
+        var pins1=new[]{9,13,6,8,6,8};var pins2=new[]{11,14,7,9,7,1};
+        var timerNames=new[]{"timer1","timer1","timer4","timer4","timer3","timer3"};
+        for(var i=0;i<6;i++) {
+            Antmicro.Renode.Peripherals.UART.LegoLpf2ElectricalPort port;
+            emulation.ExternalsManager.TryGetByName("port"+names[i],out port);
+            port.Attach("motor");
+            var g1=(Antmicro.Renode.Peripherals.GPIOPort.STM32_GPIOPort)machine["sysbus.gpioPort"+banks1[i]];
+            var g2=(Antmicro.Renode.Peripherals.GPIOPort.STM32_GPIOPort)machine["sysbus.gpioPort"+banks2[i]];
+            var timer=(Antmicro.Renode.Peripherals.Timers.BrickwrightSTM32_Timer)machine["sysbus."+timerNames[i]];
+            var af=(uint)(i<2 ? 1 : 2);
+            SetMode(g1,pins1[i],2);SetMode(g2,pins2[i],1);SetHigh(g2,pins2[i]);SetAf(g1,pins1[i],af);
+            timer.WriteDoubleWord(0x2c,999);timer.WriteDoubleWord(0x18,0x6060);timer.WriteDoubleWord(0x1c,0x6060);
+            timer.WriteDoubleWord(0x20,0x3333);timer.WriteDoubleWord(0x44,0x8000);timer.WriteDoubleWord(0,1);
+            foreach(var register in new long[]{0x34,0x38,0x3c,0x40})timer.WriteDoubleWord(register,500);
+            port.Tick();var motor=(Antmicro.Renode.Peripherals.UART.Lpf2ElectricalMotor)port.Device;
+            if(motor.Power!=50)throw new System.Exception("forward bridge failed on "+names[i]+": "+motor.Power);
+            SetMode(g1,pins1[i],1);SetHigh(g1,pins1[i]);SetMode(g2,pins2[i],2);SetAf(g2,pins2[i],af);
+            foreach(var register in new long[]{0x34,0x38,0x3c,0x40})timer.WriteDoubleWord(register,250);
+            port.Tick();if(motor.Power!=-25)throw new System.Exception("reverse bridge failed on "+names[i]);
+            SetMode(g2,pins2[i],1);SetHigh(g2,pins2[i]);port.Tick();
+            if(motor.Power!=0)throw new System.Exception("brake bridge failed on "+names[i]);
         }
         // Exercise a real CPU-facing UART write through the connector.
         var uart=(Antmicro.Renode.Peripherals.Bus.IDoubleWordPeripheral)machine["sysbus.uart7"];
@@ -72,7 +120,17 @@ public static class PrimeSourceFixtureRunner {
     }
     public static string ConfirmPrimeWiring(this Antmicro.Renode.Core.Emulation emulation) {
         if(wiringWrites!=1)throw new System.Exception("UART fixture callback did not execute");
-        return "PASS 5 Prime UART endpoint registrations and timed transfer";
+        return "PASS 6 Prime UART endpoint registrations, forward/reverse/brake bridges and timed transfer";
+    }
+    private static void SetMode(Antmicro.Renode.Peripherals.GPIOPort.STM32_GPIOPort gpio,int pin,uint mode) {
+        gpio.WriteDoubleWord(0,(gpio.ReadDoubleWord(0)&~(3u<<(pin*2)))|(mode<<(pin*2)));
+    }
+    private static void SetHigh(Antmicro.Renode.Peripherals.GPIOPort.STM32_GPIOPort gpio,int pin) {
+        gpio.WriteDoubleWord(0x14,gpio.ReadDoubleWord(0x14)|(1u<<pin));
+    }
+    private static void SetAf(Antmicro.Renode.Peripherals.GPIOPort.STM32_GPIOPort gpio,int pin,uint af) {
+        var offset=pin<8 ? 0x20 : 0x24;var shift=(pin%8)*4;
+        gpio.WriteDoubleWord(offset,(gpio.ReadDoubleWord(offset)&~(15u<<shift))|(af<<shift));
     }
     private static int wiringWrites;
 }
@@ -101,6 +159,6 @@ if __name__ == '__main__':
     with (output / 'test.log').open('wb') as log:
         result = subprocess.run([str(args.renode.resolve()), '--disable-xwt', '--console', '--plain', str(output / 'test.resc')], stdout=log, stderr=subprocess.STDOUT, timeout=180)
     transcript = (output / 'test.log').read_text(errors='replace')
-    if result.returncode or 'PASS 9 display-clock fixtures; 4 I2C stream fixtures; ADC trigger/halfword fixture; repeated SPI DMA read fixture; 3 timer rollover fixtures; PASS 29 electrical' not in transcript or 'PASS 5 Prime UART endpoint' not in transcript or 'There was an error' in transcript:
+    if result.returncode or 'PASS 9 display-clock fixtures; 4 I2C stream fixtures; ADC trigger/halfword fixture; repeated SPI DMA read fixture; 3 timer rollover fixtures; 9 timer software-event fixtures; 12 inclusive-period fixtures; PASS 29 electrical' not in transcript or 'PASS 6 Prime UART endpoint' not in transcript or 'There was an error' in transcript:
         raise SystemExit('Prime source model checks failed; inspect test.log')
     print('Prime source model and wiring checks passed.')
