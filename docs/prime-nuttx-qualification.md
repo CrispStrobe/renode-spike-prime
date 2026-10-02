@@ -140,3 +140,22 @@ its own ELF provides a read-only userspace-flash marker whose live ABI word
 is one and the program mailbox is initialized. Older packages stay
 unadvertised. Storage packets are checked again at the state service,
 and cannot supply memory addresses or file paths.
+
+## Deferred desktop storage requests
+
+A server with `nuttx-program-storage-deferred/v1` accepts only an eight-byte
+SAVE/LOAD packet through `nuttx.program.storage.submit`, after verifying our
+full-firmware storage marker. Submission queues the unchanged firmware ABI and
+returns without waiting for filesystem I/O. Snapshots expose
+`lifecycle.nuttxProgramStorage` with `requestSeq`, `replySeq`, `operation`,
+`programId` and `pending`. A client must match the submitted sequence and the
+reply's operation and program ID before accepting completion or its signed
+errno. READY/COMPLETE program state alone does not establish storage success.
+An already pending mailbox request rejects another submission.
+
+The GUI polls through the existing state-read path. Each IPC retains its
+two-second guard; startup remains bounded to 60 seconds and the process to
+120 seconds. A storage job has a separate bounded completion wait; a timeout
+means its final storage outcome is unknown, and does not roll back firmware
+I/O. No arbitrary path, memory address, firmware instruction or auto-run is
+accepted by this operation.

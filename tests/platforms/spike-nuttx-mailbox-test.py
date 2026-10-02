@@ -98,6 +98,39 @@ class MailboxTests(unittest.TestCase):
         self.put(36, 0xfffffffe)
         self.assertEqual(mailbox.submit(self.base, packet, self.read, self.write), 2)
 
+    def test_storage_submission_reports_pending_and_exact_ack(self):
+        self.assertIsNone(mailbox.storage_request(self.base, self.read, self.bytes))
+        packet = [0x70, 1, 8, 0, 42, 0, 0, 0]
+        seq = mailbox.submit(self.base, packet, self.read, self.write)
+        expected = {'requestSeq': seq, 'replySeq': 0, 'operation': 8,
+                    'programId': 42, 'pending': True}
+        self.assertEqual(mailbox.storage_request(self.base, self.read, self.bytes), expected)
+        before = list(self.writes)
+        with self.assertRaises(ValueError):
+            mailbox.submit(self.base, packet, self.read, self.write)
+        self.assertEqual(self.writes, before)
+        self.put(36, seq)
+        expected.update(replySeq=seq, pending=False)
+        self.assertEqual(mailbox.storage_request(self.base, self.read, self.bytes), expected)
+        self.put(12, 9)
+        with self.assertRaises(ValueError):
+            mailbox.storage_request(self.base, self.read, self.bytes)
+
+    def test_storage_submission_rejects_torn_or_invalid_metadata(self):
+        mailbox.submit(self.base, [0x70, 1, 9, 0, 42, 0, 0, 0], self.read, self.write)
+        reads = [2, 4]
+        def changing(address):
+            return reads.pop(0) if address == self.base + 8 else self.read(address)
+        with self.assertRaises(ValueError):
+            mailbox.storage_request(self.base, changing, self.bytes)
+        self.put(8, 3)
+        with self.assertRaises(ValueError):
+            mailbox.storage_request(self.base, self.read, self.bytes)
+        self.put(8, 2)
+        self.memory[20:24] = bytes(4)
+        with self.assertRaises(ValueError):
+            mailbox.storage_request(self.base, self.read, self.bytes)
+
     def test_coherent_signed_status_and_partial_publication(self):
         self.memory[60:112] = struct.pack('<6I6iI', 10, 1234, 5, 42, 3, 0xfffffffb,
                                         -90, 180, -300, 0, -5000, 0, 3)
