@@ -32,3 +32,7 @@ spi2:
 spi1:
     DMAReceive -> dma2@2
     DMATransmit -> dma2@3
+
+// NuttX regular ADC sequence is triggered by TIM2 TRGO (EXTSEL=6).
+timer2:
+    TriggerOutput -> adc1@6

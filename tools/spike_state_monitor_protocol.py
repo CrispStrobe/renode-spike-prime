@@ -37,6 +37,16 @@ def validate_config(config):
     if image_hash is not None and (not isinstance(image_hash, string_types) or
                                    re.match(r"^[0-9a-f]{64}$", image_hash) is None):
         raise ValueError("imageSha256 must be null or lowercase SHA-256")
+    if "programMailbox" in config:
+        if board != "spike-prime" or firmware != "brickwright-nuttx" or transport != "none":
+            raise ValueError("program mailbox requires our full simulation firmware")
+        import spike_nuttx_mailbox
+        spike_nuttx_mailbox.validate_base(config["programMailbox"])
+    if "pythonOutputMailbox" in config:
+        if "programMailbox" not in config:
+            raise ValueError("Python output requires our full program firmware")
+        import spike_nuttx_mailbox
+        spike_nuttx_mailbox.validate_output_base(config["pythonOutputMailbox"])
     return config
 
 
