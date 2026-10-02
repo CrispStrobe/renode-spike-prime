@@ -86,7 +86,8 @@ python3 tools/check_prime_nuttx.py \
   --storage-test --output /private/new-program-persistence-check
 ```
 
-This writes native and completed Python programs through the firmware's
+This writes maximum-size native (256 rows) and completed Python (4095 source
+bytes) programs through the firmware's
 packet service, snapshots only the synthetic external flash, and starts
 separate emulator processes to restore, load and execute each program. It
 checks missing/wrong IDs, upload/execution busy rejection, READY after load

@@ -47,12 +47,13 @@ try:
     if status('boot-empty')['state']!=0:raise Exception('unexpected automatic execution/load')
     if phase=='write':
         exchange(header(9,301),-2)
-        upload(301,struct.pack('<8i',2,50,0,0,0,0,0,0))
+        upload(301,struct.pack('<8i',2,50,0,0,0,0,0,0)+'\x00'*(254*16))
         exchange(header(8,301));snapshot('native')
         exchange(header(3,301));exchange(header(8,301),-16)
         run(100)
         if status('native-complete')['state']!=3:raise Exception('native failed')
-        upload(302,'assert sum(range(11)) == 55\n',True)
+        source='assert sum(range(11)) == 55\n#'
+        upload(302,source+' '*(4095-len(source)),True)
         exchange(header(3,302));run(100)
         if status('python-complete')['state']!=3:raise Exception('Python failed')
         # Saving AFTER Python completion must retain source/language.
