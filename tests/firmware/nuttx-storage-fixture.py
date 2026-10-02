@@ -36,11 +36,29 @@ def upload(ident,payload,python=False):
 def check(label,state):
     observations.append({'scenario':label,'status':state})
     return state
-def status(label):return check(label,mb.status(base,bus.ReadDoubleWord,bus.ReadBytes))
+def status(label):
+    for attempt in range(10):
+        try:
+            return check(label,mb.status(base,bus.ReadDoubleWord,bus.ReadBytes))
+        except ValueError as error:
+            if str(error)!='full-firmware publication is not ready or changed' or attempt==9:raise
+            run(1)
 def snapshot(name):
     memory=self.Machine['sysbus.spi2.primeStorageMux.primeStorage'].UnderlyingMemory
     File.WriteAllBytes(_bw_nuttx_config['output']+'/'+name+'-flash.bin',memory.ReadBytes(0,0x2000000))
 try:
+    # Mounting and shell/service startup have separate completion points.
+    # This bounded qualification wait does not change production launch limits.
+    for boot_attempt in range(300):
+        try:
+            mb.status(base,bus.ReadDoubleWord,bus.ReadBytes)
+            break
+        except ValueError as error:
+            if str(error) not in ('full-firmware publication is not ready or changed',
+                                  'our full firmware has not initialized its packet mailbox'):raise
+            run(10)
+    else:
+        raise Exception('program worker was not ready within 3 simulated seconds')
     log=''.join(chr(int(b)) for b in bus.ReadBytes(_bw_nuttx_config['ramlogBase'],_bw_nuttx_config['ramlogSize']))
     if 'LittleFS mounted at /mnt/flash' not in log:raise Exception('LittleFS not mounted')
     phase=_bw_nuttx_config['phase']
@@ -75,5 +93,6 @@ try:
     result={'passed':True,'observations':observations}
 except Exception as error:
     result={'passed':False,'error':str(error),'observations':observations}
-    result['ramlog']=''.join(chr(int(b)) for b in bus.ReadBytes(_bw_nuttx_config['ramlogBase'],_bw_nuttx_config['ramlogSize']))
-f=open(_bw_nuttx_config['result'],'w');json.dump(result,f);f.close()
+    result['ramlogBytes']=[int(b) for b in bus.ReadBytes(_bw_nuttx_config['ramlogBase'],_bw_nuttx_config['ramlogSize'])]
+wire=json.dumps(result,ensure_ascii=True)
+f=open(_bw_nuttx_config['result'],'w');f.write(wire);f.close()

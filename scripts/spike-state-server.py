@@ -136,6 +136,8 @@ def _snapshot(config, seq, generation):
                 if "pythonOutputMailbox" in config:
                     lifecycle["nuttxProgramOutput"] = spike_nuttx_mailbox.output(config["pythonOutputMailbox"], bus.ReadDoubleWord, bus.ReadBytes)
                 identity["capabilities"].append("nuttx-program/v1")
+                if config.get("motorPorts") == 6:
+                    identity["capabilities"].append("nuttx-six-motors/v1")
                 if spike_nuttx_mailbox.supports_storage(base, config.get("programStorageAbiAddress"), bus.ReadDoubleWord):
                     identity["capabilities"].extend(["nuttx-program-storage/v1", "nuttx-program-storage-deferred/v1"])
                     storage_request = spike_nuttx_mailbox.storage_request(base, bus.ReadDoubleWord, bus.ReadBytes)

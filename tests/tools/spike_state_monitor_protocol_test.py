@@ -51,6 +51,20 @@ class MonitorProtocolTest(unittest.TestCase):
         for changes in invalid:
             with self.assertRaises(ValueError): validate_command(command(**changes))
 
+    def test_six_motor_declaration_requires_own_verified_image(self):
+        value = config()
+        value['identity']['imageSha256'] = 'a' * 64
+        value.update(programMailbox=0x20021000, motorPorts=6)
+        validate_config(value)
+        for count in (True, 0, 2, 5, 6.0, 7, '6', None):
+            with self.assertRaises(ValueError): validate_config(dict(value, motorPorts=count))
+        for mutation in ('no_hash', 'no_mailbox', 'other_firmware'):
+            bad = dict(value, identity=dict(value['identity']))
+            if mutation == 'no_hash': bad['identity']['imageSha256'] = None
+            if mutation == 'no_mailbox': del bad['programMailbox']
+            if mutation == 'other_firmware': bad['identity']['firmware'] = 'brickwright-arena-demo'
+            with self.assertRaises(ValueError): validate_config(bad)
+
     def test_storage_marker_requires_full_firmware_and_flash_bounds(self):
         value = config()
         value.update(programMailbox=0x20021000, programStorageAbiAddress=0x08061234)
