@@ -28,7 +28,177 @@ import spike_arena_mailbox
 import spike_nuttx_mailbox
 
 _state_server = None
+FLASH_CHECKPOINT_ABI = 1
+try:
+    _CHECKPOINT_INTEGERS = (int, long)
+except NameError:
+    _CHECKPOINT_INTEGERS = (int,)
 _MAX_LINE, _READ_SIZE = 256 * 1024, 16 * 1024
+
+
+# Newly authored flash-checkpoint adapter: BSD-3-Clause.
+# Copyright (c) 2026 Brickwright contributors.
+class _FlashCheckpoint(object):
+    """Fixed native-owned files; never accepts a path from a socket command.
+
+    Firmware ACK is distinct from host durability. The native owner validates
+    and commits the exported bytes, then publishes a correlated receipt.
+    """
+    SIZE = 0x2000000
+
+    def __init__(self, directory, image, export, reply, launch, sleep, now):
+        self.directory, self.image = directory, image
+        self.export, self.reply, self.launch = export, reply, launch
+        self.sleep, self.now, self.lock = sleep, now, RLock()
+        self.current, self.blocked = None, False
+
+    def _path(self, name):
+        return os.path.join(self.directory, name)
+
+    def _fail(self):
+        with self.lock:
+            if self.current is not None:
+                self.current['status'] = 'failed'
+                self.current['error'] = 'Host flash checkpoint failed; previous saved checkpoint retained'
+
+    def status(self):
+        with self.lock:
+            if self.current is None:
+                return None
+            if self.current['status'] == 'pending' and os.path.exists(self._path('receipt.json')):
+                try:
+                    with open(self._path('receipt.json'), 'r') as stream:
+                        receipt = json.loads(stream.read(2048))
+                    expected = set(('schema', 'imageSha256', 'requestSeq', 'programId', 'status'))
+                    if (set(receipt) != expected or
+                        any(isinstance(receipt.get(key), bool) or not isinstance(receipt.get(key), _CHECKPOINT_INTEGERS)
+                            for key in ('schema', 'requestSeq', 'programId')) or receipt['schema'] != 1 or
+                        receipt['imageSha256'] != self.image or
+                        receipt['requestSeq'] != self.current['requestSeq'] or
+                        receipt['programId'] != self.current['programId'] or
+                        receipt['status'] not in ('durable', 'failed')):
+                        raise ValueError('invalid checkpoint receipt')
+                    self.current['status'] = receipt['status']
+                    if receipt['status'] == 'durable':
+                        self.blocked = False
+                    if receipt['status'] == 'failed':
+                        self.current['error'] = 'Host flash checkpoint failed; previous saved checkpoint retained'
+                except Exception:
+                    self._fail()
+            return dict(self.current)
+
+    def busy(self):
+        status = self.status()
+        return status is not None and self.blocked
+
+    def begin(self, sequence, program_id):
+        with self.lock:
+            if self.busy():
+                raise ValueError('host flash checkpoint is pending')
+            for name in ('receipt.json', 'export.json', 'flash.bin', 'flash.pending'):
+                path = self._path(name)
+                if os.path.lexists(path):
+                    os.remove(path)
+            self.current = {'requestSeq': sequence, 'programId': program_id, 'status': 'pending'}
+            self.blocked = True
+        self.launch(lambda: self._checkpoint(sequence, program_id))
+
+    def _checkpoint(self, sequence, program_id):
+        try:
+            deadline = self.now() + 30
+            while True:
+                packet = self.reply(sequence)
+                if packet is not None:
+                    if (packet[2] != 8 or
+                        sum(int(packet[4 + i]) << (8 * i) for i in range(4)) != program_id):
+                        raise ValueError('checkpoint SAVE correlation mismatch')
+                    if any(packet[8:12]):
+                        # Correlated firmware rejection cannot have exported or
+                        # committed host data, so the session remains reusable.
+                        self._fail()
+                        with self.lock:
+                            self.blocked = False
+                        return
+                    break
+                if self.now() >= deadline:
+                    raise ValueError('firmware SAVE completion timed out')
+                self.sleep()
+            # The adapter pauses only while copying model memory. Disk writes
+            # occur after releasing the pause and never on the socket thread.
+            raw = self.export()
+            if len(raw) != self.SIZE:
+                raise ValueError('incorrect flash export length')
+            with open(self._path('flash.pending'), 'wb') as stream:
+                stream.write(raw)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.rename(self._path('flash.pending'), self._path('flash.bin'))
+            metadata = {'schema': 1, 'imageSha256': self.image,
+                        'requestSeq': sequence, 'programId': program_id, 'byteLength': self.SIZE}
+            with open(self._path('export.pending'), 'w') as stream:
+                json.dump(metadata, stream)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.rename(self._path('export.pending'), self._path('export.json'))
+            while self.status()['status'] == 'pending':
+                if self.now() >= deadline:
+                    raise ValueError('host checkpoint completion timed out')
+                self.sleep()
+        except Exception:
+            self._fail()
+
+
+
+def mc_spike_flash_restore():
+    """Fixed native launch hook, called before firmware boot or LittleFS mount."""
+    directory = os.environ.get('BW_SPIKE_FLASH_JOB_DIR')
+    if not directory:
+        return
+    if not os.path.isabs(directory) or not os.path.isdir(directory):
+        raise ValueError('invalid native flash restore context')
+    restore = os.path.join(directory, 'restore.bin')
+    if os.path.exists(restore):
+        if os.path.getsize(restore) != _FlashCheckpoint.SIZE:
+            raise ValueError('invalid native flash restore size')
+        from System.IO import File
+        storage = _resolve('machine:sysbus.spi2.primeStorageMux.primeStorage')
+        storage.UnderlyingMemory.WriteBytes(0, File.ReadAllBytes(restore))
+
+
+def _flash_checkpoint(config, state_lock):
+    directory = os.environ.get('BW_SPIKE_FLASH_JOB_DIR')
+    if not directory:
+        return None
+    image = os.environ.get('BW_SPIKE_FLASH_IMAGE_SHA256')
+    if (not os.path.isabs(directory) or not os.path.isdir(directory) or
+        config['identity'].get('firmware') != 'brickwright-nuttx' or
+        config['identity'].get('transport') != 'none' or
+        image != config['identity'].get('imageSha256') or not image or
+        'programMailbox' not in config or config.get('hostFlashCheckpointAbi') != FLASH_CHECKPOINT_ABI):
+        raise ValueError('invalid native flash checkpoint context')
+    storage = _resolve('machine:sysbus.spi2.primeStorageMux.primeStorage')
+    timer = Stopwatch.StartNew()
+    def export():
+        with state_lock:
+            paused = monitor.Machine.ObtainPausedState(True)
+            try:
+                return bytearray(storage.UnderlyingMemory.ReadBytes(0, _FlashCheckpoint.SIZE))
+            finally:
+                paused.Dispose()
+    def reply(sequence):
+        with state_lock:
+            paused = monitor.Machine.ObtainPausedState(True)
+            try:
+                bus = monitor.Machine.SystemBus
+                return spike_nuttx_mailbox.reply(config['programMailbox'], sequence, bus.ReadDoubleWord, bus.ReadBytes)
+            finally:
+                paused.Dispose()
+    def launch(callback):
+        worker = Thread(ThreadStart(callback))
+        worker.IsBackground = True
+        worker.Start()
+    return _FlashCheckpoint(directory, image, export, reply, launch,
+                            lambda: Thread.Sleep(10), lambda: timer.ElapsedMilliseconds / 1000.0)
 
 
 def _resolve(path):
@@ -58,7 +228,7 @@ def _kind(device):
     return "unknown:" + device.GetType().Name[:48]
 
 
-def _snapshot(config, seq, generation):
+def _snapshot(config, seq, generation, checkpoint=None):
     if config["identity"].get("firmware") == "brickwright-arena-demo":
         bus = monitor.Machine.SystemBus
         try:
@@ -143,6 +313,11 @@ def _snapshot(config, seq, generation):
                     storage_request = spike_nuttx_mailbox.storage_request(base, bus.ReadDoubleWord, bus.ReadBytes)
                     if storage_request is not None:
                         lifecycle["nuttxProgramStorage"] = storage_request
+    if checkpoint is not None:
+        identity['capabilities'].append('nuttx-flash-checkpoint/v1')
+        checkpoint_status = checkpoint.status()
+        if checkpoint_status is not None:
+            lifecycle['nuttxFlashCheckpoint'] = checkpoint_status
     identity["limitations"] = ["state is model output, not physical hardware"]
     clock = int(emulationManager.CurrentEmulation.MasterTimeSource.ElapsedVirtualTime.TotalNanoseconds)
     return {"schemaVersion": 1, "type": "snapshot", "seq": seq, "clockNs": clock,
@@ -159,7 +334,7 @@ def _snapshot(config, seq, generation):
             else "unavailable", "transport": identity["transport"]}}
 
 
-def _dispatch(config, command):
+def _dispatch(config, command, checkpoint=None):
     if config["identity"]["board"] == "ev3":
         return ev3_state_observer.dispatch(config, _resolve, command)
     paths, name, args = config["paths"], command["command"], command["arguments"]
@@ -174,6 +349,10 @@ def _dispatch(config, command):
         bus = monitor.Machine.SystemBus
         packet = spike_nuttx_mailbox.validate_packet(args["bytes"])
         deferred = name == "nuttx.program.storage.submit"
+        if checkpoint is not None and checkpoint.busy():
+            raise ValueError('host flash checkpoint is pending')
+        if checkpoint is not None and packet[2] == 8 and not deferred:
+            raise ValueError('durable SAVE requires deferred storage submission')
         if deferred and (len(packet) != 8 or packet[2] not in (8, 9)):
             raise ValueError("storage submit requires a SAVE or LOAD packet")
         if packet[2] in (8, 9) and not spike_nuttx_mailbox.supports_storage(config["programMailbox"], config.get("programStorageAbiAddress"), bus.ReadDoubleWord):
@@ -184,6 +363,9 @@ def _dispatch(config, command):
         finally:
             paused.Dispose()
         if deferred:
+            if checkpoint is not None and packet[2] == 8:
+                ident = sum(int(packet[4 + i]) << (8 * i) for i in range(4))
+                checkpoint.begin(sequence, ident)
             # Typed storage submissions return promptly; firmware completion is
             # exposed separately with the exact mailbox sequence and packet ID.
             return
@@ -257,6 +439,7 @@ class _Server(object):
         self.config, self.running, self.generation = validate_config(config), True, 0
         self.last_error = ""
         self.stream, self.seq, self.write_lock, self.state_lock = None, 0, Lock(), RLock()
+        self.checkpoint = _flash_checkpoint(self.config, self.state_lock)
         self.listener = TcpListener(address, port)
         self.listener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, True)
         self.listener.Start(clients)
@@ -292,7 +475,7 @@ class _Server(object):
         with self.state_lock:
             if self.stream is None:
                 return False
-            snapshot = self._synchronized(lambda: _snapshot(self.config, self.seq, self.generation))
+            snapshot = self._synchronized(lambda: _snapshot(self.config, self.seq, self.generation, self.checkpoint))
             self._send(self.stream, snapshot)
             self.seq += 1
             return True
@@ -342,9 +525,9 @@ class _Server(object):
                         if len(seen) > 256: seen.pop(0)
                         try:
                             if command["command"] in ("nuttx.program.packet", "nuttx.program.storage.submit"):
-                                _dispatch(self.config, command)
+                                _dispatch(self.config, command, self.checkpoint)
                             else:
-                                self._synchronized(lambda: _dispatch(self.config, command))
+                                self._synchronized(lambda: _dispatch(self.config, command, self.checkpoint))
                         except Exception as exception: accepted, error = False, str(exception)
                 result = {"schemaVersion": 1, "type": "result", "requestId": request, "accepted": accepted, "seq": self.seq - 1}
                 if error is not None: result["error"] = error
