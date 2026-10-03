@@ -5,6 +5,7 @@
 import importlib.util
 from pathlib import Path
 import struct
+import tempfile
 import unittest
 
 spec = importlib.util.spec_from_file_location("local_image", Path(__file__).parents[2] / "tools/spike_local_image.py")
@@ -116,6 +117,40 @@ class ObservationTests(unittest.TestCase):
         for icsr in (3, 4, 5, 6, 0x04000003, -1, 0x100000000):
             with self.subTest(icsr=icsr), self.assertRaises(ValueError):
                 image.validate_observation({**self.state, "icsr": icsr}, self.memory, 2000)
+
+
+class PlatformClockTests(unittest.TestCase):
+    def fixture(self, root):
+        for name in ("boards/spike-prime.repl", "boards/spike-prime-brick-devices.repl",
+                     "cpus/stm32f413vg.repl", "cpus/stm32f4.repl"):
+            path = root / "platforms" / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("spi1:\n    DMAReceive -> dma2@2\nspi2:\n    DMAReceive -> dma1@3\n")
+
+    def test_selected_clock_only_changes_storage_spi(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.fixture(root)
+            before = (root / "platforms/boards/spike-prime.repl").read_text()
+            for frequency in (0, 48000000, (1 << 64) - 1):
+                output = root / str(frequency)
+                platform = image.stage_platform(root, output, frequency)
+                expected = before if not frequency else before.replace("spi2:\n", "spi2:\n    frequency: " + str(frequency) + "\n")
+                self.assertEqual(platform.read_text(), expected)
+                self.assertEqual((output / "platforms/cpus/stm32f4.repl").read_text(), before)
+            self.assertEqual((root / "platforms/boards/spike-prime.repl").read_text(), before)
+
+    def test_invalid_clock_and_missing_interface_fail_before_execution(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.fixture(root)
+            for frequency in (-1, 1 << 64, True, "48000000"):
+                with self.subTest(frequency=frequency), self.assertRaises(ValueError):
+                    image.stage_platform(root, root / "invalid", frequency)
+            self.assertFalse((root / "invalid").exists())
+            (root / "platforms/boards/spike-prime.repl").write_text("spi1:\n")
+            with self.assertRaises(ValueError):
+                image.stage_platform(root, root / "missing", 48000000)
 
 
 if __name__ == "__main__":
