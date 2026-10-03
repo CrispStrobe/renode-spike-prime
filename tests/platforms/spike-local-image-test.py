@@ -50,5 +50,73 @@ class ImportTests(unittest.TestCase):
             image.vectors({}, 0x08010001)
 
 
+    def test_reset_requires_both_opcode_bytes(self):
+        memory = image.read_hex(self.valid_hex().encode())
+        del memory[0x08010009]
+        with self.assertRaises(ValueError):
+            image.vectors(memory, 0x08010000)
+
+
+class ObservationTests(unittest.TestCase):
+    def setUp(self):
+        # A Thumb self-loop can execute the full budget without changing PC.
+        self.memory = {0x08010008: 0xfe, 0x08010009: 0xe7}
+        self.state = {"instructionsBefore": 17, "instructionsAfter": 2017,
+                      "pc": 0x08010008, "sp": 0x2004fff8, "icsr": 0}
+
+    def test_same_pc_with_exact_instruction_delta_is_valid(self):
+        image.validate_observation(self.state, self.memory, 2000)
+
+    def test_nonfault_exception_and_unrelated_icsr_bits_are_valid(self):
+        self.state["icsr"] = 0x04000000 | 15  # SysTick active, pending bit set.
+        image.validate_observation(self.state, self.memory, 2000)
+
+    def test_missing_and_wrong_observation_types(self):
+        for field in self.state:
+            for value in (None, True, False, 1.0, "1", [], {}):
+                with self.subTest(field=field, value=value), self.assertRaises(ValueError):
+                    image.validate_observation({**self.state, field: value}, self.memory, 2000)
+            missing = dict(self.state)
+            del missing[field]
+            with self.subTest(missing=field), self.assertRaises(ValueError):
+                image.validate_observation(missing, self.memory, 2000)
+        for value in (None, [], True):
+            with self.assertRaises(ValueError):
+                image.validate_observation(value, self.memory, 2000)
+
+    def test_wrong_or_negative_instruction_counts(self):
+        for before, after in ((17, 17), (17, 2016), (17, 2018), (-1, 1999), (17, -1)):
+            with self.subTest(before=before, after=after), self.assertRaises(ValueError):
+                image.validate_observation({**self.state, "instructionsBefore": before,
+                                            "instructionsAfter": after}, self.memory, 2000)
+
+    def test_uint64_instruction_counter_boundary(self):
+        maximum = (1 << 64) - 1
+        image.validate_observation({**self.state, "instructionsBefore": maximum - 2000,
+                                    "instructionsAfter": maximum}, self.memory, 2000)
+        for before, after in ((maximum - 1999, maximum + 1),
+                              (maximum + 1, maximum + 2001), (maximum - 1000, 999)):
+            with self.subTest(before=before, after=after), self.assertRaises(ValueError):
+                image.validate_observation({**self.state, "instructionsBefore": before,
+                                            "instructionsAfter": after}, self.memory, 2000)
+
+    def test_final_pc_must_be_even_and_originally_loaded(self):
+        for pc in (0x08010009, 0x0801000a, 0x20000000, -2):
+            with self.subTest(pc=pc), self.assertRaises(ValueError):
+                image.validate_observation({**self.state, "pc": pc}, self.memory, 2000)
+        with self.assertRaises(ValueError):
+            image.validate_observation(self.state, {0x08010008: 0xfe}, 2000)
+
+    def test_invalid_final_stack(self):
+        for sp in (0x20000000, 0x20050008, 0x2004fffc, -8):
+            with self.subTest(sp=sp), self.assertRaises(ValueError):
+                image.validate_observation({**self.state, "sp": sp}, self.memory, 2000)
+
+    def test_active_faults_and_invalid_icsr_are_rejected(self):
+        for icsr in (3, 4, 5, 6, 0x04000003, -1, 0x100000000):
+            with self.subTest(icsr=icsr), self.assertRaises(ValueError):
+                image.validate_observation({**self.state, "icsr": icsr}, self.memory, 2000)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -15,6 +15,7 @@ import subprocess
 
 FLASH_START = 0x08000000
 FLASH_END = 0x08100000
+MAX_INSTRUCTION_COUNT = (1 << 64) - 1
 
 
 def read_hex(data):
@@ -68,9 +69,35 @@ def vectors(memory, address):
         sp, pc = struct.unpack("<II", bytes(memory[address + index] for index in range(8)))
     except KeyError as error:
         raise ValueError("missing vector table") from error
-    if not 0x20000000 < sp <= 0x20050000 or sp % 8 or not pc & 1 or (pc & ~1) not in memory:
+    if not valid_stack(sp) or not pc & 1 or not loaded_opcode(memory, pc & ~1):
         raise ValueError("invalid Prime stack/reset vectors")
     return sp, pc
+
+
+def valid_stack(sp):
+    return 0x20000000 < sp <= 0x20050000 and sp % 8 == 0
+
+
+def loaded_opcode(memory, pc):
+    return pc % 2 == 0 and pc in memory and pc + 1 in memory
+
+
+def validate_observation(state, memory, steps):
+    """Validate private CPU observations, without inferring boot completion."""
+    fields = ("instructionsBefore", "instructionsAfter", "pc", "sp", "icsr")
+    if not isinstance(state, dict) or any(type(state.get(name)) is not int for name in fields):
+        raise ValueError("missing or invalid CPU observations; inspect private diagnostics")
+    before, after = state["instructionsBefore"], state["instructionsAfter"]
+    if not 0 <= before <= MAX_INSTRUCTION_COUNT or not 0 <= after <= MAX_INSTRUCTION_COUNT or after - before != steps:
+        raise ValueError("CPU instruction count does not match the requested probe")
+    if not loaded_opcode(memory, state["pc"]):
+        raise ValueError("final CPU PC is outside original loaded instructions")
+    if not valid_stack(state["sp"]):
+        raise ValueError("invalid final Prime stack")
+    if not 0 <= state["icsr"] <= 0xffffffff:
+        raise ValueError("invalid NVIC observation")
+    if 3 <= (state["icsr"] & 0x1ff) <= 6:
+        raise ValueError("CPU has an active fault exception; inspect private diagnostics")
 
 
 def stage_platform(root, output):
@@ -114,8 +141,10 @@ def probe(args):
         "mach create", "machine LoadPlatformDescription " + quote(platform),
         "sysbus LoadBinary " + quote(image) + " " + hex(start),
         "cpu VectorTableOffset " + hex(args.vector_address), "cpu SP " + hex(sp), "cpu PC " + hex(pc),
-        "cpu ExecutionMode SingleStep", "cpu Step " + str(args.steps),
-        "python \"import json; f=open('" + str(snapshot).replace("'", "\\'") + "','w'); json.dump({'pc':int(self.Machine['sysbus.cpu'].PC.RawValue), 'sp':int(self.Machine['sysbus.cpu'].SP.RawValue)},f); f.close()\"",
+        "cpu ExecutionMode SingleStep",
+        "python \"probe_instructions_before=int(self.Machine['sysbus.cpu'].ExecutedInstructions)\"",
+        "cpu Step " + str(args.steps),
+        "python \"import json; f=open('" + str(snapshot).replace("'", "\\'") + "','w'); json.dump({'instructionsBefore':probe_instructions_before, 'instructionsAfter':int(self.Machine['sysbus.cpu'].ExecutedInstructions), 'pc':int(self.Machine['sysbus.cpu'].PC.RawValue), 'sp':int(self.Machine['sysbus.cpu'].SP.RawValue), 'icsr':int(self.Machine['sysbus'].ReadDoubleWord(0xe000ed04))},f); f.close()\"",
         "quit", "")))
     script.chmod(0o600)
     with (output / "renode.log").open("wb") as log:
@@ -125,8 +154,7 @@ def probe(args):
     if result.returncode or "There was an error" in log or not snapshot.is_file():
         raise ValueError("Renode probe failed; diagnostics remain in private output")
     state = json.loads(snapshot.read_text())
-    if state["pc"] == (pc & ~1):
-        raise ValueError("CPU did not change PC; inspect private diagnostics")
+    validate_observation(state, memory, args.steps)
     print("Vector validation and bounded CPU probe completed; program/peripheral compatibility remains unproven.")
 
 
