@@ -103,6 +103,13 @@ def run_phase(args, directory, memory, seed, reboot=False):
         lines += observe_motor(directory, 'motor-loop', 0.01)
         lines += send_uart(b'\x03') + observe_motor(directory, 'motor-stop', 0.2)
         lines += send_uart(b'print("BW_MOTOR_DONE")\r') + ['emulation RunFor "0.01"']
+    if args.raw_repl_test and not reboot:
+        for command in [b"print('BW_RAW',6*7)\x04", b"raise ValueError('BW_RAW_ERROR')\x04",
+                        b"while True: pass\x04", b"print('BW_RAW_AFTER',sum(range(10)))\x04"]:
+            lines += send_uart(b'\x03\x03\x02\x01') + ['emulation RunFor "0.01"']
+            lines += send_uart(command) + ['emulation RunFor "0.02"']
+            if command == b'while True: pass\x04':
+                lines += send_uart(b'\x03') + ['emulation RunFor "0.02"']
     observation = directory / "cpu.json"
     lines += ["python \"import json; f=open('" + str(observation) + "','w'); "
               "json.dump({'pc':int(self.Machine['sysbus.cpu'].PC.RawValue),"
@@ -136,7 +143,21 @@ def run_phase(args, directory, memory, seed, reboot=False):
         if found < 0:
             raise ValueError("missing ordered console observation")
         cursor = found + len(marker)
-    if not output.endswith(b'>>> ') or saved.stat().st_size != 65536:
+    if args.raw_repl_test and not reboot:
+        raw = output[output.find(b'raw REPL; CTRL-B to exit\r\n>'):]
+        expected_raw = [b'raw REPL; CTRL-B to exit\r\n>', b'OKBW_RAW 42\r\n\x04\x04>',
+                        b'OK\x04Traceback', b'ValueError: BW_RAW_ERROR\r\n\x04>',
+                        b'OK\x04Traceback', b'KeyboardInterrupt:', b'\x04>',
+                        b'OKBW_RAW_AFTER 45\r\n\x04\x04>']
+        cursor = 0
+        for marker in expected_raw:
+            found = raw.find(marker, cursor)
+            if found < 0:
+                raise ValueError('missing ordered raw REPL observation')
+            cursor = found + len(marker)
+        (directory / 'raw-repl.bin').write_bytes(raw)
+    final_prompt = b'\x04\x04>' if args.raw_repl_test and not reboot else b'>>> '
+    if not output.endswith(final_prompt) or saved.stat().st_size != 65536:
         raise ValueError("console/flash qualification incomplete")
     if args.motor_test and not reboot:
         states = {name: json.loads((directory / ('motor-' + name + '.json')).read_text())
@@ -162,6 +183,8 @@ def main():
     parser.add_argument('--private-output', type=Path, required=True)
     parser.add_argument('--motor-test', action='store_true',
                         help='also qualify port A PWM, load/stall and authored finally cleanup using electrical port models')
+    parser.add_argument('--raw-repl-test', action='store_true',
+                        help='also qualify programmatic UART upload, completion, Python error and Ctrl-C framing')
     args = parser.parse_args()
     os.umask(0o077)
     try:
@@ -180,6 +203,7 @@ def main():
             raise ValueError("restored filesystem changed unexpectedly")
         (output / 'result.json').write_text(json.dumps({'console': True, 'cancellation': True,
                                                       'writeFlushRestoreExecute': True,
+                                                      'rawReplUploadCompletionErrorCancel': bool(args.raw_repl_test),
                                                       'portAElectricalMotor': bool(args.motor_test)}))
         print('PASS: UART Python execution, cancellation, file write/flush and fresh-process restore.')
     except (OSError, ValueError, subprocess.TimeoutExpired) as error:

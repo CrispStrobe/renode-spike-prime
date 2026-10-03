@@ -140,6 +140,15 @@ qualification.
 The application clock and pin profile follow the upstream board configuration:
 [MicroPython LEGO_HUB_NO6 board](https://github.com/micropython/micropython/tree/v1.26.1/ports/stm32/boards/LEGO_HUB_NO6).
 
+`--raw-repl-test` additionally exercises programmatic UART source upload. It
+enters raw REPL before each program, checks `OK`, both output/error EOT
+delimiters and the final prompt, observes arithmetic, an uncaught Python
+exception, interruption of an infinite loop and a subsequent successful run.
+The byte capture remains in the private output. This qualifies interpreter
+framing; native GUI transport and image admission still require integration.
+The protocol follows the documented
+[MicroPython raw REPL](https://docs.micropython.org/en/v1.26.0/reference/repl.html#raw-mode-and-raw-paste-mode).
+
 ## Local repeated-boot resource gate
 
 After building headless Renode, run:
