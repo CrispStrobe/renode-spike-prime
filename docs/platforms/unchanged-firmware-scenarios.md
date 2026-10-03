@@ -73,6 +73,16 @@ Its explicitly selected local platform, model sources, and Renode runtime must
 support the same model interfaces. Platform-loading or model-compilation errors
 fail the probe before CPU execution; they establish no firmware behavior.
 
+For a locally compiled pacing-capable SPI model, the probe also accepts
+`--storage-spi-frequency 48000000` to select a 48 MHz SPI2 input clock.
+The model divides that input clock by `2 << BR` and rounds each supported
+eight-bit transfer up to a nanosecond. It schedules a shifting byte and a
+holding byte, exposes TXE/BSY, and cancels pending work on reset or SPI disable.
+The default clock is zero, retaining instantaneous transfers; the receive queue
+still holds four bytes. Only the explicitly selected storage SPI interface is
+changed. Clock selection does not establish a REPL, USB device support or
+complete STM32 timing/overflow behavior. DFF/16-bit transfers remain unsupported.
+
 ## Local repeated-boot resource gate
 
 After building headless Renode, run:

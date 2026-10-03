@@ -100,11 +100,17 @@ def validate_observation(state, memory, steps):
         raise ValueError("CPU has an active fault exception; inspect private diagnostics")
 
 
-def stage_platform(root, output):
+def stage_platform(root, output, storage_frequency=0):
+    if type(storage_frequency) is not int or not 0 <= storage_frequency < (1 << 64):
+        raise ValueError("storage SPI frequency must be an unsigned 64-bit clock in Hz")
     relative = ("boards/spike-prime.repl", "boards/spike-prime-brick-devices.repl",
                 "cpus/stm32f413vg.repl", "cpus/stm32f4.repl")
     for name in relative:
         source = (root / "platforms" / name).read_text()
+        if name == "boards/spike-prime.repl" and storage_frequency:
+            if source.count("spi2:\n") != 1:
+                raise ValueError("platform must expose one storage SPI2 configuration")
+            source = source.replace("spi2:\n", "spi2:\n    frequency: " + str(storage_frequency) + "\n")
         # Register names are debug metadata; the topology never needs an SVD download.
         source = "\n".join(line for line in source.splitlines() if "ApplySVD @https://" not in line) + "\n"
         if "https://" in source or "http://" in source:
@@ -127,7 +133,7 @@ def probe(args):
     image = output / "image.bin"
     image.write_bytes(bytes(memory.get(address, 255) for address in range(start, end)))
     image.chmod(0o600)
-    platform = stage_platform(args.platform_root.resolve(), output)
+    platform = stage_platform(args.platform_root.resolve(), output, args.storage_spi_frequency)
     # Quote paths for the Renode monitor, never a shell.
     def quote(path):
         value = str(path)
@@ -169,6 +175,8 @@ def main():
                         help="local C# peripheral source required by the installed Renode")
     parser.add_argument("--platform-root", type=Path, default=Path(__file__).resolve().parents[1],
                         help="local offline platform source root")
+    parser.add_argument("--storage-spi-frequency", type=lambda s: int(s, 0), default=0,
+                        help="SPI2 input clock in Hz; zero retains instant transfers, positive clocks require a pacing-capable local model")
     parser.add_argument("--private-output", type=Path, required=True)
     parser.add_argument("--steps", type=int, default=2000)
     args = parser.parse_args()
