@@ -58,6 +58,12 @@ def validate_config(config):
                 board != "spike-prime" or firmware != "brickwright-nuttx" or
                 transport != "none" or "programMailbox" not in config or image_hash is None):
             raise ValueError("six motor ports require our verified full simulation firmware")
+    if "hostFlashCheckpointAbi" in config:
+        value = config["hostFlashCheckpointAbi"]
+        if (not isinstance(value, integer_types) or isinstance(value, bool) or value != 1 or
+                board != "spike-prime" or firmware != "brickwright-nuttx" or transport != "none" or
+                "programStorageAbiAddress" not in config or image_hash is None):
+            raise ValueError("host flash checkpoint requires verified own program storage")
     return config
 
 
