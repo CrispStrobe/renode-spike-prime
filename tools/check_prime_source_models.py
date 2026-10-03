@@ -159,6 +159,6 @@ if __name__ == '__main__':
     with (output / 'test.log').open('wb') as log:
         result = subprocess.run([str(args.renode.resolve()), '--disable-xwt', '--console', '--plain', str(output / 'test.resc')], stdout=log, stderr=subprocess.STDOUT, timeout=180)
     transcript = (output / 'test.log').read_text(errors='replace')
-    if result.returncode or 'PASS 9 display-clock fixtures; 4 I2C stream fixtures; ADC trigger/halfword fixture; repeated SPI DMA read fixture; 3 timer rollover fixtures; 9 timer software-event fixtures; 12 inclusive-period fixtures; PASS 29 electrical' not in transcript or 'PASS 6 Prime UART endpoint' not in transcript or 'There was an error' in transcript:
+    if result.returncode or 'PASS 9 display-clock fixtures; 4 I2C stream fixtures; ADC trigger/halfword fixture; repeated SPI DMA read fixture; 3 timer rollover fixtures; 9 timer software-event fixtures; 12 inclusive-period fixtures; PASS 35 electrical' not in transcript or 'PASS 6 Prime UART endpoint' not in transcript or 'There was an error' in transcript:
         raise SystemExit('Prime source model checks failed; inspect test.log')
     print('Prime source model and wiring checks passed.')

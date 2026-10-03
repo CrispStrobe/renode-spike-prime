@@ -102,6 +102,44 @@ filesystem fixtures, transcripts and diagnostic output stay private. The
 bounded CPU probe itself does not mount a filesystem or attach this console,
 and retains its existing instruction and wall-time limits.
 
+## Local upstream MicroPython application qualification
+
+Use `tools/check_prime_micropython.py` with a caller-supplied local raw or HEX
+application. It never downloads an image or writes firmware to hardware:
+
+```bash
+python3 tools/check_prime_micropython.py /private/path/application.hex \
+  --format hex --renode /path/to/renode \
+  --platform-root /path/to/matching/offline/runtime \
+  --model-source /path/to/matching/local/models.cs \
+  --private-output /private/path/new-qualification
+```
+
+The model-source option is optional when the installed Renode already contains
+the matching models. The tool validates application vectors at `0x08010000`,
+enters the application with normal reset mode, selects paced 50 MHz SPI2 with
+a one-byte receive queue, and applies the 100 MHz application clock profile.
+It synthesizes a FAT16 prefix from newly authored bytes, installs an authored
+`boot.py` that selects UART2, then observes arithmetic, loop interruption and
+subsequent execution. It writes `trial.py` through the interpreter, flushes
+flash, starts a second Renode process with the saved prefix and imports the file
+again. Each process has a 60-second wall guard. Existing output is rejected.
+Image bytes, generated seeds, logs and observations stay in the private output;
+public CI runs only synthetic filesystem/loader tests and owned model fixtures.
+
+`--motor-test` additionally connects the existing electrical port models and
+checks port A using actual Python `pyb.Timer` PWM and GPIO calls. It observes
+positive motion, full-load stall, recovery and Ctrl-C running the authored
+`finally` block that disables the timer and brakes the bridge. This is a
+synthetic mechanical model, not a physical calibration. Cleanup is performed
+by the test program; arbitrary Python interruption does not automatically stop
+motors. No high-level SPIKE Python API, sensor program, USB device transport,
+original bootloader handoff or foreign-image GUI path is established by this
+qualification.
+
+The application clock and pin profile follow the upstream board configuration:
+[MicroPython LEGO_HUB_NO6 board](https://github.com/micropython/micropython/tree/v1.26.1/ports/stm32/boards/LEGO_HUB_NO6).
+
 ## Local repeated-boot resource gate
 
 After building headless Renode, run:
