@@ -24,7 +24,8 @@ def stage(root, firmware, executable, destination):
     shutil.copy2(root/'LICENSE', destination/'licenses/renode-MIT.txt')
     shutil.copy2(root/'licenses/arena-BSD-3-Clause.txt', destination/'licenses/arena-BSD-3-Clause.txt')
     files = ['scripts/spike-state-server.py', 'tools/spike_state_monitor_protocol.py',
-             'tools/ev3_state_observer.py', 'tools/spike_arena_inputs.py', 'tools/spike_arena_mailbox.py']
+             'tools/ev3_state_observer.py', 'tools/spike_arena_inputs.py', 'tools/spike_arena_mailbox.py',
+             'tools/spike_nuttx_mailbox.py', 'tools/spike_program_uart.py']
     for name in files: shutil.copy2(root/name, destination/name)
     shutil.copy2(firmware, destination/'arena-demo.elf')
     (destination/'arena-demo.repl').write_text('using "platforms/cpus/stm32f4.repl"\nsramUpper: Memory.MappedMemory @ sysbus 0x20040000\n    size: 0x10000\n')
