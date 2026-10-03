@@ -26,6 +26,7 @@ import ev3_state_observer
 from spike_arena_inputs import apply_arena_inputs
 import spike_arena_mailbox
 import spike_nuttx_mailbox
+from spike_program_uart import ProgramUartBinding, COMMANDS as PROGRAM_UART_COMMANDS
 
 _state_server = None
 FLASH_CHECKPOINT_ABI = 1
@@ -228,7 +229,7 @@ def _kind(device):
     return "unknown:" + device.GetType().Name[:48]
 
 
-def _snapshot(config, seq, generation, checkpoint=None):
+def _snapshot(config, seq, generation, checkpoint=None, program_uart=None):
     if config["identity"].get("firmware") == "brickwright-arena-demo":
         bus = monitor.Machine.SystemBus
         try:
@@ -289,7 +290,7 @@ def _snapshot(config, seq, generation, checkpoint=None):
     millivolts = int(power.BatteryMillivolts) if power is not None else 0
     identity = dict(config["identity"])
     identity["capabilities"] = ["model-observation", "bounded-command-dispatch", "state-sample/v1"]
-    if identity.get("firmware") == "brickwright-nuttx" and identity.get("transport") == "none" and any(_optional(paths, "port" + p) is not None for p in "ABCDEF"):
+    if identity.get("firmware") in ("brickwright-nuttx", "micropython-prime") and identity.get("transport") == "none" and any(_optional(paths, "port" + p) is not None for p in "ABCDEF"):
         identity["capabilities"].append("arena-inputs/v1")
     lifecycle = {"phase": "ready", "generation": topology, "connectionGeneration": generation}
     if identity.get("firmware") == "brickwright-nuttx" and identity.get("transport") == "none":
@@ -318,6 +319,9 @@ def _snapshot(config, seq, generation, checkpoint=None):
         checkpoint_status = checkpoint.status()
         if checkpoint_status is not None:
             lifecycle['nuttxFlashCheckpoint'] = checkpoint_status
+    if program_uart is not None:
+        lifecycle['micropythonUart'] = program_uart.status()
+        identity['capabilities'].append('micropython-uart/v1')
     identity["limitations"] = ["state is model output, not physical hardware"]
     clock = int(emulationManager.CurrentEmulation.MasterTimeSource.ElapsedVirtualTime.TotalNanoseconds)
     return {"schemaVersion": 1, "type": "snapshot", "seq": seq, "clockNs": clock,
@@ -334,10 +338,14 @@ def _snapshot(config, seq, generation, checkpoint=None):
             else "unavailable", "transport": identity["transport"]}}
 
 
-def _dispatch(config, command, checkpoint=None):
+def _dispatch(config, command, checkpoint=None, program_uart=None):
     if config["identity"]["board"] == "ev3":
         return ev3_state_observer.dispatch(config, _resolve, command)
     paths, name, args = config["paths"], command["command"], command["arguments"]
+    if name in ('micropython.uart.write', 'micropython.uart.read', 'micropython.uart.close'):
+        if program_uart is None or config['identity'].get('firmware') != 'micropython-prime':
+            raise ValueError('program UART unavailable')
+        return program_uart.dispatch(name, args)
     if name == "state.sample":
         if args: raise ValueError("state.sample takes no arguments")
         return
@@ -392,7 +400,7 @@ def _dispatch(config, command, checkpoint=None):
             bus = monitor.Machine.SystemBus
             spike_arena_mailbox.write_inputs(args, bus.ReadDoubleWord, bus.WriteDoubleWord)
             return
-        if config["identity"].get("firmware") != "brickwright-nuttx" or config["identity"].get("transport") != "none":
+        if config["identity"].get("firmware") not in ("brickwright-nuttx", "micropython-prime") or config["identity"].get("transport") != "none":
             raise ValueError("arena input requires our simulation firmware")
         apply_arena_inputs(args, lambda port: _resolve(paths["port" + port]).Device)
         return
@@ -440,6 +448,8 @@ class _Server(object):
         self.last_error = ""
         self.stream, self.seq, self.write_lock, self.state_lock = None, 0, Lock(), RLock()
         self.checkpoint = _flash_checkpoint(self.config, self.state_lock)
+        self.program_uart = (ProgramUartBinding(self.config, _resolve, lambda data: Array[Byte](data))
+                             if self.config['identity'].get('firmware') == 'micropython-prime' else None)
         self.listener = TcpListener(address, port)
         self.listener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, True)
         self.listener.Start(clients)
@@ -475,7 +485,7 @@ class _Server(object):
         with self.state_lock:
             if self.stream is None:
                 return False
-            snapshot = self._synchronized(lambda: _snapshot(self.config, self.seq, self.generation, self.checkpoint))
+            snapshot = self._synchronized(lambda: _snapshot(self.config, self.seq, self.generation, self.checkpoint, self.program_uart))
             self._send(self.stream, snapshot)
             self.seq += 1
             return True
@@ -512,7 +522,7 @@ class _Server(object):
             except ValueError:
                 return
             for line in lines:
-                accepted, error = True, None
+                accepted, error, data = True, None, None
                 try:
                     command = validate_command(json.loads(line))
                     request = command["requestId"]
@@ -524,13 +534,14 @@ class _Server(object):
                         seen.append(request)
                         if len(seen) > 256: seen.pop(0)
                         try:
-                            if command["command"] in ("nuttx.program.packet", "nuttx.program.storage.submit"):
-                                _dispatch(self.config, command, self.checkpoint)
+                            if command["command"] in ("nuttx.program.packet", "nuttx.program.storage.submit") + PROGRAM_UART_COMMANDS:
+                                data = _dispatch(self.config, command, self.checkpoint, self.program_uart)
                             else:
-                                self._synchronized(lambda: _dispatch(self.config, command, self.checkpoint))
+                                data = self._synchronized(lambda: _dispatch(self.config, command, self.checkpoint, self.program_uart))
                         except Exception as exception: accepted, error = False, str(exception)
                 result = {"schemaVersion": 1, "type": "result", "requestId": request, "accepted": accepted, "seq": self.seq - 1}
                 if error is not None: result["error"] = error
+                if data is not None: result['data'] = data
                 self._send(stream, result); self.sample()
 
 

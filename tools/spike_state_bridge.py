@@ -13,7 +13,7 @@ MAX_QUEUE_ITEMS = 256
 FIRMWARE_BY_BOARD = {
     "ev3": {"brickwright-ev3-smoke"},
     "spike-prime": {"lego-prime-v2", "lego-prime-v3",
-                    "spike-nx", "brickwright-nuttx", "brickwright-arena-demo"},
+                    "spike-nx", "brickwright-nuttx", "brickwright-arena-demo", "micropython-prime"},
     "spike-essential": {"lego-essential"},
 }
 
