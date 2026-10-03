@@ -30,13 +30,18 @@ def monitor_path(path):
     return "@" + value
 
 
-def send_uart(data):
+def send_uart(data, paced=False):
     lines = []
     for offset in range(0, len(data), 32):
         chunk = list(data[offset:offset + 32])
-        lines += ["python \"from System import Byte; u=self.Machine['sysbus.usart2']; "
-                  "[u.WriteChar(Byte(v)) for v in " + str(chunk) + "]\"",
-                  'emulation RunFor "0.001"']
+        if paced:
+            lines += ["python \"from System import Array, Byte; externals['programUart']."
+                      "QueueWrite(7,Array[Byte](" + str(chunk) + "))\"",
+                      'emulation RunFor "0.004"']
+        else:
+            lines += ["python \"from System import Byte; u=self.Machine['sysbus.usart2']; "
+                      "[u.WriteChar(Byte(v)) for v in " + str(chunk) + "]\"",
+                      'emulation RunFor "0.001"']
     return lines
 
 
@@ -49,6 +54,8 @@ def observe_motor(directory, name, seconds):
 
 
 def run_phase(args, directory, memory, seed, reboot=False):
+    def send(data):
+        return send_uart(data, bool(args.program_uart_model))
     directory.mkdir(mode=0o700)
     platform = stage_platform(args.platform_root.resolve(), directory, 50000000, 1)
     clock = directory / "platforms/cpus/stm32f413vg.repl"
@@ -69,7 +76,8 @@ def run_phase(args, directory, memory, seed, reboot=False):
     sp, pc = vectors(memory, 0x08010000)
     uart = directory / "uart.txt"
     saved = directory / "saved.bin"
-    lines = ["include " + monitor_path(p) for p in args.model_source]
+    sources = args.model_source + ([args.program_uart_model] if args.program_uart_model else [])
+    lines = ["include " + monitor_path(p) for p in sources]
     lines += ['mach create', 'machine LoadPlatformDescription ' + monitor_path(platform)]
     if args.motor_test:
         lines += ['emulation CreatePrimeElectricalPorts "machine-0"']
@@ -77,39 +85,51 @@ def run_phase(args, directory, memory, seed, reboot=False):
               "python \"from System import Array, Byte; b=bytearray(open('" + str(flash) +
               "','rb').read()); self.Machine['sysbus.spi2.primeStorageMux.primeStorage']."
               "UnderlyingMemory.WriteBytes(0x100000,Array[Byte](b),len(b))\"",
-              'usart2 CreateFileBackend ' + monitor_path(uart),
               'cpu VectorTableOffset 0x08010000', 'cpu SP ' + hex(sp), 'cpu PC ' + hex(pc),
               "python \"from Antmicro.Renode.Peripherals.CPU import RegisterValue; "
               "self.Machine['sysbus.cpu'].SetRegister(0,RegisterValue.Create(1,32))\"",
               'emulation RunFor "1"']
+    if args.program_uart_model:
+        # C# monitor includes live in dynamic assemblies, which IronPython does
+        # not automatically add to its namespace import table.
+        uart_setup = ("python \"from System import AppDomain, Activator, Array, Object, Int64; "
+                      "types=[a.GetType('Antmicro.Renode.Tools.BrickwrightProgramUart') "
+                      "for a in AppDomain.CurrentDomain.GetAssemblies()]; "
+                      "t=next(t for t in types if t is not None); "
+                      "p=Activator.CreateInstance(t,Array[Object]([Int64(7)])); "
+                      "emulationManager.CurrentEmulation.ExternalsManager.AddExternal(p,'programUart'); "
+                      "p.AttachTo(self.Machine['sysbus.usart2'])\"")
+    else:
+        uart_setup = 'usart2 CreateFileBackend ' + monitor_path(uart)
+    lines.insert(lines.index('cpu VectorTableOffset 0x08010000'), uart_setup)
     commands = [b'import trial\r'] if reboot else [
         b"print('BW_ARITH',6*7)\r", b"exec('while True: pass')\r", b'\x03',
         b"print('BW_AFTER',sum(range(10)))\r", b'f=open("trial.py","w")\r',
         b'f.write("print(81)\\n");f.close()\r', b'import os;os.sync()\r', b'import trial\r']
     for command in commands:
-        lines += send_uart(command) + ['emulation RunFor "0.01"']
+        lines += send(command) + ['emulation RunFor "0.01"']
     if args.motor_test and not reboot:
         lines += observe_motor(directory, 'motor-initial', 0.01)
         for command in [b'from machine import Pin\r', b'from pyb import Timer\r',
                         b'b=Pin("PORTA_M2",Pin.OUT,value=1)\r', b't=Timer(1,freq=1000)\r',
                         b'c=t.channel(1,Timer.PWM_INVERTED,pin=Pin("PORTA_M1"),pulse_width_percent=50)\r']:
-            lines += send_uart(command)
+            lines += send(command)
         lines += observe_motor(directory, 'motor-drive', 0.1)
         lines += ["python \"from System import Byte; externals['portA'].Device.SetLoad(Byte(100))\""]
         lines += observe_motor(directory, 'motor-stall', 0.1)
         lines += ["python \"from System import Byte; externals['portA'].Device.SetLoad(Byte(0))\""]
         lines += observe_motor(directory, 'motor-recover', 0.1)
-        lines += send_uart(b'exec("try:\\n while True: pass\\nfinally:\\n t.deinit();Pin(\'PORTA_M1\',Pin.OUT,value=1)")\r')
+        lines += send(b'exec("try:\\n while True: pass\\nfinally:\\n t.deinit();Pin(\'PORTA_M1\',Pin.OUT,value=1)")\r')
         lines += observe_motor(directory, 'motor-loop', 0.01)
-        lines += send_uart(b'\x03') + observe_motor(directory, 'motor-stop', 0.2)
-        lines += send_uart(b'print("BW_MOTOR_DONE")\r') + ['emulation RunFor "0.01"']
+        lines += send(b'\x03') + observe_motor(directory, 'motor-stop', 0.2)
+        lines += send(b'print("BW_MOTOR_DONE")\r') + ['emulation RunFor "0.01"']
     if args.raw_repl_test and not reboot:
         for command in [b"print('BW_RAW',6*7)\x04", b"raise ValueError('BW_RAW_ERROR')\x04",
                         b"while True: pass\x04", b"print('BW_RAW_AFTER',sum(range(10)))\x04"]:
-            lines += send_uart(b'\x03\x03\x02\x01') + ['emulation RunFor "0.01"']
-            lines += send_uart(command) + ['emulation RunFor "0.02"']
+            lines += send(b'\x03\x03\x02\x01') + ['emulation RunFor "0.01"']
+            lines += send(command) + ['emulation RunFor "0.02"']
             if command == b'while True: pass\x04':
-                lines += send_uart(b'\x03') + ['emulation RunFor "0.02"']
+                lines += send(b'\x03') + ['emulation RunFor "0.02"']
     observation = directory / "cpu.json"
     lines += ["python \"import json; f=open('" + str(observation) + "','w'); "
               "json.dump({'pc':int(self.Machine['sysbus.cpu'].PC.RawValue),"
@@ -119,6 +139,10 @@ def run_phase(args, directory, memory, seed, reboot=False):
               "python \"f=open('" + str(saved) + "','wb'); "
               "f.write(bytearray(self.Machine['sysbus.spi2.primeStorageMux.primeStorage']."
               "UnderlyingMemory.ReadBytes(0x100000,65536)));f.close()\"", 'quit', '']
+    if args.program_uart_model:
+        lines.insert(-2, "python \"p=externals['programUart']; f=open('" + str(uart) +
+                     "','wb'); [f.write(bytearray(p.Read(7,4096))) for _ in range(16)]; "
+                     "f.close(); p.Dispose()\"")
     script = directory / "qualification.resc"
     script.write_text("\n".join(lines))
     command = [str(args.renode.resolve()), '--disable-xwt', '--console', '--plain', str(script)]
@@ -179,6 +203,8 @@ def main():
     parser.add_argument('--format', choices=('hex', 'raw'), required=True)
     parser.add_argument('--renode', type=Path, required=True)
     parser.add_argument('--model-source', type=Path, action='append', default=[])
+    parser.add_argument('--program-uart-model', type=Path,
+                        help='qualify bounded simulated-time UART transport instead of direct UART injection')
     parser.add_argument('--platform-root', type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument('--private-output', type=Path, required=True)
     parser.add_argument('--motor-test', action='store_true',
@@ -204,7 +230,8 @@ def main():
         (output / 'result.json').write_text(json.dumps({'console': True, 'cancellation': True,
                                                       'writeFlushRestoreExecute': True,
                                                       'rawReplUploadCompletionErrorCancel': bool(args.raw_repl_test),
-                                                      'portAElectricalMotor': bool(args.motor_test)}))
+                                                      'portAElectricalMotor': bool(args.motor_test),
+                                                      'pacedProgramUart': bool(args.program_uart_model)}))
         print('PASS: UART Python execution, cancellation, file write/flush and fresh-process restore.')
     except (OSError, ValueError, subprocess.TimeoutExpired) as error:
         parser.exit(1, 'Local MicroPython qualification failed: ' + str(error) + '\n')
