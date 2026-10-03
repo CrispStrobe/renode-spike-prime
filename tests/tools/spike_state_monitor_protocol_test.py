@@ -65,6 +65,25 @@ class MonitorProtocolTest(unittest.TestCase):
             if mutation == 'other_firmware': bad['identity']['firmware'] = 'brickwright-arena-demo'
             with self.assertRaises(ValueError): validate_config(bad)
 
+    # Newly authored contract coverage: BSD-3-Clause, Brickwright contributors2026.
+    def test_host_checkpoint_abi_is_explicit_and_requires_own_verified_storage(self):
+        value = config()
+        value['identity']['imageSha256'] = 'a' * 64
+        value.update(programMailbox=0x20021000, programStorageAbiAddress=0x08061234,
+                     hostFlashCheckpointAbi=1)
+        validate_config(value)
+        for abi in (True, 0, 1.0, 2, '1', None):
+            with self.assertRaises(ValueError):
+                validate_config(dict(value, hostFlashCheckpointAbi=abi))
+        for mutation in ('no_hash', 'no_marker', 'other_firmware'):
+            bad = dict(value, identity=dict(value['identity']))
+            if mutation == 'no_hash': bad['identity']['imageSha256'] = None
+            if mutation == 'no_marker': del bad['programStorageAbiAddress']
+            if mutation == 'other_firmware': bad['identity']['firmware'] = 'brickwright-arena-demo'
+            with self.assertRaises(ValueError): validate_config(bad)
+        # Older service packages remain usable without a host durability claim.
+        old = config(); validate_config(old)
+
     def test_storage_marker_requires_full_firmware_and_flash_bounds(self):
         value = config()
         value.update(programMailbox=0x20021000, programStorageAbiAddress=0x08061234)
