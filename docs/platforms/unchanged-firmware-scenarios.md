@@ -57,6 +57,22 @@ Public CI tests only the catalog, loader, skip behavior, and tamper rejection
 with synthetic bytes. It never obtains or uploads firmware, manifests, hashes,
 test logs derived from private images, or TI controller data.
 
+The catalog Robot scenarios above and the separate
+`tools/spike_local_image.py` Prime raw/HEX probe have different assertions.
+The separate probe requires an explicit vector address. It observes unsigned
+64-bit instruction counts before and after
+single stepping and requires the exact requested delta. Final PC must be even
+and point to two bytes present in the original input; final SP must remain
+eight-byte aligned in SRAM. An NVIC ICSR read rejects active fault exceptions
+3 through 6. A self-loop can pass when the instruction count proves execution.
+These private observations establish bounded execution only, not boot, REPL,
+program, or peripheral success. Direct application entry also does not prove
+that an earlier bootloader reached the application. The probe connects no
+console transport and retains its observations beneath the private output.
+Its explicitly selected local platform, model sources, and Renode runtime must
+support the same model interfaces. Platform-loading or model-compilation errors
+fail the probe before CPU execution; they establish no firmware behavior.
+
 ## Local repeated-boot resource gate
 
 After building headless Renode, run:
