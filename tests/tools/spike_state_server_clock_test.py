@@ -18,7 +18,7 @@ class TimeInterval:
 
 
 class SnapshotClockTests(unittest.TestCase):
-    def snapshot_function(self, interval):
+    def snapshot_function(self, interval, ports=None):
         tree = ast.parse((ROOT / 'scripts/spike-state-server.py').read_text())
         snapshot = next(node for node in tree.body
                         if isinstance(node, ast.FunctionDef) and node.name == '_snapshot')
@@ -27,8 +27,8 @@ class SnapshotClockTests(unittest.TestCase):
         env = {'emulationManager': SimpleNamespace(CurrentEmulation=SimpleNamespace(
                    MasterTimeSource=SimpleNamespace(ElapsedVirtualTime=interval))),
                'ev3_state_observer': SimpleNamespace(observe=observe),
-               '_resolve': lambda path: None, '_optional': lambda paths, role: None,
-               '_kind': lambda device: None}
+               '_resolve': lambda path: None, '_optional': lambda paths, role: (ports or {}).get(role),
+               '_kind': lambda device: getattr(device, 'kind', None)}
         exec(compile(ast.Module(body=[snapshot], type_ignores=[]),
                      'actual-monitor-snapshot', 'exec'), env)
         return env['_snapshot']
@@ -41,6 +41,26 @@ class SnapshotClockTests(unittest.TestCase):
                                   'transport': 'none'}, 'paths': {}}, 7, 3)
                 self.assertEqual(result['clockNs'], 1_000_000_000)
                 self.assertEqual(result['seq'], 7)
+
+    def test_micro_arena_requires_uart_and_both_observed_drive_motors(self):
+        device = SimpleNamespace(kind='motor', SpeedPercent=10, PositionDegrees=90,
+            AngularVelocityDegreesPerSecond=110, Stalled=False, Power=10)
+        port = SimpleNamespace(Device=device, TopologyGeneration=1)
+        uart = SimpleNamespace(status=lambda: {'state': 'ready', 'generation': 7})
+        config = {'identity': {'board': 'spike-prime', 'firmware': 'micropython-prime',
+                              'transport': 'none'}, 'paths': {}}
+        for ports, transport in [({}, uart), ({'portA': port}, uart),
+                ({'portA': port, 'portB': port}, None),
+                ({'portA': port, 'portB': port}, uart)]:
+            result = self.snapshot_function(TimeInterval(123456789), ports)(config, 1, 3, program_uart=transport)
+            qualified = len(ports) == 2 and transport is not None
+            self.assertEqual('arena-clock/v1' in result['target']['capabilities'], qualified)
+            self.assertEqual('guest-motor-output/v1' in result['target']['capabilities'], qualified)
+            self.assertEqual(result['clockNs'], 123456789)
+            if qualified:
+                self.assertEqual(result['motors'][0]['position'], 90)
+                self.assertEqual(result['motors'][1]['speedDps'], 110)
+                self.assertEqual(result['lifecycle']['micropythonUart']['generation'], 7)
 
     def test_snapshots_use_explicit_nanoseconds_property(self):
         class ExplicitInterval:

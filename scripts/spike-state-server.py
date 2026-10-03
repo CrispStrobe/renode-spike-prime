@@ -322,6 +322,11 @@ def _snapshot(config, seq, generation, checkpoint=None, program_uart=None):
     if program_uart is not None:
         lifecycle['micropythonUart'] = program_uart.status()
         identity['capabilities'].append('micropython-uart/v1')
+        # These capabilities describe observed electrical-model state, not robot
+        # Python APIs. Require both drive encoders before offering arena motion.
+        if 'arena-inputs/v1' in identity['capabilities'] and all(
+                any(motor['port'] == port for motor in motors) for port in ('A', 'B')):
+            identity['capabilities'].extend(['arena-clock/v1', 'guest-motor-output/v1'])
     identity["limitations"] = ["state is model output, not physical hardware"]
     clock = int(emulationManager.CurrentEmulation.MasterTimeSource.ElapsedVirtualTime.TotalNanoseconds)
     return {"schemaVersion": 1, "type": "snapshot", "seq": seq, "clockNs": clock,
