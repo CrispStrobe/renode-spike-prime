@@ -152,6 +152,33 @@ class PlatformClockTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 image.stage_platform(root, root / "missing", 48000000)
 
+    def test_byte_receive_profile_only_changes_spi2(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.fixture(root)
+            before = (root / "platforms/boards/spike-prime.repl").read_text()
+            for frequency, capacity in ((0, 1), (50000000, 1), (0, 65536)):
+                with self.subTest(frequency=frequency, capacity=capacity):
+                    output = root / (str(frequency) + "-" + str(capacity))
+                    platform = image.stage_platform(root, output, frequency, capacity)
+                    settings = ("    frequency: " + str(frequency) + "\n") if frequency else ""
+                    settings += "    bufferCapacity: " + str(capacity) + "\n"
+                    self.assertEqual(platform.read_text(), before.replace("spi2:\n", "spi2:\n" + settings))
+                    self.assertEqual((output / "platforms/cpus/stm32f413vg.repl").read_text(), before)
+            self.assertEqual((root / "platforms/boards/spike-prime.repl").read_text(), before)
+
+    def test_invalid_receive_capacity_and_missing_spi_fail_before_execution(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.fixture(root)
+            for capacity in (0, -1, 65537, True, 1.0, "1"):
+                with self.subTest(capacity=capacity), self.assertRaises(ValueError):
+                    image.stage_platform(root, root / "invalid", 0, capacity)
+            self.assertFalse((root / "invalid").exists())
+            (root / "platforms/boards/spike-prime.repl").write_text("spi1:\n")
+            with self.assertRaises(ValueError):
+                image.stage_platform(root, root / "missing", 0, 1)
+
 
 if __name__ == "__main__":
     unittest.main()
