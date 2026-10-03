@@ -64,8 +64,9 @@ def validate_config(config):
                 board != "spike-prime" or firmware != "brickwright-nuttx" or transport != "none" or
                 "programStorageAbiAddress" not in config or image_hash is None):
             raise ValueError("host flash checkpoint requires verified own program storage")
-    from spike_program_uart import validate_binding_config
-    validate_binding_config(config)
+    if firmware == 'micropython-prime' or 'programUart' in config['paths'] or 'programUartGeneration' in config:
+        from spike_program_uart import validate_binding_config
+        validate_binding_config(config)
     return config
 
 

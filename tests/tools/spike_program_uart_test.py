@@ -6,6 +6,8 @@ import copy
 import json
 from pathlib import Path
 import sys
+import subprocess
+import tempfile
 from types import SimpleNamespace
 import unittest
 
@@ -40,6 +42,21 @@ class Terminal:
 
 
 class ProgramUartTests(unittest.TestCase):
+    def test_legacy_profile_validation_does_not_require_micro_helper(self):
+        # Run the real validator from an isolated old-package layout containing
+        # no MicroPython helper, rather than testing a mirrored validator.
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)
+            (path / 'spike_state_monitor_protocol.py').write_bytes(
+                (ROOT / 'tools/spike_state_monitor_protocol.py').read_bytes())
+            program = ("from spike_state_monitor_protocol import validate_config; "
+                       "validate_config({'identity':{'board':'spike-prime',"
+                       "'firmware':'brickwright-arena-demo','transport':'none',"
+                       "'imageSha256':None},'paths':{}})")
+            result = subprocess.run([sys.executable, '-c', program], cwd=path,
+                                    capture_output=True, timeout=5)
+            self.assertEqual(result.returncode, 0, result.stderr.decode())
+
     def binding(self):
         self.model = Terminal()
         self.route = {'external:programUart': self.model}

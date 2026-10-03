@@ -26,7 +26,7 @@ import ev3_state_observer
 from spike_arena_inputs import apply_arena_inputs
 import spike_arena_mailbox
 import spike_nuttx_mailbox
-from spike_program_uart import ProgramUartBinding, COMMANDS as PROGRAM_UART_COMMANDS
+PROGRAM_UART_COMMANDS = ('micropython.uart.write', 'micropython.uart.read', 'micropython.uart.close')
 
 _state_server = None
 FLASH_CHECKPOINT_ABI = 1
@@ -448,8 +448,10 @@ class _Server(object):
         self.last_error = ""
         self.stream, self.seq, self.write_lock, self.state_lock = None, 0, Lock(), RLock()
         self.checkpoint = _flash_checkpoint(self.config, self.state_lock)
-        self.program_uart = (ProgramUartBinding(self.config, _resolve, lambda data: Array[Byte](data))
-                             if self.config['identity'].get('firmware') == 'micropython-prime' else None)
+        self.program_uart = None
+        if self.config['identity'].get('firmware') == 'micropython-prime':
+            from spike_program_uart import ProgramUartBinding
+            self.program_uart = ProgramUartBinding(self.config, _resolve, lambda data: Array[Byte](data))
         self.listener = TcpListener(address, port)
         self.listener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, True)
         self.listener.Start(clients)
