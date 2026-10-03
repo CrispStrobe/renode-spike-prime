@@ -83,6 +83,25 @@ still holds four bytes. Only the explicitly selected storage SPI interface is
 changed. Clock selection does not establish a REPL, USB device support or
 complete STM32 timing/overflow behavior. DFF/16-bit transfers remain unsupported.
 
+`--storage-spi-buffer-capacity 1` selects a one-byte storage receive queue;
+omitting it retains the local model's default. The accepted range is 1..65536
+bytes. This changes only SPI2 in the staged copy. It is useful for callers that
+discard command responses with one data-register read before receiving a block:
+a larger queue can leave stale command responses ahead of that block. This
+setting does not add an overrun flag or reproduce every silicon overflow rule.
+
+A separate local console qualification of unchanged upstream MicroPython
+v1.26.1 used a 50 MHz SPI2 clock, one-byte receive queue, 100 MHz SysTick,
+normal application-entry reset mode, and an authored FAT16 `boot.py` that
+selected UART2 with `os.dupterm`. It observed the program's print marker,
+arithmetic, Ctrl-C interruption of a running loop, and subsequent execution.
+The seeded filesystem remained unchanged. These are application-entry and
+UART observations; USB device transport, original bootloader handoff, port
+programs and foreign-image GUI execution remain unqualified. Images, generated
+filesystem fixtures, transcripts and diagnostic output stay private. The
+bounded CPU probe itself does not mount a filesystem or attach this console,
+and retains its existing instruction and wall-time limits.
+
 ## Local repeated-boot resource gate
 
 After building headless Renode, run:
