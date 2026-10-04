@@ -44,6 +44,11 @@ jobs:
             exit 1
           fi
 
+      # The offline support profile retains its reviewed source closure. A
+      # shallow checkout of a newer runtime pin need not contain that commit.
+      - name: Fetch the immutable offline profile source reference
+        run: git -C src/Infrastructure fetch --depth 1 origin 1291ba1e4ddfb0d58e6957df55a56daa2132bf13
+
       - name: Run source-only SPIKE Essential gates
         run: |
           python3 tests/tools/steering_docs_test.py
