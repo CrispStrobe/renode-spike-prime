@@ -21,7 +21,8 @@ def prepare(infrastructure, output):
     for name in ('STM32TLCClockTests.cs', 'LegoLpf2ElectricalPortTests.cs', 'STM32F4I2CStreamTests.cs', 'STM32ADCTriggerTests.cs', 'STM32SPIDmaReadTests.cs', 'STM32TimerRolloverTests.cs', 'STM32TimerSoftwareEventTests.cs', 'STM32TimerInclusivePeriodTests.cs'):
         source = (source_root / name).read_text().replace('using NUnit.Framework;', '')
         source = re.sub(r'\[(?:TestFixture|NonParallelizable|SetUp|TearDown|Test|(?:TestCase|Values)\([^\]]+\))\]', '', source)
-        source = source.replace('Assert.', 'SourceAssert.')
+        source = re.sub(r'\bAssert\.', 'SourceAssert.', source)
+        source = source.replace('CollectionAssert.', 'SourceCollectionAssert.')
         for original in CORE.values():
             source = re.sub(r'\b' + original + r'\b', 'Brickwright' + original, source)
         imports.update(re.findall(r'^using [^\n]+;', source, re.M))
@@ -41,6 +42,18 @@ public static class SourceAssert {
     public static void AreNotEqual(object a,object b,string message=null) { if(Equal(a,b))throw new System.Exception("source fixture inequality failed: "+message); }
     public static void Greater(int a,int b,string message=null) { if(a<=b)throw new System.Exception("source fixture comparison failed: "+message); }
 }
+public static class SourceCollectionAssert {
+    public static void AreEqual(System.Collections.IEnumerable expected,System.Collections.IEnumerable actual,string message=null) {
+        var a=expected.GetEnumerator();var b=actual.GetEnumerator();var index=0;
+        while(true) {
+            var nextA=a.MoveNext();var nextB=b.MoveNext();
+            SourceAssert.AreEqual(nextA,nextB,message+" length at "+index);
+            if(!nextA)return;
+            SourceAssert.AreEqual(a.Current,b.Current,message+" element "+index);
+            index++;
+        }
+    }
+}
 public static class PrimeSourceFixtureRunner {
     public static string RunPrimeSourceFixtures(this Antmicro.Renode.Core.Emulation emulation) {
         var clock=new Antmicro.Renode.PeripheralsTests.STM32TLCClockTests();
@@ -50,7 +63,15 @@ public static class PrimeSourceFixtureRunner {
             foreach(var halfword in new[]{false,true})
                 foreach(var restart in new[]{false,true})
                     i2c.ShouldStreamUntilFinalNack(count,halfword,restart);
-        new Antmicro.Renode.PeripheralsTests.STM32ADCTriggerTests().ShouldSelectEdgesAndScanIdleButtonThroughHalfwordDataReads();
+        var adc=new Antmicro.Renode.PeripheralsTests.STM32ADCTriggerTests();
+        adc.ShouldCancelPendingConversionAndRestoreSingleRankOnReset();
+        adc.ShouldUseSequenceWrittenAfterEnablingADC();
+        adc.ShouldSelectEdgesAndScanIdleButtonThroughHalfwordDataReads();
+        foreach(var eachConversion in new[]{false,true})
+            foreach(var consumeData in new[]{false,true})
+                foreach(var enableInterrupt in new[]{false,true})
+                    adc.ShouldPublishEOCBeforeDMAAndPreserveDataReadAcknowledgement(eachConversion,consumeData,enableInterrupt);
+        foreach(var enableInterrupt in new[]{false,true})adc.ShouldKeepUnreadEOCForSoftwarePolling(enableInterrupt);
         new Antmicro.Renode.PeripheralsTests.STM32SPIDmaReadTests().ShouldReadRepeatedDmaBlocksAfterCpuConsumesCommandBytes();
         var rollover=new Antmicro.Renode.PeripheralsTests.STM32TimerRolloverTests();
         rollover.SetUp();try { rollover.ShouldWakeOnZeroCompareAcrossRepeatedRollover(); } finally { rollover.TearDown(); }
@@ -77,7 +98,7 @@ public static class PrimeSourceFixtureRunner {
         inclusive.SetUp();try { inclusive.ShouldKeepPreloadedArrUntilRolloverAcrossControlWrites(); } finally { inclusive.TearDown(); }
         inclusive.SetUp();try { inclusive.ShouldRetainLegacyDescendingAndCenterAlignedPeriods(); } finally { inclusive.TearDown(); }
         var electrical=ElectricalTests.RunElectricalTests(emulation);
-        return "PASS ''' + str(len(clock_methods)) + ''' display-clock fixtures; 24 I2C stream fixtures; ADC trigger/halfword fixture; repeated SPI DMA read fixture; 3 timer rollover fixtures; 9 timer software-event fixtures; 12 inclusive-period fixtures; "+electrical;
+        return "PASS ''' + str(len(clock_methods)) + ''' display-clock fixtures; 24 I2C stream fixtures; 13 ADC trigger/EOC fixtures; repeated SPI DMA read fixture; 3 timer rollover fixtures; 9 timer software-event fixtures; 12 inclusive-period fixtures; "+electrical;
     }
     public static string CheckPrimeWiring(this Antmicro.Renode.Core.Emulation emulation) {
         Antmicro.Renode.Core.IMachine machine;
@@ -148,6 +169,8 @@ public static class PrimeSourceFixtureRunner {
         'machine LoadPlatformDescription @' + str(output / 'platforms/boards/spike-prime.repl'),
         'sysbus LoadBinary @' + str(output / 'loop.bin') + ' 0x08000000',
         'cpu SP 0x20010000', 'cpu PC 0x08000009',
+        'include @' + str(Path(__file__).resolve().with_name('renode_check_prime_exti_routing.py')),
+        'check_prime_exti_routing',
         'emulation CreatePrimeElectricalPorts "source-fixture"', 'emulation CheckPrimeWiring',
         'emulation RunFor "0.01"', 'emulation ConfirmPrimeWiring', 'quit', '')))
 
@@ -163,6 +186,6 @@ if __name__ == '__main__':
     with (output / 'test.log').open('wb') as log:
         result = subprocess.run([str(args.renode.resolve()), '--disable-xwt', '--console', '--plain', str(output / 'test.resc')], stdout=log, stderr=subprocess.STDOUT, timeout=180)
     transcript = (output / 'test.log').read_text(errors='replace')
-    if result.returncode or 'PASS 9 display-clock fixtures; 24 I2C stream fixtures; ADC trigger/halfword fixture; repeated SPI DMA read fixture; 3 timer rollover fixtures; 9 timer software-event fixtures; 12 inclusive-period fixtures; PASS 35 electrical' not in transcript or 'PASS 6 Prime UART endpoint' not in transcript or 'There was an error' in transcript:
+    if result.returncode or 'PASS 9 display-clock fixtures; 24 I2C stream fixtures; 13 ADC trigger/EOC fixtures; repeated SPI DMA read fixture; 3 timer rollover fixtures; 9 timer software-event fixtures; 12 inclusive-period fixtures; PASS 35 electrical' not in transcript or 'PASS Prime GPIO/SYSCFG/EXTI routing and 4 preserved device endpoints' not in transcript or 'PASS 6 Prime UART endpoint' not in transcript or 'There was an error' in transcript:
         raise SystemExit('Prime source model checks failed; inspect test.log')
     print('Prime source model and wiring checks passed.')

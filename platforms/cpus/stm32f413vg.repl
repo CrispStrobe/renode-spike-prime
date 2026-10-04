@@ -65,3 +65,42 @@ uart9: UART.STM32_UART @ sysbus <0x40011800, +0x400>
 
 uart10: UART.STM32_UART @ sysbus <0x40011c00, +0x400>
     -> nvic@89
+
+// EXTICR selects one GPIO bank for each EXTI line (ST RM0430, SYSCFG).
+// Override the common F4 direct connections only for this CPU platform.
+// The inherited GPIO bank declarations remain available to existing users.
+syscfg: Miscellaneous.STM32_SYSCFG @ sysbus 0x40013800
+    [0-15] -> exti@[0-15]
+
+gpioPortA:
+    [0-15] -> syscfg#0@[0-15]
+
+gpioPortB:
+    [0-15] -> syscfg#1@[0-15]
+
+gpioPortC:
+    [0-15] -> syscfg#2@[0-15]
+
+gpioPortD:
+    [0-15] -> syscfg#3@[0-15]
+
+gpioPortE:
+    [0-15] -> syscfg#4@[0-15]
+
+gpioPortF:
+    [0-15] -> syscfg#5@[0-15]
+
+gpioPortG:
+    [0-15] -> syscfg#6@[0-15]
+
+gpioPortH:
+    [0-15] -> syscfg#7@[0-15]
+
+gpioPortI:
+    [0-15] -> syscfg#8@[0-15]
+
+gpioPortJ:
+    [0-15] -> syscfg#9@[0-15]
+
+gpioPortK:
+    [0-15] -> syscfg#10@[0-15]

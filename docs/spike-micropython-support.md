@@ -20,19 +20,28 @@ python3 tests/tools/stage_prime_micropython_test.py
 ```
 
 The consumed Infrastructure source closure must match public commit
-`5d2d3a79ed1df755fc261194de0774960d2ae0d3` in
-[the model repository](https://github.com/CrispStrobe/renode-infrastructure-spike-prime/tree/5d2d3a79ed1df755fc261194de0774960d2ae0d3).
+`3f968455440204393d209f3d7941bc1304086eeb` in
+[the model repository](https://github.com/CrispStrobe/renode-infrastructure-spike-prime/tree/3f968455440204393d209f3d7941bc1304086eeb).
 The assembler checks the bytes of every consumed model and its MIT license
 against that commit, and refuses modified inputs before creating output. It
 never fetches, resets a checkout or overwrites an existing package. Keep the
 assembler and pinned submodule from the same reviewed repository revision.
 
-This revision includes the native SPI flash fast-read address-mode correction:
-`0x0B` follows `0xB7`/`0xE9`, while `0x0C` always takes four address bytes.
-Compared with the preceding source reference, only `GenericSpiFlash.cs` changes
-within the 19-file consumed closure; the other 18 inputs, including the MIT
-license, remain byte-identical. The correction is qualified with synthetic
-address-mode fixtures and does not establish any opaque application's opcode use.
+This revision retains the native SPI flash address-mode correction and adds
+ADC EOC publication before synchronous DMA reads. It also stages the retained
+MIT SYSCFG model through a class alias and routes GPIO banks through EXTICR.
+Compared with the preceding source reference, `STM32_ADC.cs` changes and
+`STM32_SYSCFG.cs` is newly consumed. The other 18 inputs, including the MIT
+license, remain byte-identical; the consumed closure now has 20 files. Existing
+Antmicro notices are retained alongside scoped modification credits. The
+16-file output manifest remains closed.
+
+Focused synthetic fixtures cover ADC flag acknowledgement and SYSCFG reset
+bank selection. Actual board routing tests also check PA9/PC9 isolation and
+preserve the four display, power, storage and speaker GPIO endpoints. These
+checks do not establish reference firmware boot. DDS=0 DMA terminal-transfer
+handling, SYSCFG memory remapping and native battery/temperature ADC sample
+sources remain open model gaps.
 
 From a Brickwright checkout, freeze the assembled support and a separately
 installed, qualified Renode executable for a desktop build:

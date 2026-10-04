@@ -20,7 +20,22 @@ The Prime machine now uses `stm32f413vg.repl`: Cortex-M4F, a 96 MHz SysTick
 and timer domain, the exact 1 MiB flash and contiguous 320 KiB SRAM geometry,
 and USART6/UART7/UART8/UART9/UART10 at their F413 addresses and IRQs. The
 common STM32F4 base still supplies a harmless peripheral superset; unsupported
-blocks are not evidence of physical SPIKE hardware.
+blocks are not evidence of physical SPIKE hardware. GPIO external interrupts
+now pass through the retained MIT SYSCFG EXTICR model, selecting one bank per
+line rather than combining every inherited bank directly into EXTI. PA13 power
+hold, PA15 display latch, PB12 storage select and PC10 speaker enable retain
+their separate device connections alongside that routing. The SYSCFG model
+implements EXTICR1–4; memory remapping and other SYSCFG registers remain outside
+its contract.
+
+The ADC model publishes completion before synchronous DMA reads, so reading
+ADC_DR acknowledges EOC without the flag being restored afterward. Synthetic
+fixtures cover scan EOCS selection, DMA reads, polling and interrupt state.
+DMA with DDS=0 still lacks the terminal transfer handshake and remains an open
+model gap. Battery current/voltage, NTC temperature and charger-current ADC
+channels have no native sample sources in this profile; empty-channel zeroes
+are fallback values, not qualified board measurements. These corrections do
+not establish reference firmware boot or modern IMU wire compatibility.
 
 The Prime mappings are sourced from the MIT-tagged Pybricks `prime_hub/platform.c`
 at commit `101c6babb592148bda9a8fd912b7953c7d561c0a`: I2C2 IMU with PB4 INT1,
