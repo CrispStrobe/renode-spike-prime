@@ -34,8 +34,8 @@ and resume only after the ADC DMA bit is toggled off and on (or ADC reset).
 Re-enabling the DMA stream alone does not rearm the ADC. DDS=1 circular
 transfers continue across buffer completions.
 
-Compared with the preceding 20-file source closure, only `STM32_ADC.cs` and
-`STM32DMA.cs` change; the other 18 inputs, including the MIT license, remain
+Compared with the preceding DDS-qualified 20-file source closure, only
+`STM32DMA.cs` changes; the other 19 inputs, including the MIT license, remain
 byte-identical. Existing Antmicro notices remain with scoped modification
 credits. The source closure remains 20 files and the output manifest 16 files.
 
@@ -52,11 +52,23 @@ recommends limited requests with noncircular DMA and unlimited requests with
 circular DMA. Actual native and staged board checks also exercise the connected
 terminal path.
 
+A real DMA stream EN 0→1 transition restarts working pointers at the programmed
+PAR/M0AR bases and reloads the last software-programmed NDTR. EN 1→1 writes
+preserve progress. To resume a partial transfer, software must adjust the bases
+and explicitly write the residual count before enabling. This follows
+[RM0430 §9.3.15 and §9.5.6–8](https://www.st.com/resource/en/reference_manual/rm0430-stm32f413423-advanced-armbased-32bit-mcus-stmicroelectronics.pdf)
+and [ST AN4031's transfer-resume procedure](https://www.st.com/resource/en/application_note/dm00046011.pdf).
+The bare-restart count reload is a document-based interpretation, not a physical
+measurement. The native and staged board fixture restarts a partial ADC/DMA
+buffer at a new base and checks data, guards and terminal acknowledgements.
+
 These checks do not establish reference firmware boot or asynchronous hardware
 timing. SYSCFG memory remapping, native battery/temperature samples, ADC overrun
 and full DMA channel-mux/double-buffer/FIFO/error behavior remain outside this
-qualification. The existing DMA pointer state after manual abort also remains
-an open gap; acknowledgement recovery tests use a fixed-address destination.
+qualification. Software-interruption TCIF behavior and FIFO draining also remain
+unmodeled; a successful-buffer acknowledgement is distinct from that status.
+The earlier acknowledgement-only recovery tests retain their fixed-address
+destination; new restart fixtures cover incrementing pointers.
 
 From a Brickwright checkout, freeze the assembled support and a separately
 installed, qualified Renode executable for a desktop build:
