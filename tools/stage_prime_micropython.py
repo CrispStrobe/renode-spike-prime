@@ -71,7 +71,10 @@ def assemble(infrastructure, output):
         raise ValueError("unexpected Prime storage configuration")
     board.write_text(source.replace("spi2:\n", "spi2:\n    frequency: 50000000\n    bufferCapacity: 1\n"))
     shutil.copyfile(root / "tools/spike_program_uart.cs", output / "program-uart.cs")
-    (output / "boot-seed.bin").write_bytes(build_seed({"boot.py": BOOT}))
+    (output / "boot-seed.bin").write_bytes(build_seed({
+        "boot.py": BOOT,
+        "bwspike.py": (root / "tools/micropython/bwspike.py").read_bytes(),
+    }))
     for name in FILES:
         target = output / name
         if not target.exists():
