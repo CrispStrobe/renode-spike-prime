@@ -24,7 +24,7 @@ class SnapshotClockTests(unittest.TestCase):
                         if isinstance(node, ast.FunctionDef) and node.name == '_snapshot')
         def observe(config, resolve, seq, clock, generation):
             return {'clockNs': clock, 'seq': seq, 'generation': generation}
-        env = {'emulationManager': SimpleNamespace(CurrentEmulation=SimpleNamespace(
+        env = {'integer_types': (int,), 'emulationManager': SimpleNamespace(CurrentEmulation=SimpleNamespace(
                    MasterTimeSource=SimpleNamespace(ElapsedVirtualTime=interval))),
                'ev3_state_observer': SimpleNamespace(observe=observe),
                '_resolve': lambda path: None, '_optional': lambda paths, role: (ports or {}).get(role),
@@ -61,6 +61,24 @@ class SnapshotClockTests(unittest.TestCase):
                 self.assertEqual(result['motors'][0]['position'], 90)
                 self.assertEqual(result['motors'][1]['speedDps'], 110)
                 self.assertEqual(result['lifecycle']['micropythonUart']['generation'], 7)
+
+    def test_micro_six_requires_all_observed_motors_and_owned_ready_uart(self):
+        device = SimpleNamespace(kind='motor', SpeedPercent=0, PositionDegrees=0,
+            AngularVelocityDegreesPerSecond=0, Stalled=False, Power=0)
+        ports = {'port'+p: SimpleNamespace(Device=device, TopologyGeneration=1) for p in 'ABCDEF'}
+        config = {'identity': {'board': 'spike-prime', 'firmware': 'micropython-prime',
+                  'transport': 'none'}, 'paths': {}, 'motorPorts': 6, 'programUartGeneration': 7}
+        for defect in (None, 'missing', 'sensor', 'unready', 'wrong_generation', 'bool_generation', 'no_declaration'):
+            models=dict(ports); cfg=dict(config); status={'state':'ready','generation':7}
+            if defect=='missing':del models['portF']
+            if defect=='sensor':models['portF']=SimpleNamespace(Device=None,TopologyGeneration=1)
+            if defect=='unready':status['state']='closed'
+            if defect=='wrong_generation':status['generation']=8
+            if defect=='bool_generation':status['generation']=True
+            if defect=='no_declaration':del cfg['motorPorts']
+            uart=SimpleNamespace(status=lambda:status)
+            result=self.snapshot_function(TimeInterval(1),models)(cfg,1,1,program_uart=uart)
+            self.assertEqual('micropython-six-motors/v1' in result['target']['capabilities'],defect is None)
 
     def test_snapshots_use_explicit_nanoseconds_property(self):
         class ExplicitInterval:

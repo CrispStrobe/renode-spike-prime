@@ -65,6 +65,21 @@ class MonitorProtocolTest(unittest.TestCase):
             if mutation == 'other_firmware': bad['identity']['firmware'] = 'brickwright-arena-demo'
             with self.assertRaises(ValueError): validate_config(bad)
 
+    # SPDX-License-Identifier: BSD-3-Clause; Brickwright contributors2026.
+    def test_micro_six_requires_admitted_image_and_owned_uart_binding(self):
+        value=config(firmware='micropython-prime')
+        value['identity']['imageSha256']='b'*64
+        value.update(motorPorts=6,programUartGeneration=7)
+        value['paths']['programUart']='external:programUart'
+        validate_config(value)
+        for defect in ('hash','uart','generation','wrong_generation'):
+            bad=dict(value,identity=dict(value['identity']),paths=dict(value['paths']))
+            if defect=='hash':bad['identity']['imageSha256']=None
+            if defect=='uart':del bad['paths']['programUart']
+            if defect=='generation':del bad['programUartGeneration']
+            if defect=='wrong_generation':bad['programUartGeneration']=True
+            with self.assertRaises(ValueError):validate_config(bad)
+
     # Newly authored contract coverage: BSD-3-Clause, Brickwright contributors2026.
     def test_host_checkpoint_abi_is_explicit_and_requires_own_verified_storage(self):
         value = config()
