@@ -67,6 +67,7 @@ class SupportProfileTests(unittest.TestCase):
         seed = (output / "boot-seed.bin").read_bytes()
         self.assertEqual(len(seed), 65536)
         self.assertIn(profile.BOOT, seed)
+        self.assertIn(b"class Motor:", seed)
         self.assertEqual(seed[510:512], b"\x55\xaa")
         clock = (output / "platforms/cpus/stm32f413vg.repl").read_text()
         self.assertIn("systickFrequency: 100000000", clock)
