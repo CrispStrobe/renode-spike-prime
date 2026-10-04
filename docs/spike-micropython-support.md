@@ -59,7 +59,7 @@ is made for this integration.
 
 This does not establish physical accuracy or complete firmware equivalence.
 The upstream application has no robot-level `hub`/`motor` modules. The assembled
-seed now supplies the BSD `bwspike` drive-motor module described below. Original LEGO firmware, USB bootloader entry, BLE
+seed now supplies the BSD `bwspike` motor/sensor module described below. Original LEGO firmware, USB bootloader entry, BLE
 program upload, full desktop dialog automation, non-Unix staging and portable
 installed runtime discovery remain outside this qualification.
 
@@ -115,7 +115,7 @@ reconfigure that timer while using this module.
 
 Power is not a speed target. Acceleration, braking/coasting, load and stall
 behavior come from the existing retained electrical/mechanical model and its
-shared arena observations. No encoder read, position control, sensor read,
+shared arena observations. No position control,
 closed-loop speed control, six-motor topology or robot-level `hub`/`motor`
 compatibility is claimed by this module. `run_for` completion means that braking
 has been requested, not that the motor has already reached zero speed.
@@ -135,3 +135,71 @@ more than 100 degrees/second after the short wait. Disabling arena wheel
 propagation makes the live movement assertion fail despite Python completion.
 These test-specific tolerances distinguish the exposed actions; they do not
 establish physical calibration or complete API equivalence.
+
+## Read devices through the emulated CPU UARTs
+
+The seed also contains `_bwlpf2.py`, a bounded reader for the default modeled
+attachments. `bwspike` uses it lazily, so selecting or driving a motor does not
+open its UART. The reader configures the port UART, checks the discovery device
+type and frame checksum, acknowledges discovery, selects a mode and reads its
+data frame. It does not access native-host or frontend telemetry.
+
+| Operation | Output and units |
+| --- | --- |
+| `Motor('A').angle()`, `Motor('B').angle()` | Signed 32-bit encoder degrees. Does not reset the encoder. |
+| `motor.speed_percent()` | Signed integer speed percentage from -100 through 100, observed rather than commanded. |
+| `ColorSensor('C').color_id()` | Model color ID, 0 through 255; 255 means unknown. No color-name mapping is promised. |
+| `color.reflection()`, `color.ambient()` | Integer percentages from 0 through 100. |
+| `DistanceSensor('D').distance()` | Integer millimeters, 0 through 65534; `None` for the model's no-distance sentinel. |
+| `ForceSensor('E').force()` | Integer force percentage from 0 through 100, not Newtons. |
+| `force.pressed()` | Boolean. |
+
+Sensor constructors default to C, D and E respectively and reject other ports
+before configuring anything. Construction does not open a UART. For example:
+
+```python
+from bwspike import Motor, ColorSensor, DistanceSensor, ForceSensor
+
+print(Motor('A').angle())
+print(ColorSensor().reflection())
+print(DistanceSensor().distance())
+print(ForceSensor().pressed())
+```
+
+Reads are synchronous and interruptible. Each read has a 1000 ms firmware-time
+budget across discovery, writes and reply parsing; wraparound-safe tick checks
+apply while waiting or consuming bytes. Bounds also limit frame payloads to
+33 bytes, discovery/reply scans to 128 frames and queued-byte draining to 1024
+bytes. Missing/wrong attachments, corrupt checksums, UART errors, invalid value
+ranges and exhausted limits raise `OSError`; `KeyboardInterrupt` propagates and
+releases the reader's busy flag. GUI execution deadlines still apply.
+
+One interpreter serializes calls, with one reader shared per port. Queued old
+reports are discarded before requesting a mode report; values are not cached
+between calls. These are independently sampled readings, not an atomic snapshot
+across devices. A report that arrives during a read can reflect a different
+simulation instant from the next reading. Other code must not reconfigure these
+UARTs while readers are in use. This is a qualified default-topology reader,
+not a general hardware/hotplug driver; restart the session after a discovery
+failure or topology change. Motor power/braking continue through the same GPIO
+model while its encoder UART is open.
+
+Run `python3 tests/tools/bwspike_readers_test.py` for synthetic protocol/value
+coverage: discovery metadata, checksums, lengths, wrong devices, stale queued
+reports, mode changes, timeouts/tick wrap, interruption, limits, integer
+boundaries and sensor sentinels. Qualification still uses locally supplied
+firmware; no upstream firmware or runtime bytes are included in public source.
+
+Coordinator live qualification ran these readers inside the separately supplied
+MicroPython application through the production native/frontend session. Exact
+sensor values matched three synthetic arena-input sets, including percentages
+at 0/100, unknown color, no distance, zero distance and both pressed states.
+Changing inputs between reads changed the returned values without reopening
+ports. Moving A/B encoders had the expected signs and speed percentages; after
+braking, reported encoder positions matched shared motor positions within one
+degree and stopped speed was below one degree/second. This compares independently
+sampled protocol results with existing model observations, not physical sensors.
+The 14 synthetic reader tests detect mutations that disable checksum verification
+or decode negative encoders as unsigned. Detailed fixtures, commands, observations
+and raw coordinator transcript are preserved privately. No new implementation
+independence claim follows from this integration.

@@ -55,6 +55,17 @@ def wait(milliseconds):
     sleep_ms(_integer(milliseconds, 0, 2147483647, "milliseconds"))
 
 
+def _read(port, device_type, mode, length):
+    from _bwlpf2 import read
+    return read(port, device_type, mode, length)
+
+
+def _percent(value):
+    if value > 100:
+        raise OSError("sensor percentage outside range")
+    return value
+
+
 class Motor:
     """One of the two drive motors in the default simulation topology."""
     def __init__(self, port):
@@ -100,6 +111,20 @@ class Motor:
         _level(first, False)
         _level(second, False)
 
+    def angle(self):
+        """Read signed encoder degrees through the device UART."""
+        data = _read(self.port, 48, 2, 4)
+        value = data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24)
+        return value - 0x100000000 if value & 0x80000000 else value
+
+    def speed_percent(self):
+        """Read signed speed percentage, not a speed-control target."""
+        value = _read(self.port, 48, 1, 1)[0]
+        value = value - 256 if value & 128 else value
+        if not -100 <= value <= 100:
+            raise OSError("motor speed percentage outside range")
+        return value
+
     def run_for(self, power, milliseconds):
         """Run for firmware milliseconds, braking on return or interruption."""
         _integer(power, -100, 100, "power")
@@ -115,3 +140,49 @@ def stop_all():
     """Brake both configured drive motors."""
     Motor("A").brake()
     Motor("B").brake()
+
+
+class ColorSensor:
+    def __init__(self, port="C"):
+        if type(port) is not str or port != "C":
+            raise ValueError("default color sensor port must be C")
+        self.port = port
+
+    def color_id(self):
+        """Return the model's color ID; 255 means unknown."""
+        return _read(self.port, 61, 0, 1)[0]
+
+    def reflection(self):
+        return _percent(_read(self.port, 61, 1, 1)[0])
+
+    def ambient(self):
+        return _percent(_read(self.port, 61, 2, 1)[0])
+
+
+class DistanceSensor:
+    def __init__(self, port="D"):
+        if type(port) is not str or port != "D":
+            raise ValueError("default distance sensor port must be D")
+        self.port = port
+
+    def distance(self):
+        """Return unsigned millimeters, or None when no distance is detected."""
+        data = _read(self.port, 62, 0, 2)
+        value = data[0] | (data[1] << 8)
+        return None if value == 65535 else value
+
+
+class ForceSensor:
+    def __init__(self, port="E"):
+        if type(port) is not str or port != "E":
+            raise ValueError("default force sensor port must be E")
+        self.port = port
+
+    def force(self):
+        return _percent(_read(self.port, 63, 0, 1)[0])
+
+    def pressed(self):
+        value = _read(self.port, 63, 1, 1)[0]
+        if value not in (0, 1):
+            raise OSError("force pressed value outside range")
+        return bool(value)
