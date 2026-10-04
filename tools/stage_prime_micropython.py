@@ -7,6 +7,7 @@ Only pinned public model sources and an authored synthetic boot seed are used.
 No firmware, executable, user program, or qualification log is packaged.
 """
 import argparse
+import ast
 import hashlib
 import json
 from pathlib import Path
@@ -34,6 +35,29 @@ BOOT = (b"# SPDX-License-Identifier: BSD-3-Clause\n"
         b"import os, machine\n"
         b"os.dupterm(machine.UART(2, 115200), 0)\n"
         b"print('BW_MICRO_READY')\n")
+
+
+def compact_module(source):
+    """Remove our comments/docstrings, keeping attribution and executable AST."""
+    class StripDocs(ast.NodeTransformer):
+        def visit(self, node):
+            node = super().visit(node)
+            if (isinstance(node, (ast.Module, ast.FunctionDef, ast.ClassDef))
+                    and node.body and isinstance(node.body[0], ast.Expr)
+                    and isinstance(node.body[0].value, ast.Constant)
+                    and isinstance(node.body[0].value.value, str)):
+                node.body = node.body[1:] or [ast.Pass()]
+            return node
+    header = "\n".join(source.splitlines()[:2]) + "\n"
+    if "SPDX-License-Identifier: BSD-3-Clause" not in header or "Copyright" not in header:
+        raise ValueError("authored module must retain its license and copyright header")
+    tree = ast.fix_missing_locations(StripDocs().visit(ast.parse(source)))
+    body = ast.unparse(tree)
+    body = "\n".join(" " * ((len(line) - len(line.lstrip())) // 2) + line.lstrip()
+                     for line in body.splitlines()) + "\n"
+    if ast.dump(ast.parse(body)) != ast.dump(tree):
+        raise ValueError("module compaction changed executable syntax")
+    return (header + body).encode("utf8")
 
 
 def verify_sources(infrastructure):
@@ -79,11 +103,10 @@ def assemble(infrastructure, output):
         raise ValueError("unexpected Prime storage configuration")
     board.write_text(source.replace("spi2:\n", "spi2:\n    frequency: 50000000\n    bufferCapacity: 1\n"))
     shutil.copyfile(root / "tools/spike_program_uart.cs", output / "program-uart.cs")
-    (output / "boot-seed.bin").write_bytes(build_seed({
-        "boot.py": BOOT,
-        "bwspike.py": (root / "tools/micropython/bwspike.py").read_bytes(),
-        "_bwlpf2.py": (root / "tools/micropython/_bwlpf2.py").read_bytes(),
-    }))
+    modules = {"boot.py": BOOT}
+    for name in ("bwspike.py", "_bwlpf2.py", "_bwctrl.py"):
+        modules[name] = compact_module((root / "tools/micropython" / name).read_text())
+    (output / "boot-seed.bin").write_bytes(build_seed(modules))
     for name in FILES:
         target = output / name
         if not target.exists():

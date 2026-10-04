@@ -69,6 +69,7 @@ class SupportProfileTests(unittest.TestCase):
         self.assertIn(profile.BOOT, seed)
         self.assertIn(b"class Motor:", seed)
         self.assertIn(b"class _Link:", seed)
+        self.assertIn(b"class _Feedback:", seed)
         self.assertEqual(seed[510:512], b"\x55\xaa")
         clock = (output / "platforms/cpus/stm32f413vg.repl").read_text()
         self.assertIn("systickFrequency: 100000000", clock)
@@ -105,6 +106,23 @@ class SupportProfileTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "prior packages are preserved"):
             profile.assemble(self.infrastructure, output)
         self.assertEqual((output / "important").read_bytes(), b"preserve")
+
+    def test_compaction_preserves_execution_and_attribution(self):
+        source = ('# SPDX-License-Identifier: BSD-3-Clause\n# Copyright (c) Fixture\n'
+                  '"""module docs"""\nclass Example:\n'
+                  '    """class docs"""\n    def value(self, x):\n'
+                  '        """method docs"""\n        # comment\n'
+                  '        return " leading space\\nsecond line" if x else 6 * 7\n')
+        compact = profile.compact_module(source)
+        self.assertTrue(compact.startswith(b'# SPDX-License-Identifier: BSD-3-Clause\n# Copyright (c) Fixture\n'))
+        self.assertNotIn(b'method docs', compact)
+        original, staged = {}, {}
+        exec(source, original)
+        exec(compact, staged)
+        for value in (False, True):
+            self.assertEqual(original['Example']().value(value), staged['Example']().value(value))
+        with self.assertRaisesRegex(ValueError, 'license and copyright'):
+            profile.compact_module('value = 42\n')
 
     def test_unknown_clock_geometry_refused(self):
         def broken(infrastructure, output, aggregate_display):
