@@ -34,7 +34,7 @@ and resume only after the ADC DMA bit is toggled off and on (or ADC reset).
 Re-enabling the DMA stream alone does not rearm the ADC. DDS=1 circular
 transfers continue across buffer completions.
 
-Compared with the preceding DDS-qualified 20-file source closure, only
+Compared with the preceding restart-qualified 20-file source closure, only
 `STM32DMA.cs` changes; the other 19 inputs, including the MIT license, remain
 byte-identical. Existing Antmicro notices remain with scoped modification
 credits. The source closure remains 20 files and the output manifest 16 files.
@@ -61,6 +61,17 @@ and [ST AN4031's transfer-resume procedure](https://www.st.com/resource/en/appli
 The bare-restart count reload is a document-based interpretation, not a physical
 measurement. The native and staged board fixture restarts a partial ADC/DMA
 buffer at a new base and checks data, guards and terminal acknowledgements.
+
+Receive-request pulses arriving inside a synchronous copy callback are retained
+until the copy returns, including a pulse for a descriptor rearmed in that
+callback. A real manual-disable edge discards an ended pulse queued by the
+old descriptor, while retaining readiness if the request line is still high. Falling edges at rest still
+cancel readiness; a held request asserted while disabled remains available on
+enable. Automatic buffer completion retains the existing transmit-readiness
+behavior. The model stores one pending-readiness bit, not a counted request FIFO.
+Synthetic source-read fixtures check matched 8/16/32-bit widths, old/new source
+read counts, copied data, guards, reset/disable cancellation and completion
+pulses. These callback semantics do not establish physical handshake timing.
 
 These checks do not establish reference firmware boot or asynchronous hardware
 timing. SYSCFG memory remapping, native battery/temperature samples, ADC overrun

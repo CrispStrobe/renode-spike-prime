@@ -18,7 +18,7 @@ def prepare(infrastructure, output):
     stage(infrastructure, output, True)
     source_root = infrastructure / 'src/Emulator/Peripherals/Test/PeripheralsTests'
     imports, bodies = set(), []
-    for name in ('STM32TLCClockTests.cs', 'LegoLpf2ElectricalPortTests.cs', 'STM32F4I2CStreamTests.cs', 'STM32ADCTriggerTests.cs', 'STM32ADCDMAInitialRequestsTests.cs', 'STM32ADCDMATests.cs', 'STM32DMAAbortRearmTests.cs', 'STM32SPIDmaReadTests.cs', 'STM32TimerRolloverTests.cs', 'STM32TimerSoftwareEventTests.cs', 'STM32TimerInclusivePeriodTests.cs'):
+    for name in ('STM32TLCClockTests.cs', 'LegoLpf2ElectricalPortTests.cs', 'STM32F4I2CStreamTests.cs', 'STM32ADCTriggerTests.cs', 'STM32ADCDMAInitialRequestsTests.cs', 'STM32ADCDMATests.cs', 'STM32DMAAbortRearmTests.cs', 'STM32DMAReceivePulseTests.cs', 'STM32SPIDmaReadTests.cs', 'STM32TimerRolloverTests.cs', 'STM32TimerSoftwareEventTests.cs', 'STM32TimerInclusivePeriodTests.cs'):
         source = (source_root / name).read_text().replace('using NUnit.Framework;', '')
         source = re.sub(r'\[(?:TestFixture|NonParallelizable|SetUp|TearDown|Test|(?:TestCase|Values)\([^\]]+\))\]', '', source)
         source = re.sub(r'\bAssert\.', 'SourceAssert.', source)
@@ -106,6 +106,18 @@ public static class PrimeSourceFixtureRunner {
         dmaAbort.ShouldNotRetriggerMemoryCopyOnEnabledControlWrite();
         dmaAbort.ShouldServeNewPeripheralRequestReceivedDuringOldCopy();
         foreach(var reset in new[]{false,true})dmaAbort.ShouldCancelQueuedRearmWhenDisabledOrReset(reset);
+        var dmaReceive=new Antmicro.Renode.PeripheralsTests.STM32DMAReceivePulseTests();
+        foreach(var reset in new[]{false,true})
+            foreach(var width in new[]{0,1,2})
+                dmaReceive.ShouldRetainReceivePulseAfterRearmInsideSourceRead(reset,width);
+        foreach(var width in new[]{0,1,2})dmaReceive.ShouldRetainNestedReceivePulseWithoutRearm(width);
+        foreach(var reset in new[]{false,true})dmaReceive.ShouldCancelQueuedReceiveGenerationOnAbortOrReset(reset);
+        dmaReceive.ShouldNotCarryOldGenerationPulseAcrossManualRearm();
+        dmaReceive.ShouldCancelDisabledReadinessWhenLowAtRest();
+        dmaReceive.ShouldPreserveDisabledReadinessUntilEnable();
+        dmaReceive.ShouldPreserveHeldReceiveReadinessAcrossManualRearm();
+        dmaReceive.ShouldCancelHeldReceiveReadinessOnReset();
+        dmaReceive.ShouldCancelQueuedReceiveReadinessWhenLowAtRest();
         new Antmicro.Renode.PeripheralsTests.STM32SPIDmaReadTests().ShouldReadRepeatedDmaBlocksAfterCpuConsumesCommandBytes();
         var rollover=new Antmicro.Renode.PeripheralsTests.STM32TimerRolloverTests();
         rollover.SetUp();try { rollover.ShouldWakeOnZeroCompareAcrossRepeatedRollover(); } finally { rollover.TearDown(); }
@@ -132,7 +144,7 @@ public static class PrimeSourceFixtureRunner {
         inclusive.SetUp();try { inclusive.ShouldKeepPreloadedArrUntilRolloverAcrossControlWrites(); } finally { inclusive.TearDown(); }
         inclusive.SetUp();try { inclusive.ShouldRetainLegacyDescendingAndCenterAlignedPeriods(); } finally { inclusive.TearDown(); }
         var electrical=ElectricalTests.RunElectricalTests(emulation);
-        return "PASS ''' + str(len(clock_methods)) + ''' display-clock fixtures; 24 I2C stream fixtures; 13 ADC trigger/EOC fixtures; 29 ADC DMA terminal fixtures; 51 DMA abort/rearm fixtures; repeated SPI DMA read fixture; 3 timer rollover fixtures; 9 timer software-event fixtures; 12 inclusive-period fixtures; "+electrical;
+        return "PASS ''' + str(len(clock_methods)) + ''' display-clock fixtures; 24 I2C stream fixtures; 13 ADC trigger/EOC fixtures; 29 ADC DMA terminal fixtures; 51 DMA abort/rearm fixtures; 17 DMA receive-pulse fixtures; repeated SPI DMA read fixture; 3 timer rollover fixtures; 9 timer software-event fixtures; 12 inclusive-period fixtures; "+electrical;
     }
     public static string CheckPrimeWiring(this Antmicro.Renode.Core.Emulation emulation) {
         Antmicro.Renode.Core.IMachine machine;
@@ -222,6 +234,6 @@ if __name__ == '__main__':
     with (output / 'test.log').open('wb') as log:
         result = subprocess.run([str(args.renode.resolve()), '--disable-xwt', '--console', '--plain', str(output / 'test.resc')], stdout=log, stderr=subprocess.STDOUT, timeout=180)
     transcript = (output / 'test.log').read_text(errors='replace')
-    if result.returncode or 'PASS 9 display-clock fixtures; 24 I2C stream fixtures; 13 ADC trigger/EOC fixtures; 29 ADC DMA terminal fixtures; 51 DMA abort/rearm fixtures; repeated SPI DMA read fixture; 3 timer rollover fixtures; 9 timer software-event fixtures; 12 inclusive-period fixtures; PASS 35 electrical' not in transcript or 'PASS Prime GPIO/SYSCFG/EXTI routing and 4 preserved device endpoints' not in transcript or 'PASS Prime ADC DMA terminal handshake: DDS=0 transfer, suppression, rearm, TCIE=0' not in transcript or 'PASS Prime DMA abort/rearm: new buffer base, preserved guards, no abort acknowledgement' not in transcript or 'PASS 6 Prime UART endpoint' not in transcript or 'There was an error' in transcript:
+    if result.returncode or 'PASS 9 display-clock fixtures; 24 I2C stream fixtures; 13 ADC trigger/EOC fixtures; 29 ADC DMA terminal fixtures; 51 DMA abort/rearm fixtures; 17 DMA receive-pulse fixtures; repeated SPI DMA read fixture; 3 timer rollover fixtures; 9 timer software-event fixtures; 12 inclusive-period fixtures; PASS 35 electrical' not in transcript or 'PASS Prime GPIO/SYSCFG/EXTI routing and 4 preserved device endpoints' not in transcript or 'PASS Prime ADC DMA terminal handshake: DDS=0 transfer, suppression, rearm, TCIE=0' not in transcript or 'PASS Prime DMA abort/rearm: new buffer base, preserved guards, no abort acknowledgement' not in transcript or 'PASS 6 Prime UART endpoint' not in transcript or 'There was an error' in transcript:
         raise SystemExit('Prime source model checks failed; inspect test.log')
     print('Prime source model and wiring checks passed.')
