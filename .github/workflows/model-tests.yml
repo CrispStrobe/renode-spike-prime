@@ -82,6 +82,8 @@ jobs:
 
       - name: Run neutral brick-state contract gates
         run: |
+          python3 tests/tools/stage_prime_micropython_test.py
+          python3 tools/stage_prime_micropython.py --infrastructure src/Infrastructure --output "$RUNNER_TEMP/prime-micro-support"
           python3 -m unittest discover -s tests/tools -p 'spike_state_bridge_test.py'
           python3 -m unittest discover -s tests/tools -p 'spike_live_state_test.py'
           python3 tests/tools/spike_state_server_clock_test.py
