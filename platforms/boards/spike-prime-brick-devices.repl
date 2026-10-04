@@ -15,12 +15,12 @@ timer12:
     1 -> display@1
 
 gpioPortA:
-    15 -> display@0
+    15 -> syscfg#0@15 | display@0
 
 power: Miscellaneous.BrickPowerController @ none
 
 gpioPortA:
-    13 -> power@0
+    13 -> syscfg#0@13 | power@0
 
 speaker: Sound.PCMAudioSink @ sysbus 0x40007408
 
@@ -31,7 +31,7 @@ timer6:
     UpdateDMARequest -> dma1@5
 
 gpioPortC:
-    10 -> speaker@0
+    10 -> syscfg#2@10 | speaker@0
 
 // Two physical resistor ladders drive ADC1_IN14 (PC4) and ADC1_IN1 (PA1).
 // Digital Button peripherals are frontend controls; the ladder chooses stable

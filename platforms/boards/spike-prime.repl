@@ -24,7 +24,7 @@ primeStorage: SPI.GenericSpiFlash @ primeStorageMux 0
     secondaryStatusRegisterReadCommand: 0x35
 
 gpioPortB:
-    12 -> primeStorageMux@0
+    12 -> syscfg#1@12 | primeStorageMux@0
 
 spi2:
     DMAReceive -> dma1@3

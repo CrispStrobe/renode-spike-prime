@@ -13,7 +13,8 @@ import shutil
 
 CORE = {"I2C/STM32F4_I2C.cs": "STM32F4_I2C", "Analog/ADCChannel.cs": "ADCChannel", "Analog/STM32_ADC.cs": "STM32_ADC",
         "SPI/STM32SPI.cs": "STM32SPI", "SPI/GenericSpiFlash.cs": "GenericSpiFlash",
-        "Timers/STM32_Timer.cs": "STM32_Timer", "DMA/STM32DMA.cs": "STM32DMA"}
+        "Timers/STM32_Timer.cs": "STM32_Timer", "DMA/STM32DMA.cs": "STM32DMA",
+        "Miscellaneous/STM32_SYSCFG.cs": "STM32_SYSCFG"}
 OTHER = ("Sensors/LSM6DS3TRC.cs", "SPI/TLC5955.cs", "Miscellaneous/BrickPowerController.cs",
          "Sound/PCMAudioSink.cs", "Analog/PrimeButtonLadder.cs", "UART/Lpf2Devices.cs",
          "UART/Lpf2ArenaSensors.cs", "UART/LegoLpf2Port.cs", "UART/LegoLpf2ElectricalPort.cs", "UART/PrimeElectricalPorts.cs")

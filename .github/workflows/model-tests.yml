@@ -47,7 +47,7 @@ jobs:
       # The offline support profile retains its reviewed source closure. A
       # shallow checkout of a newer runtime pin need not contain that commit.
       - name: Fetch the immutable offline profile source reference
-        run: git -C src/Infrastructure fetch --depth 1 origin 5d2d3a79ed1df755fc261194de0774960d2ae0d3
+        run: git -C src/Infrastructure fetch --depth 1 origin 3f968455440204393d209f3d7941bc1304086eeb
 
       - name: Run source-only SPIKE Essential gates
         run: |
@@ -171,7 +171,7 @@ jobs:
           # The solution built PeripheralsTests and the runtime together.
           dotnet test "$project" --configuration Release --no-build --no-restore \
             "${common[@]}" \
-            --filter 'FullyQualifiedName~STM32CRCTests|FullyQualifiedName~STM32DMATests|FullyQualifiedName~STM32SPITests|FullyQualifiedName~STM32SPIDmaReadTests|FullyQualifiedName~STM32_UARTTests|FullyQualifiedName~STM32F7I2CTests|FullyQualifiedName~TLC5955Tests|FullyQualifiedName~LSM6DS3TRCTests|FullyQualifiedName~LP50XXTests|FullyQualifiedName~GenericSpiFlashW25Q256Tests|FullyQualifiedName~LegoLpf2PortTests|FullyQualifiedName~LegoLpf2ElectricalPortTests|FullyQualifiedName~STM32TLCClockTests|FullyQualifiedName~STM32F4I2CStreamTests|FullyQualifiedName~STM32ADCTriggerTests|FullyQualifiedName~BrickPowerControllerTests|FullyQualifiedName~PCMAudioSinkTests|FullyQualifiedName~SpikeFaultSoakTests|FullyQualifiedName~PrimeButtonLadderTests|FullyQualifiedName~STM32TimerBoardClockTests|FullyQualifiedName~STM32TimerRolloverTests|FullyQualifiedName~STM32TimerSoftwareEventTests|FullyQualifiedName~STM32TimerInclusivePeriodTests|FullyQualifiedName~TI_DA8xx_AINTCTests|FullyQualifiedName~TI_DA8xx_Timer64Tests|FullyQualifiedName~TI_DA8xx_PSCTests|FullyQualifiedName~TI_DA8xx_PLLCTests|FullyQualifiedName~TI_DA8xx_SYSCFG0Tests|FullyQualifiedName~TI_DA8xx_EDMA3CCTests|FullyQualifiedName~TI_DA8xx_EDMA3TCTests|FullyQualifiedName~TI_DA8xx_MMCSDTests|FullyQualifiedName~TI_DA8xx_GPIOTests|FullyQualifiedName~TI_DA8xx_SPITests|FullyQualifiedName~ST7586Tests' \
+            --filter 'FullyQualifiedName~STM32CRCTests|FullyQualifiedName~STM32DMATests|FullyQualifiedName~STM32SPITests|FullyQualifiedName~STM32SPIDmaReadTests|FullyQualifiedName~STM32_UARTTests|FullyQualifiedName~STM32F7I2CTests|FullyQualifiedName~TLC5955Tests|FullyQualifiedName~LSM6DS3TRCTests|FullyQualifiedName~LP50XXTests|FullyQualifiedName~GenericSpiFlashW25Q256Tests|FullyQualifiedName~LegoLpf2PortTests|FullyQualifiedName~LegoLpf2ElectricalPortTests|FullyQualifiedName~STM32TLCClockTests|FullyQualifiedName~STM32F4I2CStreamTests|FullyQualifiedName~STM32ADCTriggerTests|FullyQualifiedName~STM32SYSCFGTests|FullyQualifiedName~BrickPowerControllerTests|FullyQualifiedName~PCMAudioSinkTests|FullyQualifiedName~SpikeFaultSoakTests|FullyQualifiedName~PrimeButtonLadderTests|FullyQualifiedName~STM32TimerBoardClockTests|FullyQualifiedName~STM32TimerRolloverTests|FullyQualifiedName~STM32TimerSoftwareEventTests|FullyQualifiedName~STM32TimerInclusivePeriodTests|FullyQualifiedName~TI_DA8xx_AINTCTests|FullyQualifiedName~TI_DA8xx_Timer64Tests|FullyQualifiedName~TI_DA8xx_PSCTests|FullyQualifiedName~TI_DA8xx_PLLCTests|FullyQualifiedName~TI_DA8xx_SYSCFG0Tests|FullyQualifiedName~TI_DA8xx_EDMA3CCTests|FullyQualifiedName~TI_DA8xx_EDMA3TCTests|FullyQualifiedName~TI_DA8xx_MMCSDTests|FullyQualifiedName~TI_DA8xx_GPIOTests|FullyQualifiedName~TI_DA8xx_SPITests|FullyQualifiedName~ST7586Tests' \
             --logger 'console;verbosity=normal'
 
       - name: Run redirected console input tests
@@ -181,6 +181,16 @@ jobs:
             -p:GUI_DISABLED=true -p:CurrentPlatform=Linux -p:NET=true \
             --filter 'FullyQualifiedName~ConsoleIOSourceTests' \
             --logger 'console;verbosity=normal'
+
+      - name: Exercise native Prime GPIO/SYSCFG/EXTI topology
+        shell: bash
+        run: |
+          log=/tmp/prime-exti-routing.log
+          timeout 120s dotnet output/bin/Release/Renode.dll --disable-gui --plain --console -e \
+            'mach create; machine LoadPlatformDescription @platforms/boards/spike-prime.repl; include @tools/renode_check_prime_exti_routing.py; check_prime_exti_routing; q' \
+            | tee "$log"
+          grep -Fq 'PASS Prime GPIO/SYSCFG/EXTI routing and 4 preserved device endpoints' "$log"
+          ! grep -Fq 'There was an error' "$log"
 
       - name: Run focused EV3 analog and motor model tests
         run: |
