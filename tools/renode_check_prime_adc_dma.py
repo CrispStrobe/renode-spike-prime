@@ -76,3 +76,74 @@ def mc_check_prime_adc_dma():
     adc.Reset()
     dma.Reset()
     print('PASS Prime ADC DMA terminal handshake: DDS=0 transfer, suppression, rearm, TCIE=0')
+
+
+def mc_check_prime_dma_abort():
+    """Restart a partially filled buffer through the actual ADC/DMA board pair."""
+    machine = monitor.Machine
+    if not machine.IsPaused:
+        raise ValueError('DMA abort fixture requires a paused machine')
+    adc = machine['sysbus.adc1']
+    dma = machine['sysbus.dma2']
+    bus = machine.SystemBus
+    completions = []
+
+    def observe_completion(value):
+        if value:
+            completions.append(True)
+
+    dma.TransferComplete0.AddStateChangedHook(observe_completion)
+    old_address = 0x2003f140
+    new_address = 0x2003f180
+    control = 1 | (1 << 10) | (1 << 11) | (1 << 13)
+    adc.Reset()
+    dma.Reset()
+    for address in (old_address, new_address):
+        bus.WriteWord(address - 2, 0xface)
+        bus.WriteWord(address, 0xa55a)
+        bus.WriteWord(address + 2, 0xa55a)
+        bus.WriteWord(address + 4, 0xbeef)
+
+    def prepare_adc():
+        adc.Reset()
+        adc.SetChannelValue(0, 1234)
+        adc.SetChannelValue(2, 2345)
+        adc.WriteDoubleWord(4, 1 << 8)
+        adc.WriteDoubleWord(0x2c, 1 << 20)
+        adc.WriteDoubleWord(0x34, 2 << 5)
+        adc.WriteDoubleWord(8, 1 | (1 << 8) | (1 << 9))
+
+    prepare_adc()
+    dma.WriteDoubleWord(0x14, 2)
+    dma.WriteDoubleWord(0x18, 0x4001204c)
+    dma.WriteDoubleWord(0x1c, old_address)
+    dma.WriteDoubleWord(0x10, control)
+    adc.WriteDoubleWord(8, 1 | (1 << 8) | (1 << 9) | (1 << 30))
+    machine.ClockSource.Advance(TimeInterval.FromNanoseconds(UInt64(100000)), True)
+    if bus.ReadWord(old_address) != 1234 or dma.ReadDoubleWord(0x14) != 1:
+        raise AssertionError('DMA abort fixture did not stop after its first sample')
+    dma.WriteDoubleWord(0x10, 0)
+    if completions or dma.TransferComplete0.IsSet:
+        raise AssertionError('Partial disable must not publish terminal acknowledgement')
+    prepare_adc()
+    dma.WriteDoubleWord(0x14, 2)
+    dma.WriteDoubleWord(0x18, 0x4001204c)
+    dma.WriteDoubleWord(0x1c, new_address)
+    dma.WriteDoubleWord(0x10, control)
+    adc.WriteDoubleWord(8, 1 | (1 << 8) | (1 << 9) | (1 << 30))
+    for unused in range(2):
+        machine.ClockSource.Advance(TimeInterval.FromNanoseconds(UInt64(100000)), True)
+    if [int(bus.ReadWord(new_address + 2 * i)) for i in range(2)] != [1234, 2345]:
+        raise AssertionError('Reprogrammed DMA buffer did not restart at its base')
+    if bus.ReadWord(old_address + 2) != 0xa55a:
+        raise AssertionError('Aborted buffer received another sample')
+    for address in (old_address, new_address):
+        if bus.ReadWord(address - 2) != 0xface or bus.ReadWord(address + 4) != 0xbeef:
+            raise AssertionError('DMA abort/rearm crossed a synthetic buffer guard')
+    if dma.ReadDoubleWord(0x14) != 0 or dma.ReadDoubleWord(0x10) & 1:
+        raise AssertionError('Reprogrammed DMA did not complete its two samples')
+    if len(completions) != 1:
+        raise AssertionError('Only the restarted complete buffer may acknowledge')
+    adc.Reset()
+    dma.Reset()
+    print('PASS Prime DMA abort/rearm: new buffer base, preserved guards, no abort acknowledgement')

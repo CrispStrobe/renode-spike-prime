@@ -37,9 +37,12 @@ ADC DMA must transition 0→1. The common F4 base connects DMA2 stream0's
 independent terminal notification to the ADC model, separate from TCIE/NVIC.
 Acknowledgement is scoped to the ADC's own synchronous request dispatch.
 Other producers completing on a reused stream do not suppress ADC requests.
+A real DMA EN 0→1 transition reloads programmed base pointers and count;
+EN 1→1 writes preserve progress. A synthetic board fixture checks partial-abort
+restart at a new buffer with guards and successful-buffer acknowledgement.
 Asynchronous transfer timing, ADC overrun, DMA channel mux, double buffering,
-full FIFO/error behavior and pointer reload following manual abort remain
-outside this qualification. Battery current/voltage, NTC temperature and charger-current ADC
+full FIFO/error behavior and software-interruption TCIF remain outside this
+qualification. Battery current/voltage, NTC temperature and charger-current ADC
 channels have no native sample sources in this profile; empty-channel zeroes
 are fallback values, not qualified board measurements. These corrections do
 not establish reference firmware boot or modern IMU wire compatibility.
