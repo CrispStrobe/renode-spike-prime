@@ -122,8 +122,8 @@ reconfigure that timer while using this module.
 
 Power is not a speed target. Acceleration, braking/coasting, load and stall
 behavior come from the existing retained electrical/mechanical model and its
-shared arena observations. No position control,
-closed-loop speed control, six-motor topology or robot-level `hub`/`motor`
+shared arena observations. The feedback methods below add bounded speed and
+position control. No six-motor topology or robot-level `hub`/`motor`
 compatibility is claimed by this module. `run_for` completion means that braking
 has been requested, not that the motor has already reached zero speed.
 
@@ -210,3 +210,69 @@ The 14 synthetic reader tests detect mutations that disable checksum verificatio
 or decode negative encoders as unsigned. Detailed fixtures, commands, observations
 and raw coordinator transcript are preserved privately. No new implementation
 independence claim follows from this integration.
+
+## Synchronous motor feedback control
+
+`Motor('A')` and `Motor('B')` also expose these methods:
+
+| Operation | Contract |
+| --- | --- |
+| `motor.run_speed(target_percent, milliseconds)` | Track a signed integer speed percentage from -100 through 100 for a firmware-time duration, then brake and wait for observed speed percentage to become zero. Returns `None`. |
+| `motor.run_to(angle, speed_limit=30, timeout_ms=10000)` | Move to signed 32-bit absolute encoder degrees; return the observed integer angle within two degrees of the target after braking. Speed limit is an integer percentage from 1 through 100. |
+
+Durations are integers from 0 through 2147483647 ms; position timeouts are
+integers from 1 through 2147483647 ms. Invalid values and booleans fail before
+actuation or UART configuration. Zero speed requests braking for the duration;
+zero duration requests braking without a powered interval. The requested speed
+ramps at up to 200 percentage points/second. Updates sleep for 20 ms plus UART
+work, with elapsed firmware time used for feedback. These methods require the
+encoder/speed reader contract and updated support/native build pins.
+
+Use these blocking methods from one program thread. A control owns its selected
+port until completion/failure; another control for that port raises `OSError`
+without modifying it. Other ports retain their existing outputs. Do not issue
+other commands or reconfigure the selected port while a control owns it.
+The control duration/deadline begins after initial encoder acquisition, so
+module loading and discovery add startup time. Braking adds completion time.
+The position deadline is checked between samples and after settling; a UART
+read retains its own 1000 ms budget. These are cooperative deadlines, not exact
+instruction-time cutoffs.
+
+Both methods request braking on failure or `KeyboardInterrupt` and release
+ownership. No two-degree encoder progress for 500 ms while requesting motion
+raises `OSError` with a progress/stall message. This detects lack of measurable
+progress, not the model's internal stall flag; very slow motion can trigger it.
+Position deadline and braking deadline failures also raise `OSError`. Braking
+waits at most 1000 ms between bounded reader calls for speed percentage zero;
+that quantized observation can include a small residual velocity. Position
+completion checks encoder degrees again after braking, retrying an overshoot
+until the deadline. It does not maintain active position hold afterward.
+Timed speed completion means that the requested control interval ended;
+an unreachable moving speed target is not guaranteed to be achieved.
+
+```python
+from bwspike import Motor
+
+motor = Motor('A')
+motor.run_speed(40, 1500)
+print(motor.run_to(180, speed_limit=30, timeout_ms=10000))
+```
+
+`python3 tests/tools/bwspike_control_test.py` uses a separate synthetic
+first-order plant to check loaded tracking in both directions, absolute moves,
+validation, deadlines, interruption, ownership, concurrent B output and tick
+wrap. Live MicroPython qualification tracked a 40% request at 38–39% under 25%
+modeled load in the tested steady window (tolerance: three percentage points).
+Moves to 180/-90 degrees completed at 182/-88 (tolerance: two encoder degrees).
+Full load triggered the progress guard; Ctrl-C braked A while B kept running.
+Disabling feedback or ownership cleanup makes the comparisons fail. This is
+qualified simulation behavior, not physical calibration or complete equivalence.
+
+The assembler compacts only our authored Python modules to fit the synthetic
+filesystem. It keeps each BSD SPDX/copyright header, removes comments/docstrings,
+uses shorter indentation and verifies the executable AST is unchanged. Readable
+sources remain public; staged docstrings are intentionally absent. This uses
+standard Python 3.9+ tooling, with no firmware/compiler download. Qualification
+used Python 3.13.11; Python formatter versions can produce different package
+bytes, so retain the generated manifest/pins for each configured build. The
+compacted modules were exercised inside the actual MicroPython application.

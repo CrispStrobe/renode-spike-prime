@@ -135,6 +135,16 @@ class Motor:
         finally:
             self.brake()
 
+    def run_speed(self, target_percent, milliseconds):
+        """Track speed percentage for a duration, then brake and settle."""
+        from _bwctrl import run_speed
+        return run_speed(self, target_percent, milliseconds)
+
+    def run_to(self, angle, speed_limit=30, timeout_ms=10000):
+        """Reach absolute encoder degrees within two degrees, then brake."""
+        from _bwctrl import run_to
+        return run_to(self, angle, speed_limit, timeout_ms)
+
 
 def stop_all():
     """Brake both configured drive motors."""
