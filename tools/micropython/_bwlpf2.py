@@ -27,9 +27,9 @@ def _field(address, shift, width, value):
 
 
 class _Link:
-    def __init__(self, port, device_type):
+    def __init__(self, port):
         self.uart, self.tx_gpio, self.tx_pin, self.rx_gpio, self.rx_pin, self.af, self.hz = _PORTS[port]
-        self.device_type = device_type
+        self.kind = None  # Attachment-reported type, never the caller's guess.
         self.ready = False
         self.busy = False
 
@@ -73,40 +73,47 @@ class _Link:
             raise OSError("LPF2 checksum mismatch")
         return header, data
 
-    def _open(self):
+    def _open(self, want):
+        # A wrong reader leaves verified discovery available to the right reader.
+        if self.kind not in (None, want):
+            raise OSError("LPF2 attachment type mismatch")
         if self.ready:
             return
-        mem32[self.uart + 12] = 0  # No IRQ/DMA: this API polls the CPU UART.
-        mem32[self.uart + 16] = 0
-        mem32[self.uart + 20] = 0
-        mem32[self.uart + 8] = (self.hz + 57600) // 115200
-        mem32[self.uart + 12] = 0x200c
-        # Set AF before enabling TX; the port announces only after TX is AF.
-        for gpio, pin in ((self.rx_gpio, self.rx_pin), (self.tx_gpio, self.tx_pin)):
-            _field(gpio + (32 if pin < 8 else 36), (pin % 8) * 4, 4, self.af)
-            _field(gpio, pin * 2, 2, 2)
-        found_type = False
+        if self.kind is None:
+            mem32[self.uart + 12] = 0  # No IRQ/DMA: this API polls the CPU UART.
+            mem32[self.uart + 16] = 0
+            mem32[self.uart + 20] = 0
+            mem32[self.uart + 8] = (self.hz + 57600) // 115200
+            mem32[self.uart + 12] = 0x200c
+            # Set AF before enabling TX; the port announces only after TX is AF.
+            for gpio, pin in ((self.rx_gpio, self.rx_pin), (self.tx_gpio, self.tx_pin)):
+                _field(gpio + (32 if pin < 8 else 36), (pin % 8) * 4, 4, self.af)
+                _field(gpio, pin * 2, 2, 2)
         for _ in range(128):
             header, data = self._frame()
             if header == 64:
-                if len(data) != 1 or data[0] != self.device_type:
+                if len(data) != 1:
+                    raise OSError("LPF2 type length mismatch")
+                if self.kind not in (None, data[0]):
+                    raise OSError("LPF2 type changed")
+                self.kind = data[0]
+                if self.kind != want:
                     raise OSError("LPF2 attachment type mismatch")
-                found_type = True
             if header == 4:
-                if not found_type:
-                    raise OSError("LPF2 discovery missing device type")
+                if self.kind is None:
+                    raise OSError("LPF2 missing device type")
                 self._write(b"\x04")
                 self.ready = True
                 return
-        raise OSError("LPF2 discovery exceeds frame bound")
+        raise OSError("LPF2 discovery exceeds bound")
 
-    def read(self, mode, length):
+    def read(self, want, mode, length):
         if self.busy:
             raise OSError("LPF2 port is busy")
         self.busy = True
         self.started = ticks_ms()
         try:
-            self._open()
+            self._open(want)
             # Discard already queued reports, then request a fresh mode report.
             for _ in range(16384):
                 self._check_time()
@@ -114,7 +121,7 @@ class _Link:
                     break
                 mem32[self.uart + 4]
             else:
-                raise OSError("LPF2 receive backlog exceeds bound")
+                raise OSError("LPF2 backlog exceeds bound")
             self._write(bytes((0x43, mode, 0xff ^ 0x43 ^ mode)))
             for _ in range(128):
                 header, data = self._frame()
@@ -127,11 +134,9 @@ class _Link:
             self.busy = False
 
 
-def read(port, device_type, mode, length):
+def read(port, kind, mode, length):
     link = _links.get(port)
     if link is None:
-        link = _Link(port, device_type)
+        link = _Link(port)
         _links[port] = link
-    elif link.device_type != device_type:
-        raise OSError("LPF2 port already belongs to another attachment type")
-    return link.read(mode, length)
+    return link.read(kind, mode, length)

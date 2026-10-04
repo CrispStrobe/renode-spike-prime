@@ -331,3 +331,27 @@ Feedback commands remain synchronous and require one program thread; power
 commands can keep other motors running while one motor executes feedback.
 A/B drive the shared arena rover; C–F publish auxiliary motor telemetry and
 accept load inputs. Six mode has no mounted arena sensors.
+
+## Recovering from an incorrect reader type
+
+A port reader now records the type in the checksum-verified device announcement,
+not the type requested by the program. A wrong request raises
+`OSError("LPF2 attachment type mismatch")` before discovery acknowledgment or
+motor GPIO/PWM writes. The verified announcement remains available: a later
+correct reader on that same port continues discovery and requests fresh data,
+without rebooting the interpreter or reopening its UART. Repeated wrong requests
+also fail explicitly; they do not consume the pending discovery stream. A wrong
+request after successful discovery leaves the working reader intact.
+
+All reader types for a port share one busy guard and the existing one-second
+read deadline, frame/checksum/length bounds and bounded stale-report drain.
+Conflicting device types in a discovery stream fail explicitly. This supports
+recovery from an incorrect reader request on a fixed topology; changing physical
+attachments, corrupt-stream resynchronization and general hotplug remain outside
+the qualified contract. Reassemble support and regenerate native package pins
+before rebuilding the desktop to obtain the updated seed.
+
+Run `python3 tests/tools/bwspike_readers_test.py` for synthetic recovery in both
+directions, repeated wrong requests, conflicts, timeout, interruption and
+shared-port exclusion. The SDK remains coordinator-authored BSD integration;
+no new independent implementation or physical calibration claim is made.
