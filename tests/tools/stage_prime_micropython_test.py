@@ -5,6 +5,7 @@ import hashlib
 import json
 from pathlib import Path
 import subprocess
+import struct
 import sys
 import tempfile
 import unittest
@@ -12,6 +13,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
 import stage_prime_micropython as profile
+import spike_micropython_filesystem as filesystem
 
 
 class SupportProfileTests(unittest.TestCase):
@@ -70,7 +72,34 @@ class SupportProfileTests(unittest.TestCase):
         self.assertIn(b"class Motor:", seed)
         self.assertIn(b"class _Link:", seed)
         self.assertIn(b"class _Feedback:", seed)
+        self.assertIn(b"class Display:", seed)
+        self.assertIn(b"class Buttons:", seed)
+        self.assertIn(b"class IMU:", seed)
+        self.assertIn(b"class Sound:", seed)
         self.assertEqual(seed[510:512], b"\x55\xaa")
+        self.assertEqual(struct.unpack_from("<H", seed, 17)[0], 128)
+        self.assertEqual(filesystem.DATA_START, 36864)
+        # Recover every file through directory/FAT geometry, not substring scans.
+        for index, name in enumerate(("boot.py", "bwspike.py", "_bwlpf2.py", "_bwctrl.py", "bwhub.py")):
+            entry = filesystem.ROOT_START + index * 32
+            cluster, length = struct.unpack_from("<HI", seed, entry + 26)
+            recovered = bytearray()
+            seen = set()
+            while cluster != 0xffff:
+                self.assertNotIn(cluster, seen)
+                seen.add(cluster)
+                start = filesystem.DATA_START + (cluster - 2) * filesystem.CLUSTER_SIZE
+                self.assertLessEqual(start + filesystem.CLUSTER_SIZE, len(seed))
+                recovered.extend(seed[start:start + filesystem.CLUSTER_SIZE])
+                cluster = struct.unpack_from("<H", seed, filesystem.FAT_START + cluster * 2)[0]
+            expected = profile.BOOT if name == "boot.py" else profile.compact_module(
+                (Path(__file__).resolve().parents[2] / "tools/micropython" / name).read_text())
+            self.assertEqual(bytes(recovered[:length]), expected)
+            if name == "bwhub.py":
+                self.assertIn(b"# Matrix mapping contract: retained MIT TLC5955 model interface.",
+                              bytes(recovered[:length]))
+                self.assertIn(b"# Retained mapping attribution: Copyright (c) 2019-2023 The Pybricks Authors.",
+                              bytes(recovered[:length]))
         clock = (output / "platforms/cpus/stm32f413vg.repl").read_text()
         self.assertIn("systickFrequency: 100000000", clock)
         self.assertIn("PerformanceInMips: 100", clock)
