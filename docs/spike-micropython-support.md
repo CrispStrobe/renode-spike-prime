@@ -20,12 +20,19 @@ python3 tests/tools/stage_prime_micropython_test.py
 ```
 
 The consumed Infrastructure source closure must match public commit
-`1291ba1e4ddfb0d58e6957df55a56daa2132bf13` in
-[the model repository](https://github.com/CrispStrobe/renode-infrastructure-spike-prime/tree/1291ba1e4ddfb0d58e6957df55a56daa2132bf13).
+`5d2d3a79ed1df755fc261194de0774960d2ae0d3` in
+[the model repository](https://github.com/CrispStrobe/renode-infrastructure-spike-prime/tree/5d2d3a79ed1df755fc261194de0774960d2ae0d3).
 The assembler checks the bytes of every consumed model and its MIT license
 against that commit, and refuses modified inputs before creating output. It
 never fetches, resets a checkout or overwrites an existing package. Keep the
 assembler and pinned submodule from the same reviewed repository revision.
+
+This revision includes the native SPI flash fast-read address-mode correction:
+`0x0B` follows `0xB7`/`0xE9`, while `0x0C` always takes four address bytes.
+Compared with the preceding source reference, only `GenericSpiFlash.cs` changes
+within the 19-file consumed closure; the other 18 inputs, including the MIT
+license, remain byte-identical. The correction is qualified with synthetic
+address-mode fixtures and does not establish any opaque application's opcode use.
 
 From a Brickwright checkout, freeze the assembled support and a separately
 installed, qualified Renode executable for a desktop build:
