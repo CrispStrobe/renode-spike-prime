@@ -119,6 +119,36 @@ class ReaderTests(unittest.TestCase):
             self.read()
         self.assertNotIn((self.uart.address + 4, 4), self.uart.writes)
 
+    def test_wrong_probe_recovers_using_observed_type_without_reopening(self):
+        self.uart.discovery = packet(0x40, b"\x3d") + packet(0x98, b"\x00SYNTH   ") + b"\x04"
+        for _ in range(3):
+            with self.assertRaisesRegex(OSError, "type mismatch"):
+                self.read()
+        self.assertNotIn((self.uart.address + 4, 4), self.uart.writes)
+        self.assertEqual(self.protocol.read("A", 61, 0, 1), b"\x14")
+        self.assertEqual(sum(address == self.uart.address + 12 and value == 0x200c
+                             for address, value in self.uart.writes), 1)
+        before = list(self.uart.writes)
+        with self.assertRaisesRegex(OSError, "type mismatch"):
+            self.read()
+        self.assertEqual(self.uart.writes, before)
+        self.assertEqual(self.protocol.read("A", 61, 0, 1), b"\x14")
+
+    def test_wrong_sensor_probe_recovers_to_motor_and_busy_is_shared(self):
+        with self.assertRaisesRegex(OSError, "type mismatch"):
+            self.protocol.read("A", 61, 0, 1)
+        self.assertEqual(self.read(), struct.pack("<i", -1234))
+        self.protocol._links["A"].busy = True
+        for kind in (48, 61):
+            with self.assertRaisesRegex(OSError, "busy"):
+                self.protocol.read("A", kind, 0, 1)
+
+    def test_conflicting_discovery_types_are_refused(self):
+        self.uart.discovery = packet(0x40, b"\x30") + packet(0x40, b"\x3d") + b"\x04"
+        with self.assertRaisesRegex(OSError, "type changed"):
+            self.read()
+        self.assertNotIn((self.uart.address + 4, 4), self.uart.writes)
+
     def test_missing_type_refused(self):
         self.uart.discovery = b"\x04"
         with self.assertRaisesRegex(OSError, "missing device type"):
@@ -209,10 +239,10 @@ class ReaderTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     constructor(port)
         self.assertEqual(self.uart.writes, [])
-        link = self.protocol._Link("A", 48)
+        link = self.protocol._Link("A")
         link.busy = True
         with self.assertRaisesRegex(OSError, "busy"):
-            link.read(2, 4)
+            link.read(48, 2, 4)
 
 
 if __name__ == "__main__":
