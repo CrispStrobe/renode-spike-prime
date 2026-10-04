@@ -233,6 +233,11 @@ adc1: Analog.STM32_ADC @ sysbus 0x40012000
     -> nvic@18
     DMARequest -> dma2@0
 
+// Internal model handshake for ADC_CR2.DDS=0 terminal-transfer suppression.
+// This is distinct from the stream's TCIE-masked NVIC interrupt.
+dma2:
+    TransferComplete0 -> adc1@16
+
 timer12: Timers.STM32_Timer @ sysbus 0x40001800
     -> nvic@43
     frequency: 10000000
