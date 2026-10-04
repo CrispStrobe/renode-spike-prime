@@ -20,28 +20,43 @@ python3 tests/tools/stage_prime_micropython_test.py
 ```
 
 The consumed Infrastructure source closure must match public commit
-`3f968455440204393d209f3d7941bc1304086eeb` in
-[the model repository](https://github.com/CrispStrobe/renode-infrastructure-spike-prime/tree/3f968455440204393d209f3d7941bc1304086eeb).
+`8be722f931a5d0b82a2b866478e25efc3232df2f` in
+[the model repository](https://github.com/CrispStrobe/renode-infrastructure-spike-prime/tree/8be722f931a5d0b82a2b866478e25efc3232df2f).
 The assembler checks the bytes of every consumed model and its MIT license
 against that commit, and refuses modified inputs before creating output. It
 never fetches, resets a checkout or overwrites an existing package. Keep the
 assembler and pinned submodule from the same reviewed repository revision.
 
-This revision retains the native SPI flash address-mode correction and adds
-ADC EOC publication before synchronous DMA reads. It also stages the retained
-MIT SYSCFG model through a class alias and routes GPIO banks through EXTICR.
-Compared with the preceding source reference, `STM32_ADC.cs` changes and
-`STM32_SYSCFG.cs` is newly consumed. The other 18 inputs, including the MIT
-license, remain byte-identical; the consumed closure now has 20 files. Existing
-Antmicro notices are retained alongside scoped modification credits. The
-16-file output manifest remains closed.
+This revision retains SPI address-mode and ADC EOC ordering corrections plus
+SYSCFG bank routing/reset support. It corrects ADC DDS=0 handling: requests
+start when DMA is enabled, stop after the programmed DMA buffer completes,
+and resume only after the ADC DMA bit is toggled off and on (or ADC reset).
+Re-enabling the DMA stream alone does not rearm the ADC. DDS=1 circular
+transfers continue across buffer completions.
 
-Focused synthetic fixtures cover ADC flag acknowledgement and SYSCFG reset
-bank selection. Actual board routing tests also check PA9/PC9 isolation and
-preserve the four display, power, storage and speaker GPIO endpoints. These
-checks do not establish reference firmware boot. DDS=0 DMA terminal-transfer
-handling, SYSCFG memory remapping and native battery/temperature ADC sample
-sources remain open model gaps.
+Compared with the preceding 20-file source closure, only `STM32_ADC.cs` and
+`STM32DMA.cs` change; the other 18 inputs, including the MIT license, remain
+byte-identical. Existing Antmicro notices remain with scoped modification
+credits. The source closure remains 20 files and the output manifest 16 files.
+
+The common F4 platform pairs ADC1's DMA2 stream0 request with a separate model
+completion notification (`TransferComplete0` to ADC input16). This is not a
+physical GPIO or a TCIE/NVIC interrupt. The ADC accepts acknowledgement only
+while its own request is being serviced by the synchronous DMA model; a reused
+stream completing for another producer cannot suppress it. Synthetic fixtures
+cover EOCS selection, IRQ masking, terminal suppression/rearm, circular buffers,
+stream reuse, reset/abort acknowledgement and synchronous IRQ rearm. The
+DDS=0/circular combination is tested only as the model's buffer-boundary
+interpretation; [ST's LL header](https://github.com/STMicroelectronics/stm32f4xx-hal-driver/blob/1f6451c3e07728b4c830744de380e56bf5bc0026/Inc/stm32f4xx_ll_adc.h#L2638)
+recommends limited requests with noncircular DMA and unlimited requests with
+circular DMA. Actual native and staged board checks also exercise the connected
+terminal path.
+
+These checks do not establish reference firmware boot or asynchronous hardware
+timing. SYSCFG memory remapping, native battery/temperature samples, ADC overrun
+and full DMA channel-mux/double-buffer/FIFO/error behavior remain outside this
+qualification. The existing DMA pointer state after manual abort also remains
+an open gap; acknowledgement recovery tests use a fixed-address destination.
 
 From a Brickwright checkout, freeze the assembled support and a separately
 installed, qualified Renode executable for a desktop build:

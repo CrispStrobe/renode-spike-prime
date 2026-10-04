@@ -31,8 +31,15 @@ its contract.
 The ADC model publishes completion before synchronous DMA reads, so reading
 ADC_DR acknowledges EOC without the flag being restored afterward. Synthetic
 fixtures cover scan EOCS selection, DMA reads, polling and interrupt state.
-DMA with DDS=0 still lacks the terminal transfer handshake and remains an open
-model gap. Battery current/voltage, NTC temperature and charger-current ADC
+DDS=0 now permits initial DMA requests and suppresses further requests after
+its programmed buffer completes. Re-enabling the stream alone cannot rearm it;
+ADC DMA must transition 0→1. The common F4 base connects DMA2 stream0's
+independent terminal notification to the ADC model, separate from TCIE/NVIC.
+Acknowledgement is scoped to the ADC's own synchronous request dispatch.
+Other producers completing on a reused stream do not suppress ADC requests.
+Asynchronous transfer timing, ADC overrun, DMA channel mux, double buffering,
+full FIFO/error behavior and pointer reload following manual abort remain
+outside this qualification. Battery current/voltage, NTC temperature and charger-current ADC
 channels have no native sample sources in this profile; empty-channel zeroes
 are fallback values, not qualified board measurements. These corrections do
 not establish reference firmware boot or modern IMU wire compatibility.

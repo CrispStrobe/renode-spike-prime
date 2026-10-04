@@ -18,7 +18,7 @@ import subprocess
 from spike_micropython_filesystem import build_seed
 from stage_prime_runtime import CORE, OTHER, stage
 
-INFRASTRUCTURE_COMMIT = "3f968455440204393d209f3d7941bc1304086eeb"
+INFRASTRUCTURE_COMMIT = "8be722f931a5d0b82a2b866478e25efc3232df2f"
 FILES = (
     "models.cs", "program-uart.cs", "boot-seed.bin",
     "platforms/boards/spike-prime.repl",
