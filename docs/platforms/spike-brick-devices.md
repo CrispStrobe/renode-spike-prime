@@ -40,6 +40,11 @@ Other producers completing on a reused stream do not suppress ADC requests.
 A real DMA EN 0→1 transition reloads programmed base pointers and count;
 EN 1→1 writes preserve progress. A synthetic board fixture checks partial-abort
 restart at a new buffer with guards and successful-buffer acknowledgement.
+Nested receive pulses survive an active copy. Manual disable discards ended
+queued pulses but preserves held-high readiness; falling edges at rest cancel
+readiness. Source-read fixtures check
+rearm, cancellation, data/guards and terminal acknowledgements. This models one
+pending-readiness bit, without claiming physical request timing.
 Asynchronous transfer timing, ADC overrun, DMA channel mux, double buffering,
 full FIFO/error behavior and software-interruption TCIF remain outside this
 qualification. Battery current/voltage, NTC temperature and charger-current ADC
