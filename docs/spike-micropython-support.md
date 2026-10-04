@@ -315,7 +315,8 @@ Disabling feedback or ownership cleanup makes the comparisons fail. This is
 qualified simulation behavior, not physical calibration or complete equivalence.
 
 The assembler compacts only our authored Python modules to fit the synthetic
-filesystem. It keeps each BSD SPDX/copyright header, removes comments/docstrings,
+filesystem. It keeps each contiguous leading comment header, including BSD
+SPDX/copyright and retained mapping attribution, removes other comments/docstrings,
 uses shorter indentation and verifies the executable AST is unchanged. Readable
 sources remain public; staged docstrings are intentionally absent. This uses
 standard Python 3.9+ tooling, with no firmware/compiler download. Qualification
@@ -366,3 +367,120 @@ Run `python3 tests/tools/bwspike_readers_test.py` for synthetic recovery in both
 directions, repeated wrong requests, conflicts, timeout, interruption and
 shared-port exclusion. The SDK remains coordinator-authored BSD integration;
 no new independent implementation or physical calibration claim is made.
+
+## Hub interfaces inside MicroPython
+
+The seed also supplies `bwhub`, a coordinator-authored BSD integration of the
+retained MIT board/model interfaces. Reassemble support and regenerate desktop
+pins before use. This adds no implementation-independence or physical-accuracy
+claim. It provides a bounded Brickwright simulation API.
+
+```python
+from bwhub import Display, Buttons, IMU, Sound
+
+panel = Display()
+panel.show([65535 if i in (6, 8, 16, 17, 18) else 0 for i in range(25)])
+print(Buttons().pressed())
+print(IMU().acceleration_raw())
+Sound().write_pcm8(bytes([0, 128, 255]))
+panel.clear()
+```
+
+| Operation | Contract |
+| --- | --- |
+| `Display().show(pixels)` | List/tuple of exactly 25 integer grayscale values, 0..65535, row-major in the retained model's `Matrix` orientation. Writes a 97-byte SPI1 grayscale frame and pulses PA15 LAT. Clears all nonmatrix channels. |
+| `display.clear()` | Latch all display channels to zero. |
+| `Buttons().raw()` | Independently sampled ADC1 channel14/channel1 values as a tuple of integers 0..4095. |
+| `buttons.pressed()` | Tuple of currently pressed names in center/left/right/bluetooth order. Decodes only the exact deterministic samples produced by `PrimeButtonLadder`; unknown analog levels raise `OSError`. |
+| `IMU().acceleration_raw()` | Signed 16-bit X/Y/Z register samples as a tuple. |
+| `imu.angular_rate_raw()` | Signed 16-bit X/Y/Z register samples as a tuple. |
+| `imu.temperature_raw()` | Signed 16-bit temperature register sample. |
+| `Sound().write_pcm8(samples)` | Immutable `bytes`, length 1..4096; writes their exact values to the retained byte-oriented PCM observation sink with PC10 enable asserted, then releases enable. No host audio playback or sample timing is promised. |
+
+Constructors/imports perform no peripheral writes or discovery. Display/PCM
+validation rejects booleans, floats and invalid values before any output write.
+Output methods return `None`. Multiple instances share a peripheral; methods
+reject an already busy resource without modifying it. Use one program thread;
+this cooperative guard is not a thread synchronization primitive. Do not
+independently configure SPI1/PA5/PA7/PA15, ADC1/PC4/PA1, I2C2 or PC10 while using
+these APIs. GPIO updates preserve other pins, and these methods do not configure
+motor timers/UARTs or the storage SPI2.
+
+Display/button polling has a shared 1000 ms firmware-tick budget per call with
+wraparound-safe checks and interruptible one-millisecond sleeps. Display commits
+a frame only after all bytes have been transferred. An interrupted or timed-out
+partial frame is not latched; the next full frame replaces it. LAT is released
+and ownership is cleared in `finally`. Buttons turn ADC1 off in `finally`.
+Each button ladder is read separately; this is not an atomic button snapshot.
+
+IMU methods access the retained CPU-facing I2C2 registers directly at
+`0x40005800`; they do not require a firmware `machine.I2C` module. Each call
+resets/configures/enables only that controller, checks WHO_AM_I at address
+`0x6a` for `0x6a`, and writes the sensor's register-auto-increment setting.
+Register bytes use separate one-byte reads with ACK/POS clear: transmit the
+register address, issue repeated START, select the read address, clear ADDR,
+request STOP, then consume RXNE/DR. Signed 16-bit assembly preserves raw values.
+
+All transaction waits share one 1000 ms firmware-time budget for the entire
+method, with wraparound-safe checks, interruptible sleeps, and explicit I2C
+status-error detection. Missing/wrong identity, rejected addresses and exhausted
+budgets raise `OSError`; `KeyboardInterrupt` propagates. A `finally` block
+requests STOP, resets/disables the controller and releases ownership on every
+exit. These settings target the retained model's documented register contract;
+no physical I2C timing or board-pin accuracy is qualified.
+
+Reads return current register contents without waiting for a new data-ready
+event. They clear the retained model's relevant data-ready flags as output high
+bytes are read. No ODR setup, SI conversion, axis remapping, calibration, fusion,
+heading or orientation is provided. A sample can change between individual byte
+transactions; these APIs do not claim an atomic sensor snapshot.
+
+PCM writes are bounded but immediate; interruption may leave an observed prefix,
+with enable released in `finally`. This API does not use the sink's separate
+12-bit DAC/TIM6 queued-sample interface and does not implement tones, volume or
+asynchronous playback. Display latching exposes the model's grayscale channel
+state; it does not configure or qualify TIM12 grayscale-clock timing, brightness
+calibration or physical LED scanning.
+
+The model interface facts are retained at the pinned public Infrastructure
+revision in `Sensors/LSM6DS3TRC.cs`, `SPI/TLC5955.cs`,
+`Analog/PrimeButtonLadder.cs` and `Sound/PCMAudioSink.cs`, together with this
+repository's `platforms/boards/spike-prime-brick-devices.repl`. Their MIT notices
+and existing attribution remain untouched. TLC5955 retains the matrix mapping
+attribution to Copyright (c) 2019–2023 The Pybricks Authors. This integration
+uses the licensed retained model contract and does not reproduce firmware
+driver code.
+
+Run `python3 tests/tools/bwhub_api_test.py` for synthetic full-frame mapping,
+button combinations, signed sample boundaries, invalid inputs, timeouts across
+tick wrap, I2C address/NACK handling, single-byte transaction ordering,
+interruption/recovery and shared-resource cleanup. Packaging tests
+recover all seed files through their FAT chains. To accommodate the added SDK
+module, the authored seed uses a 128-entry root directory instead of 512 entries;
+its 64 KiB prefix, volume size, 2 KiB clusters and 63-sector FAT are preserved.
+The smaller root directory leaves 28 KiB for allocated file data. Old packages
+remain valid but must be reassembled to gain `bwhub`. Actual MicroPython/Renode
+execution requires separate coordinator qualification; synthetic tests alone
+establish the SDK contract and packaging, not firmware equivalence.
+
+
+Coordinator qualification on 2026-10-04 ran the SDK inside separately supplied
+MicroPython 1.26.1 and 1.29.0 applications using the production native image
+owner, raw-REPL transport and frontend arena session. The test pressed all four
+buttons, supplied signed raw IMU samples including -32768 and 32767, latched 25
+distinct display values and wrote six PCM bytes. Python returned the supplied
+values; final observations confirmed the display channels, buttons, raw samples,
+PCM byte count/last byte, zero drops and disabled speaker enable. This is the
+stated deterministic model qualification, not physical hub equivalence.
+
+The closed `prime-hub-io/v1` capability requires the complete retained fixed-path
+model set and the owned ready UART generation. Optional arena `hub` inputs contain
+four boolean buttons and signed raw temperature/gyro/acceleration samples.
+Invalid payloads or unavailable models are rejected before peripheral mutation.
+Legacy sensors/loads-only packets remain supported. Frontend/native consumers
+validate the observation before changing the shared hub or world; no renderer
+model paths or monitor commands are admitted. The UI maps 16-bit display values
+to 0–9 brightness with rounding and retains the raw observation. IMU samples are
+not converted into the arena's yaw/heading. PCM is observed without host playback.
+Firmware images, raw observations and complete qualification transcripts remain
+in the private evidence repository.

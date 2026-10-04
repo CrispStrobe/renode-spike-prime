@@ -66,7 +66,7 @@ class SeedTests(unittest.TestCase):
         self.assertEqual(len(seed), 65536)
         parsed, bpb, allocated = parse_seed(seed)
         self.assertEqual(parsed, files)
-        self.assertEqual(bpb, (512, 4, 1, 1, 512, 63488, 0xF8, 63))
+        self.assertEqual(bpb, (512, 4, 1, 1, 128, 63488, 0xF8, 63))
         self.assertEqual(allocated, {2, 3, 4, 5})
         self.assertEqual(struct.unpack_from("<I", seed, 28)[0], 256)
         self.assertEqual(struct.unpack_from("<I", seed, 32)[0], 0)
@@ -75,22 +75,22 @@ class SeedTests(unittest.TestCase):
         self.assertEqual(seed[54:62], b"FAT16   ")
         self.assertEqual(seed[38], 0x29)
         self.assertEqual(seed[524:32768], bytes(32768 - 524))
-        self.assertEqual(seed[32768 + 96:49152], bytes(49152 - 32768 - 96))
+        self.assertEqual(seed[32768 + 96:36864], bytes(36864 - 32768 - 96))
 
     def test_exact_prefix_capacity(self):
-        files = {"trial.py": b"x" * 16384}
+        files = {"trial.py": b"x" * 28672}
         self.assertEqual(parse_seed(build_seed(files))[0], files)
-        for files in ({"trial.py": b"x" * 16385},
-                      {"boot.py": b"a", "trial.py": b"b" * 16384}):
+        for files in ({"trial.py": b"x" * 28673},
+                      {"boot.py": b"a", "trial.py": b"b" * 28672}):
             with self.assertRaises(ValueError):
                 build_seed(files)
 
     def test_empty_files_and_root_capacity(self):
-        files = {f"f{i}.py": b"" for i in range(512)}
+        files = {f"f{i}.py": b"" for i in range(128)}
         seed = build_seed(files)
         self.assertEqual(parse_seed(seed)[0], files)
         self.assertEqual(seed[516:32768], bytes(32768 - 516))
-        self.assertEqual(seed[49152:], bytes(16384))
+        self.assertEqual(seed[36864:], bytes(28672))
         files["extra.py"] = b""
         with self.assertRaises(ValueError):
             build_seed(files)

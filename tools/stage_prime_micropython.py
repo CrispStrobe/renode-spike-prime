@@ -48,7 +48,12 @@ def compact_module(source):
                     and isinstance(node.body[0].value.value, str)):
                 node.body = node.body[1:] or [ast.Pass()]
             return node
-    header = "\n".join(source.splitlines()[:2]) + "\n"
+    header_lines = []
+    for line in source.splitlines():
+        if not line.startswith("#"):
+            break
+        header_lines.append(line)
+    header = "\n".join(header_lines) + "\n"
     if "SPDX-License-Identifier: BSD-3-Clause" not in header or "Copyright" not in header:
         raise ValueError("authored module must retain its license and copyright header")
     tree = ast.fix_missing_locations(StripDocs().visit(ast.parse(source)))
@@ -104,7 +109,7 @@ def assemble(infrastructure, output):
     board.write_text(source.replace("spi2:\n", "spi2:\n    frequency: 50000000\n    bufferCapacity: 1\n"))
     shutil.copyfile(root / "tools/spike_program_uart.cs", output / "program-uart.cs")
     modules = {"boot.py": BOOT}
-    for name in ("bwspike.py", "_bwlpf2.py", "_bwctrl.py"):
+    for name in ("bwspike.py", "_bwlpf2.py", "_bwctrl.py", "bwhub.py"):
         modules[name] = compact_module((root / "tools/micropython" / name).read_text())
     (output / "boot-seed.bin").write_bytes(build_seed(modules))
     for name in FILES:

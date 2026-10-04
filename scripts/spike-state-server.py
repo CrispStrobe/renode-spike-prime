@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2026 Brickwright contributors
 """Opt-in IronPython 2 monitor service for neutral SPIKE state.
 
 Include this file, then run ``spike_state_start 127.0.0.1 8765 @config.json``.
@@ -23,7 +25,7 @@ if _tools not in sys.path:
     sys.path.insert(0, _tools)
 from spike_state_monitor_protocol import split_frames, validate_command, validate_config, integer_types
 import ev3_state_observer
-from spike_arena_inputs import apply_arena_inputs
+from spike_arena_inputs import apply_arena_inputs, resolve_prime_hub_models, observe_prime_hub
 import spike_arena_mailbox
 import spike_nuttx_mailbox
 PROGRAM_UART_COMMANDS = ('micropython.uart.write', 'micropython.uart.read', 'micropython.uart.close')
@@ -229,6 +231,25 @@ def _kind(device):
     return "unknown:" + device.GetType().Name[:48]
 
 
+def _prime_hub_models(config, program_uart):
+    # Native verified-profile configuration supplies the paths; no command can
+    # choose a model. Require the owned, ready application UART generation.
+    identity = config["identity"]
+    if (identity.get("board") != "spike-prime" or identity.get("firmware") != "micropython-prime"
+            or identity.get("transport") != "none" or program_uart is None):
+        return None
+    status = program_uart.status()
+    generation = status.get("generation")
+    if (status.get("state") != "ready" or not isinstance(generation, integer_types)
+            or isinstance(generation, bool) or not 1 <= generation <= 9007199254740991
+            or generation != config.get("programUartGeneration")):
+        return None
+    try:
+        return resolve_prime_hub_models(config["paths"], _resolve)
+    except Exception:
+        return None
+
+
 def _snapshot(config, seq, generation, checkpoint=None, program_uart=None):
     if config["identity"].get("firmware") == "brickwright-arena-demo":
         bus = monitor.Machine.SystemBus
@@ -290,6 +311,12 @@ def _snapshot(config, seq, generation, checkpoint=None, program_uart=None):
     millivolts = int(power.BatteryMillivolts) if power is not None else 0
     identity = dict(config["identity"])
     identity["capabilities"] = ["model-observation", "bounded-command-dispatch", "state-sample/v1"]
+    buttons, imu, audio = {}, {"acceleration": {"x": 0, "y": 0, "z": 0},
+        "angularVelocity": {"x": 0, "y": 0, "z": 0}}, {"active": False, "bufferedBytes": 0}
+    hub_models = _prime_hub_models(config, program_uart)
+    if hub_models is not None:
+        buttons, imu, audio = observe_prime_hub(hub_models)
+        identity["capabilities"].append("prime-hub-io/v1")
     if identity.get("firmware") in ("brickwright-nuttx", "micropython-prime") and identity.get("transport") == "none" and any(_optional(paths, "port" + p) is not None for p in "ABCDEF"):
         identity["capabilities"].append("arena-inputs/v1")
     lifecycle = {"phase": "ready", "generation": topology, "connectionGeneration": generation}
@@ -343,13 +370,12 @@ def _snapshot(config, seq, generation, checkpoint=None, program_uart=None):
     return {"schemaVersion": 1, "type": "snapshot", "seq": seq, "clockNs": clock,
             "target": identity, "lifecycle": lifecycle, "ports": ports, "motors": motors,
             "sensors": sensors, "display": {"width": width, "height": height,
-            "pixels": pixels, "semantics": semantics}, "buttons": {},
+            "pixels": pixels, "semantics": semantics}, "buttons": buttons,
             "battery": {"percent": max(0, min(100, round((millivolts - 6000) / 24))),
             "millivolts": millivolts}, "power": {"state": "on" if power is not None and
             power.PowerHold else "off", "chargerConnected": bool(power is not None and
-            power.ChargerConnected)}, "imu": {"acceleration": {"x": 0, "y": 0, "z": 0},
-            "angularVelocity": {"x": 0, "y": 0, "z": 0}}, "audio": {"active": False,
-            "bufferedBytes": 0}, "storage": {"ready": _optional(paths, "storage") is not None},
+            power.ChargerConnected)}, "imu": imu, "audio": audio,
+            "storage": {"ready": _optional(paths, "storage") is not None},
             "bluetooth": {"state": "modeled" if _optional(paths, "bluetooth") is not None
             else "unavailable", "transport": identity["transport"]}}
 
@@ -418,7 +444,8 @@ def _dispatch(config, command, checkpoint=None, program_uart=None):
             return
         if config["identity"].get("firmware") not in ("brickwright-nuttx", "micropython-prime") or config["identity"].get("transport") != "none":
             raise ValueError("arena input requires our simulation firmware")
-        apply_arena_inputs(args, lambda port: _resolve(paths["port" + port]).Device)
+        hub_models = _prime_hub_models(config, program_uart) if "hub" in args else None
+        apply_arena_inputs(args, lambda port: _resolve(paths["port" + port]).Device, hub_models)
         return
     if name == "power.set-battery-millivolts":
         value = args.get("value")

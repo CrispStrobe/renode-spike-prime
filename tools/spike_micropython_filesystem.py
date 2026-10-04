@@ -16,8 +16,8 @@ CLUSTER_SIZE = 2048
 FAT_START = 512
 FAT_SIZE = 63 * SECTOR_SIZE
 ROOT_START = 32768
-ROOT_ENTRIES = 512
-DATA_START = 49152
+ROOT_ENTRIES = 128
+DATA_START = ROOT_START + ROOT_ENTRIES * 32
 
 # Canonical lowercase DOS short names: no paths, spaces, or alternate spellings.
 _PART = r"[a-z0-9!#$%&'()\-@^_`{}~]"
@@ -61,7 +61,7 @@ def build_seed(files):
     seed[0:3] = b"\xeb\x3c\x90"
     seed[3:11] = b"BRICKWRT"
     struct.pack_into("<HBHBHHBHHHII", seed, 11,
-                     SECTOR_SIZE, 4, 1, 1, ROOT_ENTRIES, 63488, 0xF8,
+                     SECTOR_SIZE, CLUSTER_SIZE // SECTOR_SIZE, 1, 1, ROOT_ENTRIES, 63488, 0xF8,
                      63, 32, 64, 256, 0)
     seed[36] = 0x80
     seed[38] = 0x29
