@@ -59,11 +59,15 @@ def mc_check_prime_exti_routing():
     # device endpoints after replacing the inherited direct EXTI wiring.
     endpoints = ((port_a, 13, 'power'), (port_a, 15, 'display'),
                  (port_b, 12, 'primeStorageMux'), (port_c, 10, 'speaker'))
+    receiver_types = {'power': 'BrickPowerController', 'display': 'TLC5955',
+                      'primeStorageMux': 'SPIMultiplexer', 'speaker': 'PCMAudioSink'}
+    targets = {}
     for port, pin, name in endpoints:
-        target = machine['sysbus.' + name]
-        if not any(endpoint.Receiver == target and endpoint.Number == 0
-                   for endpoint in port.Connections[pin].Endpoints):
-            raise AssertionError('Missing preserved GPIO endpoint: ' + name)
+        receivers = [endpoint.Receiver for endpoint in port.Connections[pin].Endpoints
+                     if endpoint.Number == 0 and endpoint.Receiver.GetType().Name == receiver_types[name]]
+        if len(receivers) != 1:
+            raise AssertionError('Missing or duplicated preserved GPIO endpoint: ' + name)
+        targets[name] = receivers[0]
 
     mask = (1 << 13) | (1 << 15) | (1 << 12) | (1 << 10)
     exti.WriteDoubleWord(0x00, mask)
@@ -82,19 +86,19 @@ def mc_check_prime_exti_routing():
         pending(pin, True)
         exti.WriteDoubleWord(0x14, 1 << pin)
         pending(pin, False)
-        if name == 'power' and not machine['sysbus.power'].PowerHold:
+        if name == 'power' and not targets['power'].PowerHold:
             raise AssertionError('PA13 did not drive power hold')
-        if name == 'speaker' and not machine['sysbus.speaker'].Enabled:
+        if name == 'speaker' and not targets['speaker'].Enabled:
             raise AssertionError('PC10 did not enable speaker')
-        before = machine['sysbus.display'].LatchedFrames
+        before = targets['display'].LatchedFrames
         port.WriteDoubleWord(0x18, 1 << (pin + 16))
         pending(pin, True)
         exti.WriteDoubleWord(0x14, 1 << pin)
         pending(pin, False)
-        if name == 'display' and machine['sysbus.display'].LatchedFrames != before + 1:
+        if name == 'display' and targets['display'].LatchedFrames != before + 1:
             raise AssertionError('PA15 falling edge did not latch display')
-        if name == 'power' and machine['sysbus.power'].PowerHold:
+        if name == 'power' and targets['power'].PowerHold:
             raise AssertionError('PA13 did not release power hold')
-        if name == 'speaker' and machine['sysbus.speaker'].Enabled:
+        if name == 'speaker' and targets['speaker'].Enabled:
             raise AssertionError('PC10 did not disable speaker')
     print('PASS Prime GPIO/SYSCFG/EXTI routing and 4 preserved device endpoints')
