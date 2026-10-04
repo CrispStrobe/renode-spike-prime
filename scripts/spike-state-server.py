@@ -21,7 +21,7 @@ from threading import Lock, RLock
 _tools = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "tools"))
 if _tools not in sys.path:
     sys.path.insert(0, _tools)
-from spike_state_monitor_protocol import split_frames, validate_command, validate_config
+from spike_state_monitor_protocol import split_frames, validate_command, validate_config, integer_types
 import ev3_state_observer
 from spike_arena_inputs import apply_arena_inputs
 import spike_arena_mailbox
@@ -327,6 +327,17 @@ def _snapshot(config, seq, generation, checkpoint=None, program_uart=None):
         if 'arena-inputs/v1' in identity['capabilities'] and all(
                 any(motor['port'] == port for motor in motors) for port in ('A', 'B')):
             identity['capabilities'].extend(['arena-clock/v1', 'guest-motor-output/v1'])
+        uart = lifecycle['micropythonUart']
+        uart_generation = uart.get('generation')
+        if (identity.get('firmware') == 'micropython-prime' and config.get('motorPorts') == 6
+                and uart.get('state') == 'ready'
+                and isinstance(uart_generation, integer_types) and not isinstance(uart_generation, bool)
+                and 1 <= uart_generation <= 9007199254740991
+                and uart_generation == config.get('programUartGeneration')
+                and len(motors) == 6 and all(
+                    any(motor['port'] == port for motor in motors) for port in 'ABCDEF')
+                and all(port['attached'] and port['kind'] == 'motor' for port in ports)):
+            identity['capabilities'].append('micropython-six-motors/v1')
     identity["limitations"] = ["state is model output, not physical hardware"]
     clock = int(emulationManager.CurrentEmulation.MasterTimeSource.ElapsedVirtualTime.TotalNanoseconds)
     return {"schemaVersion": 1, "type": "snapshot", "seq": seq, "clockNs": clock,

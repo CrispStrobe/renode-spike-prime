@@ -34,7 +34,7 @@ class MotorApiTests(unittest.TestCase):
         for value in (-101, 101, True, 1.5, "50", None):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 motor.dc(value)
-        for port in ("C", "a", 0, None, True):
+        for port in ("G", "a", 0, None, True):
             with self.subTest(port=port), self.assertRaises(ValueError):
                 self.api.Motor(port)
         with self.assertRaises(ValueError):
@@ -83,6 +83,47 @@ class MotorApiTests(unittest.TestCase):
             a.run_for(-30, 700)
         self.assertEqual((self.mode(9), self.mode(11)), (1, 1))
         self.assertTrue(self.high(9) and self.high(11))
+
+    def test_auxiliary_ports_discover_before_actuation_and_refuse_wrong_device(self):
+        self.api._read=Mock(side_effect=OSError('wrong device'))
+        for port in 'CDEF':
+            motor=self.api.Motor(port)
+            with self.assertRaises(OSError):motor.dc(20)
+        self.assertEqual(dict(self.registers),{})
+        self.assertEqual(self.api._motors,set('AB'))
+        self.api._read.reset_mock(side_effect=True)
+        self.api._read.return_value=b'\0'*4
+        self.api.Motor('F').dc(-30)
+        self.api._read.assert_called_once_with('F',48,2,4)
+        self.api.Motor('F').brake()
+        self.api._read.assert_called_once()
+
+    def test_six_motor_timer_isolation_cross_bank_f_and_stop_all(self):
+        self.api._read=Mock(return_value=b'\0'*4)
+        # Synthetic pin contract independent of register-write helper implementation.
+        layout={'C':(0x40020400,6,7,0x40000800,1),
+                'D':(0x40020400,8,9,0x40000800,3),
+                'E':(0x40020800,6,7,0x40000400,1)}
+        for port,(gpio,first,second,timer,channel) in layout.items():
+            self.api.Motor(port).dc(40)
+            self.assertEqual(self.registers[timer+52+(channel-1)*4],400)
+            self.assertEqual((self.registers[gpio]>>(first*2))&3,2)
+            self.assertTrue(self.registers[gpio+20]&(1<<second))
+        e=self.registers[0x40000400+52]
+        self.api.Motor('F').dc(-25)
+        self.assertEqual(self.registers[0x40000400+64],250)
+        self.assertEqual(self.registers[0x40000400+52],e)
+        self.assertEqual((self.registers[0x40020400]>>2)&3,2)
+        self.assertEqual((self.registers[0x40020400+32]>>4)&15,2)
+        self.assertTrue(self.registers[0x40020800+20]&(1<<8))
+        self.assertEqual(self.api._initialized,{0x40000400,0x40000800})
+        self.assertNotIn(0x40000400+68,self.registers)
+        self.assertNotIn(0x40000800+68,self.registers)
+        self.api.stop_all()
+        for gpio,pins in [(0x40021000,(9,11,13,14)),(0x40020400,(1,6,7,8,9)),(0x40020800,(6,7,8))]:
+            for pin in pins:
+                self.assertEqual((self.registers[gpio]>>(2*pin))&3,1)
+                self.assertTrue(self.registers[gpio+20]&(1<<pin))
 
     def test_wait_boundaries_and_validation(self):
         for value in (0, 2147483647):

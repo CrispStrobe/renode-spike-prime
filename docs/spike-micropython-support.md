@@ -114,26 +114,25 @@ simulation profile; it is not a supported hardware-flashing workflow.
 
 | Operation | Contract |
 | --- | --- |
-| `Motor('A')`, `Motor('B')` | Select a default drive motor; construction does not actuate it. Other ports are refused. |
+| `Motor(port)` | Select A–F; construction does not actuate or probe. A/B are default drive motors. C–F must pass motor discovery before actuation; the default sensor topology rejects them. |
 | `motor.dc(power)` | Integer power percentage, -100 through 100; positive and negative select opposite drive directions. Returns immediately. Zero coasts. |
 | `motor.brake()` | Remove drive and request electrical braking; returns immediately. |
 | `motor.coast()` | Remove drive and request coasting; returns immediately. |
 | `motor.run_for(power, milliseconds)` | Apply power, wait, then brake in `finally`, including on Ctrl-C. Validate both arguments before actuation. |
 | `wait(milliseconds)` | Firmware wait for integer milliseconds from 0 through 2147483647; interruptible. |
-| `stop_all()` | Brake A and B, including motors selected by other instances. |
+| `stop_all()` | Brake A/B and every auxiliary port positively verified as a motor by this module, including other instances. Does not probe unused sensor ports. |
 
 Booleans, floating-point values, wrong types and values outside these ranges
 raise `ValueError` before a command writes registers. Methods return `None`.
 Multiple instances for one port share its physical output; the last command
-wins. A and B share TIM1, initialized once per module import; commands preserve
+wins. A/B share TIM1, C/D share TIM4 and E/F share TIM3. Each timer is initialized once per module import; commands preserve
 the other port's GPIO and compare settings. Programs must not independently
-reconfigure that timer while using this module.
+reconfigure those timers while using this module.
 
 Power is not a speed target. Acceleration, braking/coasting, load and stall
 behavior come from the existing retained electrical/mechanical model and its
 shared arena observations. The feedback methods below add bounded speed and
-position control. No six-motor topology or robot-level `hub`/`motor`
-compatibility is claimed by this module. `run_for` completion means that braking
+position control. The opt-in six-motor topology replaces C–F sensors with motors; default sensor constructors then fail with a device-type error. Robot-level `hub`/`motor` compatibility is not claimed. `run_for` completion means that braking
 has been requested, not that the motor has already reached zero speed.
 
 Run `python3 tests/tools/bwspike_api_test.py` for validation, shared-port isolation,
@@ -285,3 +284,23 @@ standard Python 3.9+ tooling, with no firmware/compiler download. Qualification
 used Python 3.13.11; Python formatter versions can produce different package
 bytes, so retain the generated manifest/pins for each configured build. The
 compacted modules were exercised inside the actual MicroPython application.
+
+## Optional six-motor MicroPython profile
+
+A native launch requests `backend: "micropython", topology: "six-motors"`.
+The same board attaches motors on all A–F ports before boot. The state service
+advertises `micropython-six-motors/v1` only with six observed motor attachments
+and a ready program UART whose generation matches the launch configuration.
+Default A/B plus sensor launches remain available. Reassemble the support seed
+and regenerate desktop pins to use this profile.
+
+GPIO/PWM directions, per-timer isolation and F's bridge across two GPIO banks
+are covered by `bwspike_api_test.py`; F encoder reads use UART9. UART readers
+request fresh reports and discard at most 16384 stale bytes within the existing
+one-second read deadline. A larger backlog raises an explicit error, rather
+than returning stale encoder data. The synthetic reader tests include an idle
+motor's queued reports, a fresh sample, malformed frames and both drain bounds.
+Feedback commands remain synchronous and require one program thread; power
+commands can keep other motors running while one motor executes feedback.
+A/B drive the shared arena rover; C–F publish auxiliary motor telemetry and
+accept load inputs. Six mode has no mounted arena sensors.

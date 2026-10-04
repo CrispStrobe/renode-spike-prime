@@ -16,6 +16,7 @@ _PORTS = {
     "C": (0x40007c00, 0x40021000, 1, 0x40021000, 0, 8, 50000000),
     "D": (0x40005000, 0x40020800, 12, 0x40020c00, 2, 8, 50000000),
     "E": (0x40011c00, 0x40021000, 3, 0x40021000, 2, 11, 100000000),
+    "F": (0x40011800, 0x40020c00, 15, 0x40020c00, 14, 11, 100000000),
 }
 _links = {}
 
@@ -107,7 +108,7 @@ class _Link:
         try:
             self._open()
             # Discard already queued reports, then request a fresh mode report.
-            for _ in range(1024):
+            for _ in range(16384):
                 self._check_time()
                 if not mem32[self.uart] & 32:
                     break

@@ -103,6 +103,12 @@ class ReaderTests(unittest.TestCase):
         self.assertEqual(self.read(), struct.pack("<i", 2345))
         self.assertEqual(self.read(1, 1), b"\xce")
 
+    def test_idle_auxiliary_backlog_drains_to_fresh_sample(self):
+        self.read()
+        self.uart.rx.extend(self.uart.data(2) * 1000)
+        self.uart.values[2] = struct.pack("<i", 90)
+        self.assertEqual(self.read(), struct.pack("<i", 90))
+
     def test_unrequested_mode_frame_ignored(self):
         self.uart.reply = lambda mode: self.uart.data(0) + self.uart.data(mode)
         self.assertEqual(self.read(), struct.pack("<i", -1234))
@@ -143,7 +149,7 @@ class ReaderTests(unittest.TestCase):
             self.read()
         self.uart.discovery = packet(0x40, b"\x30") + b"\x04"
         self.read()
-        self.uart.rx.extend(bytes(1024))
+        self.uart.rx.extend(bytes(16384))
         with self.assertRaisesRegex(OSError, "backlog exceeds"):
             self.read()
 

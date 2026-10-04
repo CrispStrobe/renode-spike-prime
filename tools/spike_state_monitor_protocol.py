@@ -54,10 +54,12 @@ def validate_config(config):
         spike_nuttx_mailbox.validate_storage_abi_address(config["programStorageAbiAddress"])
     if "motorPorts" in config:
         value = config["motorPorts"]
+        own = firmware == "brickwright-nuttx" and "programMailbox" in config
+        micro = firmware == "micropython-prime" and "programUart" in config["paths"]
         if (not isinstance(value, integer_types) or isinstance(value, bool) or value != 6 or
-                board != "spike-prime" or firmware != "brickwright-nuttx" or
-                transport != "none" or "programMailbox" not in config or image_hash is None):
-            raise ValueError("six motor ports require our verified full simulation firmware")
+                board != "spike-prime" or transport != "none" or image_hash is None or
+                not (own or micro)):
+            raise ValueError("six motor ports require verified own or MicroPython simulation")
     if "hostFlashCheckpointAbi" in config:
         value = config["hostFlashCheckpointAbi"]
         if (not isinstance(value, integer_types) or isinstance(value, bool) or value != 1 or
