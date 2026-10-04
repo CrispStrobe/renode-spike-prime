@@ -82,6 +82,7 @@ def assemble(infrastructure, output):
     (output / "boot-seed.bin").write_bytes(build_seed({
         "boot.py": BOOT,
         "bwspike.py": (root / "tools/micropython/bwspike.py").read_bytes(),
+        "_bwlpf2.py": (root / "tools/micropython/_bwlpf2.py").read_bytes(),
     }))
     for name in FILES:
         target = output / name
