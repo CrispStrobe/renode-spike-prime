@@ -87,6 +87,16 @@ class SupportProfileTests(unittest.TestCase):
                 self.assertFalse(output.exists())
                 target.write_bytes(original)
 
+    def test_unavailable_reference_refused_before_output_without_checkout_changes(self):
+        output = self.root / "missing-reference"
+        original_head = self.git("rev-parse", "HEAD")
+        with patch.object(profile, "INFRASTRUCTURE_COMMIT", "0" * 40):
+            with self.assertRaisesRegex(ValueError, "reference commit is unavailable"):
+                profile.assemble(self.infrastructure, output)
+        self.assertFalse(output.exists())
+        self.assertEqual(self.git("rev-parse", "HEAD"), original_head)
+        self.assertEqual(self.git("status", "--porcelain"), "")
+
     def test_existing_package_preserved(self):
         output = self.root / "existing"
         output.mkdir()

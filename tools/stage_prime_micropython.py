@@ -38,6 +38,12 @@ BOOT = (b"# SPDX-License-Identifier: BSD-3-Clause\n"
 
 def verify_sources(infrastructure):
     """Check only the consumed source closure; never reset another checkout."""
+    available = subprocess.run(
+        ["git", "-C", str(infrastructure), "cat-file", "-e",
+         INFRASTRUCTURE_COMMIT + "^{commit}"], capture_output=True, check=False)
+    if available.returncode:
+        raise ValueError("pinned public reference commit is unavailable; fetch " +
+                         INFRASTRUCTURE_COMMIT + " before offline assembly")
     names = ["src/Emulator/Peripherals/Peripherals/" + name
              for name in tuple(CORE) + OTHER + ("Timers/STM32TLCClock.cs",)]
     names.append("licenses/MIT.txt")
@@ -45,7 +51,9 @@ def verify_sources(infrastructure):
         result = subprocess.run(
             ["git", "-C", str(infrastructure), "show", INFRASTRUCTURE_COMMIT + ":" + name],
             capture_output=True, check=False)
-        if result.returncode or result.stdout != (infrastructure / name).read_bytes():
+        if result.returncode:
+            raise ValueError("pinned public reference lacks required source: " + name)
+        if result.stdout != (infrastructure / name).read_bytes():
             raise ValueError("model source does not match the pinned public commit: " + name)
 
 
