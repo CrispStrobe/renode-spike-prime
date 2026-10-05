@@ -2,7 +2,7 @@
 
 Recorded 2026-10-05. This guide owns Runtime adapters, public source support
 packages and real guest qualification. Refresh main and the consumer pins before
-starting. [Brickwright's cross-repository handover](https://github.com/CrispStrobe/brickwright-lite/blob/main/docs/SPIKE-STATUS-AND-LANES.md)
+starting. [Brickwright's cross-repository handover](https://github.com/CrispStrobe/brickwright-lite/blob/1127285873b03ff6540809c15e627b946412f0c9/docs/SPIKE-STATUS-AND-LANES.md)
 and [firmware L01–L13](https://github.com/CrispStrobe/brickwright-spike-prime-fw/blob/main/docs/project/next-steps.md)
 identify the frontend and firmware owners. Tasks below are proposed, not claimed.
 
@@ -110,7 +110,7 @@ Doable now; long soak follows short deterministic failure regressions.
 `tools/check_prime_micropython.py`, `tools/renode_check_prime_adc_dma.py`,
 `tests/tools/stage_prime_micropython_test.py`,
 `docs/platforms/unchanged-firmware-scenarios.md` and
-[model tasks](https://github.com/CrispStrobe/renode-infrastructure-spike-prime/blob/main/docs/SPIKE-STATUS-AND-LANES.md).
+[model tasks](https://github.com/CrispStrobe/renode-infrastructure-spike-prime/blob/5a519ce5d9b5122bcf2ecedcbfd6f49d2735bbeb/docs/SPIKE-STATUS-AND-LANES.md).
 
 Take one publicly evidenced model correction; update submodule/source closure,
 platform wiring and manifests together. Run native and staged board regressions
