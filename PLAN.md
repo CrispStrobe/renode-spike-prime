@@ -1,5 +1,10 @@
 # Simulation roadmap
 
+The [current SPIKE state and agent lanes](docs/SPIKE-STATUS-AND-LANES.md)
+provide the cross-repository dependencies and acceptance gates. The LPF2 task
+below remains conditional on the current device catalog; already implemented
+identities must not be reimplemented.
+
 Execute the numbered tasks in dependency order. Each task is complete only
 when every stated gate passes. Committed implementation, fixtures, and derived
 data must be MIT-compatible and source-only. Proprietary firmware and

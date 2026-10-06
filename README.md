@@ -1,5 +1,8 @@
 # Renode: Brickwright LEGO hub simulation fork
 
+For SPIKE-specific tested scope and actionable tasks, read
+[the current handover](docs/SPIKE-STATUS-AND-LANES.md).
+
 > **Status:** simulation work in progress. Do not use simulation results as
 > evidence that any image is safe to flash to physical hardware.
 
