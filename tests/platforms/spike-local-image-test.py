@@ -152,6 +152,35 @@ class PlatformClockTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 image.stage_platform(root, root / "missing", 48000000)
 
+    def test_packaged_profile_can_be_staged_twice_without_duplicate_settings(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.fixture(root)
+            board = root / "platforms/boards/spike-prime.repl"
+            before = board.read_text().replace("spi1:\n", "spi1:\n    frequency: 1000000\n")
+            board.write_text(before)
+            first = root / "first"
+            once = image.stage_platform(root, first, 50000000, 1).read_text()
+            second = root / "second"
+            self.assertEqual(image.stage_platform(first, second, 50000000, 1).read_text(), once)
+            changed = image.stage_platform(first, root / "changed", 25000000, 2).read_text()
+            self.assertEqual(changed, once.replace("frequency: 50000000", "frequency: 25000000")
+                             .replace("bufferCapacity: 1", "bufferCapacity: 2"))
+            clock_only = image.stage_platform(first, root / "clock-only", 25000000).read_text()
+            self.assertEqual(clock_only, once.replace("frequency: 50000000", "frequency: 25000000"))
+            capacity_only = image.stage_platform(first, root / "capacity-only", 0, 2).read_text()
+            self.assertEqual(capacity_only, once.replace("bufferCapacity: 1", "bufferCapacity: 2"))
+            self.assertEqual(board.read_text(), before)
+
+    def test_duplicate_requested_spi_property_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.fixture(root)
+            board = root / "platforms/boards/spike-prime.repl"
+            board.write_text(board.read_text().replace("spi2:\n", "spi2:\n    frequency: 1\n    frequency: 2\n"))
+            with self.assertRaisesRegex(ValueError, "duplicate storage SPI2 property"):
+                image.stage_platform(root, root / "invalid", 50000000, 1)
+
     def test_byte_receive_profile_only_changes_spi2(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

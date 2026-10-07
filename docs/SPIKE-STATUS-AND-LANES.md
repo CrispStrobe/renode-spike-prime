@@ -32,6 +32,26 @@ identify the frontend and firmware owners. Tasks below are proposed, not claimed
   No complete stock LEGO boot, modern IMU wire mapping or Code-tab upload is
   established. Public CI uses synthetic inputs, never restricted application images.
 
+## Electrical detach candidate — 2026-10-07
+
+This review branch explicitly consumes Infrastructure
+`adf40d980` from [model PR #35](https://github.com/CrispStrobe/renode-infrastructure-spike-prime/pull/35).
+Its [attachment contract](https://github.com/CrispStrobe/renode-infrastructure-spike-prime/blob/adf40d980/docs/SPIKE-ELECTRICAL-ATTACHMENT.md)
+resolves stale detached inputs and exposes bridge demand even without a device.
+The synthetic idle policy does not establish physical unplug behavior.
+
+The canonical model workflow now includes the new attachment fixture and the
+complete managed peripheral suite, retaining the native translator/full Runtime
+build and existing board/guest regressions. Source-compiled model controls and
+one real own-firmware detach/reconnect sequence already passed separately; they
+are not results for this newly pinned Runtime build. Canonical-consumer guest
+qualification and firmware's independent mandatory gates remain required before
+adoption. The offline MicroPython support source-closure reference advances explicitly
+with the Infrastructure gitlink; generated manifests still hash every staged
+member. This candidate support package requires fresh MicroPython guest/consumer
+qualification before adoption. Firmware and desktop package pins are unchanged
+by this review branch.
+
 ## Execution rules
 
 Read `README.md`, `HISTORY.md`, the relevant route contract and
@@ -135,6 +155,25 @@ new Runtime main is never silently credited to an older package. Linux work is
 doable now; non-Unix packaging is separately environment-gated.
 
 ## Starting checks
+
+### Compiled consumer qualification route
+
+`tools/check_prime_nuttx.py --compiled-runtime` uses the supplied Runtime's
+compiled peripheral types. It stages offline board data and the same aggregate
+display clock, without generating or including `models.cs`. Keep the exact
+Runtime build identity with the private invocation; copied notices alone do not
+authenticate that binary. Add `--all-motors-test` for the existing six-port
+native/Python scenario, or `--storage-test` for fresh-process persistence. The
+default remains the separately labeled source-staged qualification route.
+
+Restaging a packaged MicroPython support profile now replaces requested storage
+SPI2 properties instead of duplicating them. Twenty local image/profile checks
+cover repeat staging, independent clock/capacity overrides and duplicate-property
+rejection. A supplied upstream MicroPython 1.26.1 application passed the repaired
+source-staged raw-REPL execution/error/cancellation/recovery, GPIO motor/load/
+cleanup and fresh-process filesystem checks. The preceding duplicate-property
+startup failure is preserved privately. This does not qualify full SDK behavior,
+installed GUI adoption or the new compiled Runtime consumer.
 
 From this repository root, with the prescribed dependencies:
 

@@ -10,6 +10,7 @@ Images, generated monitor scripts and diagnostic output must remain private.
 import argparse
 import json
 from pathlib import Path
+import re
 import struct
 import subprocess
 
@@ -113,12 +114,24 @@ def stage_platform(root, output, storage_frequency=0, storage_buffer_capacity=No
         if name == "boards/spike-prime.repl" and (storage_frequency or storage_buffer_capacity is not None):
             if source.count("spi2:\n") != 1:
                 raise ValueError("platform must expose one storage SPI2 configuration")
+            # A packaged application profile can already set these properties.
+            # Replace only requested SPI2 settings, preserving other peripherals
+            # and unspecified properties, rather than emitting duplicate keys.
+            prefix, block = source.split("spi2:\n", 1)
+            boundary = re.search(r"(?m)^[^\s/]", block)
+            end = boundary.start() if boundary else len(block)
+            configuration, tail = block[:end], block[end:]
             settings = ""
-            if storage_frequency:
-                settings += "    frequency: " + str(storage_frequency) + "\n"
-            if storage_buffer_capacity is not None:
-                settings += "    bufferCapacity: " + str(storage_buffer_capacity) + "\n"
-            source = source.replace("spi2:\n", "spi2:\n" + settings)
+            for key, value in (("frequency", storage_frequency or None),
+                               ("bufferCapacity", storage_buffer_capacity)):
+                if value is not None:
+                    setting = "    " + key + ": " + str(value) + "\n"
+                    configuration, matches = re.subn(r"(?m)^    " + key + r":[^\n]*\n", setting, configuration)
+                    if matches > 1:
+                        raise ValueError("duplicate storage SPI2 property: " + key)
+                    if not matches:
+                        settings += setting
+            source = prefix + "spi2:\n" + settings + configuration + tail
         # Register names are debug metadata; the topology never needs an SVD download.
         source = "\n".join(line for line in source.splitlines() if "ApplySVD @https://" not in line) + "\n"
         if "https://" in source or "http://" in source:
