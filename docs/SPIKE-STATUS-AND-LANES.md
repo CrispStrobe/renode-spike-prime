@@ -46,7 +46,11 @@ build and existing board/guest regressions. Source-compiled model controls and
 one real own-firmware detach/reconnect sequence already passed separately; they
 are not results for this newly pinned Runtime build. Canonical-consumer guest
 qualification and firmware's independent mandatory gates remain required before
-adoption. Firmware and desktop package pins are unchanged by this review branch.
+adoption. The offline MicroPython support source-closure reference advances explicitly
+with the Infrastructure gitlink; generated manifests still hash every staged
+member. This candidate support package requires fresh MicroPython guest/consumer
+qualification before adoption. Firmware and desktop package pins are unchanged
+by this review branch.
 
 ## Execution rules
 

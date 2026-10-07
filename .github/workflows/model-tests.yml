@@ -47,7 +47,7 @@ jobs:
       # The offline support profile retains its reviewed source closure. A
       # shallow checkout of a newer runtime pin need not contain that commit.
       - name: Fetch the immutable offline profile source reference
-        run: git -C src/Infrastructure fetch --depth 1 origin fe4ad383c7392527433783fcec455daa7ddc2bb7
+        run: git -C src/Infrastructure fetch --depth 1 origin adf40d98062a6b31aae7ef86e1ae5f289eebdc48
 
       - name: Run source-only SPIKE Essential gates
         run: |
