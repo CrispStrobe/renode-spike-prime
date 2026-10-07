@@ -32,6 +32,22 @@ identify the frontend and firmware owners. Tasks below are proposed, not claimed
   No complete stock LEGO boot, modern IMU wire mapping or Code-tab upload is
   established. Public CI uses synthetic inputs, never restricted application images.
 
+## Electrical detach candidate — 2026-10-07
+
+This review branch explicitly consumes Infrastructure
+`adf40d980` from [model PR #35](https://github.com/CrispStrobe/renode-infrastructure-spike-prime/pull/35).
+Its [attachment contract](https://github.com/CrispStrobe/renode-infrastructure-spike-prime/blob/adf40d980/docs/SPIKE-ELECTRICAL-ATTACHMENT.md)
+resolves stale detached inputs and exposes bridge demand even without a device.
+The synthetic idle policy does not establish physical unplug behavior.
+
+The canonical model workflow now includes the new attachment fixture and the
+complete managed peripheral suite, retaining the native translator/full Runtime
+build and existing board/guest regressions. Source-compiled model controls and
+one real own-firmware detach/reconnect sequence already passed separately; they
+are not results for this newly pinned Runtime build. Canonical-consumer guest
+qualification and firmware's independent mandatory gates remain required before
+adoption. Firmware and desktop package pins are unchanged by this review branch.
+
 ## Execution rules
 
 Read `README.md`, `HISTORY.md`, the relevant route contract and
