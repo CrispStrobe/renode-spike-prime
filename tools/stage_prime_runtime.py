@@ -36,6 +36,25 @@ def stage(infrastructure, output, aggregate_display=False):
         bodies.append(re.sub(r"^using [^\n]+;\n", "", source, flags=re.M))
     output.mkdir(parents=True, mode=0o700)
     (output / "models.cs").write_text("\n".join(sorted(imports)) + "\n" + "\n".join(bodies))
+    stage_platforms(output, substitutions, aggregate_display)
+    stage_notices(infrastructure, output)
+
+
+def stage_compiled(infrastructure, output, aggregate_display=False):
+    """Stage offline board data only; all peripherals must come from the Runtime.
+
+    The caller must bind the supplied executable to its tested source/build.
+    Copying source notices does not establish that binary identity.
+    """
+    if output.exists():
+        raise ValueError("output already exists; prior packages are preserved")
+    output.mkdir(parents=True, mode=0o700)
+    stage_platforms(output, {}, aggregate_display)
+    stage_notices(infrastructure, output)
+
+
+def stage_platforms(output, substitutions, aggregate_display):
+    root = Path(__file__).resolve().parents[1]
     for name in ("boards/spike-prime.repl", "boards/spike-prime-brick-devices.repl",
                  "cpus/stm32f413vg.repl", "cpus/stm32f4.repl"):
         source = (root / "platforms" / name).read_text()
@@ -43,7 +62,8 @@ def stage(infrastructure, output, aggregate_display=False):
         for original, alias in substitutions.items():
             source = re.sub(r"\b" + original + r"\b", alias, source)
         if aggregate_display and name == "cpus/stm32f4.repl":
-            source = source.replace("timer12: Timers.BrickwrightSTM32_Timer", "timer12: Timers.STM32TLCClock")
+            timer_type = substitutions.get("STM32_Timer", "STM32_Timer")
+            source = source.replace("timer12: Timers." + timer_type, "timer12: Timers.STM32TLCClock")
             source = source.replace("    -> nvic@43\n", "")
             source = re.sub(r"^timer12:\n(?:    [^\n]*\n)+", "", source, flags=re.M)
         if aggregate_display and name == "boards/spike-prime-brick-devices.repl":
@@ -53,6 +73,10 @@ def stage(infrastructure, output, aggregate_display=False):
         target = output / "platforms" / name
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(source)
+
+
+def stage_notices(infrastructure, output):
+    root = Path(__file__).resolve().parents[1]
     (output / "licenses").mkdir()
     shutil.copyfile(infrastructure / "licenses/MIT.txt", output / "licenses/renode-models-MIT.txt")
     shutil.copyfile(root / "licenses/arena-BSD-3-Clause.txt", output / "licenses/brickwright-BSD-3-Clause.txt")

@@ -88,6 +88,7 @@ jobs:
       - name: Run neutral brick-state contract gates
         run: |
           python3 tests/tools/stage_prime_micropython_test.py
+          python3 tests/tools/compiled_prime_runtime_test.py
           python3 tests/tools/bwspike_api_test.py
           python3 tests/tools/bwspike_readers_test.py
           python3 tests/tools/bwspike_control_test.py

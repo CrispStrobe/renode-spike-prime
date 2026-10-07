@@ -13,7 +13,7 @@ import re
 import struct
 import subprocess
 import sys
-from stage_prime_runtime import stage
+from stage_prime_runtime import stage, stage_compiled
 from spike_nuttx_mailbox import validate_base
 
 
@@ -45,6 +45,7 @@ def main():
     parser.add_argument('--blank-flash-test', action='store_true', help='Qualify slow first-boot erased-flash scanning instead of a source-generated empty filesystem')
     parser.add_argument('--all-motors-test', action='store_true', help='Exercise native/Python control and cancellation on six attached motors')
     parser.add_argument('--storage-test', action='store_true', help='Save native/Python programs and restore flash in fresh processes')
+    parser.add_argument('--compiled-runtime', action='store_true', help='Use the supplied Runtime compiled models; stage offline board data without source extensions')
     parser.add_argument('--timeout-seconds', type=int, default=600)
     args = parser.parse_args()
     if args.storage_test and args.all_motors_test: raise ValueError('choose one qualification profile')
@@ -76,7 +77,8 @@ def main():
     elif not args.blank_flash_test and (firmware / 'policy/nuttx-backports.json').exists():
         raise ValueError('hardened firmware requires its source-generated empty filesystem tool')
     runtime = output / 'runtime'
-    stage(args.infrastructure.resolve(), runtime, True)
+    staging = stage_compiled if args.compiled_runtime else stage
+    staging(args.infrastructure.resolve(), runtime, True)
     phases = ('write', 'native', 'python') if args.storage_test else ('robot',)
     for phase in phases:
         config = output / (phase + '-config.json' if args.storage_test else 'config.json')
@@ -85,9 +87,11 @@ def main():
                     'ramlogBase': ramlog_base, 'ramlogSize': ramlog_size,
                     'result': str(report), 'phase': phase, 'output': str(output),
                     'sourceGeneratedEmptyFlash': seed is not None}
+        settings['electricalModelRoute'] = 'compiled-runtime' if args.compiled_runtime else 'source-staged'
         config.write_text(json.dumps(settings))
         config.chmod(0o600)
-        lines = ['include @' + str(runtime / 'models.cs'), 'mach create',
+        includes = [] if args.compiled_runtime else ['include @' + str(runtime / 'models.cs')]
+        lines = includes + ['mach create',
             'machine LoadPlatformDescription @' + str(runtime / 'platforms/boards/spike-prime.repl'),
             'emulation CreatePrimeElectricalPorts "machine-0"', 'sysbus LoadELF @' + str(kernel),
             'sysbus LoadELF @' + str(user), 'cpu VectorTableOffset 0x08008000',

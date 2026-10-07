@@ -156,6 +156,25 @@ doable now; non-Unix packaging is separately environment-gated.
 
 ## Starting checks
 
+### Compiled consumer qualification route
+
+`tools/check_prime_nuttx.py --compiled-runtime` uses the supplied Runtime's
+compiled peripheral types. It stages offline board data and the same aggregate
+display clock, without generating or including `models.cs`. Keep the exact
+Runtime build identity with the private invocation; copied notices alone do not
+authenticate that binary. Add `--all-motors-test` for the existing six-port
+native/Python scenario, or `--storage-test` for fresh-process persistence. The
+default remains the separately labeled source-staged qualification route.
+
+Restaging a packaged MicroPython support profile now replaces requested storage
+SPI2 properties instead of duplicating them. Twenty local image/profile checks
+cover repeat staging, independent clock/capacity overrides and duplicate-property
+rejection. A supplied upstream MicroPython 1.26.1 application passed the repaired
+source-staged raw-REPL execution/error/cancellation/recovery, GPIO motor/load/
+cleanup and fresh-process filesystem checks. The preceding duplicate-property
+startup failure is preserved privately. This does not qualify full SDK behavior,
+installed GUI adoption or the new compiled Runtime consumer.
+
 From this repository root, with the prescribed dependencies:
 
 ```sh
