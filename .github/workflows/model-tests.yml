@@ -571,4 +571,4 @@ jobs:
 
       - name: Compile LPF2 DATA budget mutation controls
         run: |
-          python3 src/Infrastructure/tools/check_lpf2_data_budget_mutations.py --runtime-root .
+          python3 src/Infrastructure/tools/check_lpf2_data_budget_mutations.py --runtime-root . --results-directory "$RUNNER_TEMP/lpf2-budget-results"

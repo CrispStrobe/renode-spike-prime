@@ -4,8 +4,8 @@
 # LPF2 DATA budget Runtime candidate
 
 This branch pins Infrastructure candidate
-`4f705f40b93f7293cdc0edac6eb253540e967ff9` to compile and qualify its
-[bounded device DATA report control](https://github.com/CrispStrobe/renode-infrastructure-spike-prime/blob/4f705f40b93f7293cdc0edac6eb253540e967ff9/docs/LPF2-DATA-REPORT-BUDGET.md).
+`3afa32d513425cd38c5f2858db31fcbc976320cf` to compile and qualify its
+[bounded device DATA report control](https://github.com/CrispStrobe/renode-infrastructure-spike-prime/blob/3afa32d513425cd38c5f2858db31fcbc976320cf/docs/LPF2-DATA-REPORT-BUDGET.md).
 Compiled Runtime/model execution is pending. Neither firmware nor desktop
 consumer pins are changed by this candidate.
 
@@ -17,10 +17,13 @@ an unrelated model change under the budget's name.
 
 The existing model workflow builds native translators and source-only headless
 Renode, runs focused and complete managed peripheral suites, and retains its
-board/CPU/console checks. It adds the thirteen DATA-budget cases to the focused
+board/CPU/console checks. It adds the eighteen DATA-budget cases to the focused
 filter, then recompiles three actual mutations after existing checks. The
 mutation tool requires NUnit assertion failures, restores exact source bytes
-and rebuilds/retests the baseline. No new firmware, model binary, original image,
+and rebuilds/retests the baseline. Eight mocked subprocess controls exercise the
+runner failure paths; they do not execute C# or Renode. Raw mutation results stay
+in the runner temporary directory and may disappear when the runner is cleaned;
+test identities and hashes remain in the workflow log. No new firmware, model binary, original image,
 raw transcript or private input is uploaded.
 
 The adapter retains MIT attribution and grants; new fixture/control/docs use
