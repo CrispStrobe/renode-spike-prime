@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2026 Brickwright contributors
+name: Bluetooth air lifecycle
+on:
+  pull_request:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: air-lifecycle-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  lifecycle:
+    name: Air lifecycle and real Bumble traffic
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Actual helper classes with synthetic I/O and mutations
+        run: |
+          python3 tests/tools/bw_air_lifecycle_test.py
+          python3 tests/tools/bw_air_lifecycle_mutation_test.py
+      - name: Install the existing qualified host-only air versions
+        run: python3 -m pip install -r tools/bw-air/requirements-test.txt
+      - name: Actual TCP and Bumble HCI, LE and Classic smoke
+        run: timeout --signal=TERM --kill-after=10s 180s python3 tools/bw-air/test_air.py

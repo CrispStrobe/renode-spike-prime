@@ -18,6 +18,9 @@ join it and do not carry their own air.
 | `scratch_link_node.py` | Scratch Link JSON-RPC (`/scratch/ble`, `/scratch/bt`) for browsers and lite |
 | `test_air.py` | self-test through the hub: LE GATT between dial-in HCI hosts, BR/EDR page/SSP/encryption/L2CAP |
 
+Read the [HCI stream lifecycle contract](STREAM-LIFECYCLE.md) for ownership,
+shutdown, delivery errors and the separate candidate qualification gates.
+
 ## Why one air
 
 A micro:bit emulated in Renode, a micro:bit emulated in labwired, a SPIKE hub
