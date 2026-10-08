@@ -8,7 +8,8 @@ This branch pins Infrastructure candidate
 [bounded device DATA report control](https://github.com/CrispStrobe/renode-infrastructure-spike-prime/blob/1253d925accca23dfda66d5bca61e78498dcb64f/docs/LPF2-DATA-REPORT-BUDGET.md).
 Actual compiled Runtime/model qualification passed at source
 `8f7696aac606d8de90c1a6a0930e48655f03530a`; the affected NuttX guest matrix
-also passed. Separate upstream-MicroPython guest qualification remains pending.
+also passed. The separate upstream-MicroPython guest checks also passed for the two
+intended model configurations described below.
 This Runtime candidate does not change installed desktop consumer pins.
 
 The prior Runtime pin is `adf40d98062a6b31aae7ef86e1ae5f289eebdc48`.
@@ -61,8 +62,8 @@ and its immutable workflow fetch to `1253d925accca23dfda66d5bca61e78498dcb64f`.
 Exact consumed-source verification remains enabled; no source substitution or
 permissive fallback is added. Firmware and installed desktop consumer pins stay
 unchanged. The independently supplied upstream-MicroPython application profile
-also needs actual guest qualification with this candidate before adoption; source
-packaging controls and model tests alone do not qualify that application route.
+was subsequently qualified with this candidate as described below; source
+packaging controls and model tests alone did not qualify that application route.
 
 ## Actual compiled and own-firmware results
 
@@ -86,5 +87,20 @@ probe runs only in ordinary simulation. Active-session DATA polls and atomic PWM
 admission remain separate experiments.
 
 This later documentation head changes no executable source, model pin or workflow.
-The separately supplied MicroPython application still needs qualification through
-both compiled models and the verified offline source profile before adoption.
+The separately supplied MicroPython 1.26.1 application passed bounded UART upload,
+completion, error, cancellation/recovery, GPIO motor/load/cleanup and fresh-process
+storage checks through both intended configurations. The full fork uses compiled
+models without source includes. The offline source package uses the earlier
+Renode 1.16.1 executable; its exact executable and fourteen native-library hashes
+matched the historical qualification inputs. Its official distribution archive
+was also verified before execution. These are private application qualifications;
+firmware inputs and raw logs remain private.
+
+The first combined experiment passed the compiled route but failed the attempted
+source overlay before guest boot: `ILpf2Device` was already loaded in the full
+fork. That failure remains preserved. It exposed an incorrect qualification
+setup, not an observed guest failure. Source overlays target the older executable;
+they must not be loaded over the full fork's already compiled SPIKE models.
+The corrected source-only experiment then passed without changing production
+model source or aliases. This does not qualify the full SDK, installed GUI,
+bootloader/USB upload, active-session behavior or physical fidelity.

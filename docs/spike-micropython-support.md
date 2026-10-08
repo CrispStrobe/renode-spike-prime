@@ -39,8 +39,8 @@ preceding restart-qualified 20-file source closure; the other 19 inputs, includi
 the MIT license, remained byte-identical. The current candidate additionally
 changes the LPF2 source for bounded DATA reports; see the
 [exact pair qualification](LPF2-DATA-BUDGET-QUALIFICATION.md). Its compiled model
-and affected NuttX checks passed; separate actual MicroPython application
-qualification remains pending. Earlier application results below retain their
+and affected NuttX checks passed; the separate actual MicroPython application
+checks also passed on the intended compiled and older-runtime source routes. Earlier application results below retain their
 original source boundary and do not qualify this new pin automatically. Existing Antmicro notices remain with scoped modification
 credits. The source closure remains 20 files and the output manifest 16 files.
 
