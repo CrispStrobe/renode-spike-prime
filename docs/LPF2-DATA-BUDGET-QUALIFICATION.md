@@ -40,3 +40,20 @@ The new active-session experiment must then use real guest syscalls and a bounde
 external UART frame budget; it must not alter engine queues or session counters.
 Model-only controls do not establish invalid-call non-consumption, guest reset
 behavior, atomic motor authority or physical-device fidelity.
+
+## Support-profile integration failure and correction
+
+[The first paired run](https://github.com/CrispStrobe/renode-spike-prime/actions/runs/37761874920)
+at Runtime `79429555b420a63e9ce94ee0ad0828755462225b` stopped in the source-only
+support-profile gate before native/C# compilation. The offline MicroPython
+profile still required Infrastructure `adf40d98062a6b31aae7ef86e1ae5f289eebdc48`,
+so its exact-byte verifier correctly rejected the new `LegoLpf2Port.cs`.
+No C# tests or mutation checks ran; this was not a model assertion failure.
+
+This candidate now explicitly advances the offline support-profile source pin
+and its immutable workflow fetch to `1253d925accca23dfda66d5bca61e78498dcb64f`.
+Exact consumed-source verification remains enabled; no source substitution or
+permissive fallback is added. Firmware and installed desktop consumer pins stay
+unchanged. The independently supplied upstream-MicroPython application profile
+also needs actual guest qualification with this candidate before adoption; source
+packaging controls and model tests alone do not qualify that application route.
