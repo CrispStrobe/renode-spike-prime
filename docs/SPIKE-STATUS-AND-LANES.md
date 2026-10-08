@@ -191,3 +191,10 @@ and the linked qualification guides for affected source changes. Documentation
 changes do not require re-running ARM builds. LabWired does not currently replace
 Renode's qualified SPIKE device integration. Physical transport, radio/electrical
 behavior and hardware flashing/release remain separate operator-qualified work.
+
+## LPF2 DATA budget qualification candidate
+
+The [DATA budget qualification record](LPF2-DATA-BUDGET-QUALIFICATION.md) tracks
+an explicit Infrastructure candidate pin, full model suites and compiled mutation
+controls for exact external UART bursts. Compiled results and own-firmware
+consumer regressions remain pending; firmware/desktop pins remain unchanged.

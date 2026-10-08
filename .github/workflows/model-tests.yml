@@ -44,10 +44,10 @@ jobs:
             exit 1
           fi
 
-      # The offline support profile retains its reviewed source closure. A
-      # shallow checkout of a newer runtime pin need not contain that commit.
+      # This qualification candidate explicitly advances the offline support
+      # closure with its model pin; retain exact public-source verification.
       - name: Fetch the immutable offline profile source reference
-        run: git -C src/Infrastructure fetch --depth 1 origin adf40d98062a6b31aae7ef86e1ae5f289eebdc48
+        run: git -C src/Infrastructure fetch --depth 1 origin 1253d925accca23dfda66d5bca61e78498dcb64f
 
       - name: Run source-only SPIKE Essential gates
         run: |
@@ -172,7 +172,7 @@ jobs:
           # The solution built PeripheralsTests and the runtime together.
           dotnet test "$project" --configuration Release --no-build --no-restore \
             "${common[@]}" \
-            --filter 'FullyQualifiedName~STM32CRCTests|FullyQualifiedName~STM32DMATests|FullyQualifiedName~STM32DMAAbortRearmTests|FullyQualifiedName~STM32DMAReceivePulseTests|FullyQualifiedName~STM32SPITests|FullyQualifiedName~STM32SPIDmaReadTests|FullyQualifiedName~STM32_UARTTests|FullyQualifiedName~STM32F7I2CTests|FullyQualifiedName~TLC5955Tests|FullyQualifiedName~LSM6DS3TRCTests|FullyQualifiedName~LP50XXTests|FullyQualifiedName~GenericSpiFlashW25Q256Tests|FullyQualifiedName~LegoLpf2PortTests|FullyQualifiedName~LegoLpf2ElectricalPortTests|FullyQualifiedName~LegoLpf2ElectricalAttachmentTests|FullyQualifiedName~STM32TLCClockTests|FullyQualifiedName~STM32F4I2CStreamTests|FullyQualifiedName~STM32ADCTriggerTests|FullyQualifiedName~STM32ADCDMA|FullyQualifiedName~STM32SYSCFGTests|FullyQualifiedName~BrickPowerControllerTests|FullyQualifiedName~PCMAudioSinkTests|FullyQualifiedName~SpikeFaultSoakTests|FullyQualifiedName~PrimeButtonLadderTests|FullyQualifiedName~STM32TimerBoardClockTests|FullyQualifiedName~STM32TimerRolloverTests|FullyQualifiedName~STM32TimerSoftwareEventTests|FullyQualifiedName~STM32TimerInclusivePeriodTests|FullyQualifiedName~TI_DA8xx_AINTCTests|FullyQualifiedName~TI_DA8xx_Timer64Tests|FullyQualifiedName~TI_DA8xx_PSCTests|FullyQualifiedName~TI_DA8xx_PLLCTests|FullyQualifiedName~TI_DA8xx_SYSCFG0Tests|FullyQualifiedName~TI_DA8xx_EDMA3CCTests|FullyQualifiedName~TI_DA8xx_EDMA3TCTests|FullyQualifiedName~TI_DA8xx_MMCSDTests|FullyQualifiedName~TI_DA8xx_GPIOTests|FullyQualifiedName~TI_DA8xx_SPITests|FullyQualifiedName~ST7586Tests' \
+            --filter 'FullyQualifiedName~STM32CRCTests|FullyQualifiedName~STM32DMATests|FullyQualifiedName~STM32DMAAbortRearmTests|FullyQualifiedName~STM32DMAReceivePulseTests|FullyQualifiedName~STM32SPITests|FullyQualifiedName~STM32SPIDmaReadTests|FullyQualifiedName~STM32_UARTTests|FullyQualifiedName~STM32F7I2CTests|FullyQualifiedName~TLC5955Tests|FullyQualifiedName~LSM6DS3TRCTests|FullyQualifiedName~LP50XXTests|FullyQualifiedName~GenericSpiFlashW25Q256Tests|FullyQualifiedName~LegoLpf2PortTests|FullyQualifiedName~LegoLpf2DataBudgetTests|FullyQualifiedName~LegoLpf2ElectricalPortTests|FullyQualifiedName~LegoLpf2ElectricalAttachmentTests|FullyQualifiedName~STM32TLCClockTests|FullyQualifiedName~STM32F4I2CStreamTests|FullyQualifiedName~STM32ADCTriggerTests|FullyQualifiedName~STM32ADCDMA|FullyQualifiedName~STM32SYSCFGTests|FullyQualifiedName~BrickPowerControllerTests|FullyQualifiedName~PCMAudioSinkTests|FullyQualifiedName~SpikeFaultSoakTests|FullyQualifiedName~PrimeButtonLadderTests|FullyQualifiedName~STM32TimerBoardClockTests|FullyQualifiedName~STM32TimerRolloverTests|FullyQualifiedName~STM32TimerSoftwareEventTests|FullyQualifiedName~STM32TimerInclusivePeriodTests|FullyQualifiedName~TI_DA8xx_AINTCTests|FullyQualifiedName~TI_DA8xx_Timer64Tests|FullyQualifiedName~TI_DA8xx_PSCTests|FullyQualifiedName~TI_DA8xx_PLLCTests|FullyQualifiedName~TI_DA8xx_SYSCFG0Tests|FullyQualifiedName~TI_DA8xx_EDMA3CCTests|FullyQualifiedName~TI_DA8xx_EDMA3TCTests|FullyQualifiedName~TI_DA8xx_MMCSDTests|FullyQualifiedName~TI_DA8xx_GPIOTests|FullyQualifiedName~TI_DA8xx_SPITests|FullyQualifiedName~ST7586Tests' \
             --logger 'console;verbosity=normal'
 
       - name: Run complete managed peripheral suite
@@ -568,3 +568,7 @@ jobs:
         with:
           name: spike-prime-throughput
           path: /tmp/spike-prime-throughput.json
+
+      - name: Compile LPF2 DATA budget mutation controls
+        run: |
+          python3 src/Infrastructure/tools/check_lpf2_data_budget_mutations.py --runtime-root . --results-directory "$RUNNER_TEMP/lpf2-budget-results"
