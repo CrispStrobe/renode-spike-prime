@@ -4,8 +4,8 @@
 # LPF2 DATA budget Runtime candidate
 
 This branch pins Infrastructure candidate
-`3afa32d513425cd38c5f2858db31fcbc976320cf` to compile and qualify its
-[bounded device DATA report control](https://github.com/CrispStrobe/renode-infrastructure-spike-prime/blob/3afa32d513425cd38c5f2858db31fcbc976320cf/docs/LPF2-DATA-REPORT-BUDGET.md).
+`1253d925accca23dfda66d5bca61e78498dcb64f` to compile and qualify its
+[bounded device DATA report control](https://github.com/CrispStrobe/renode-infrastructure-spike-prime/blob/1253d925accca23dfda66d5bca61e78498dcb64f/docs/LPF2-DATA-REPORT-BUDGET.md).
 Compiled Runtime/model execution is pending. Neither firmware nor desktop
 consumer pins are changed by this candidate.
 
@@ -20,8 +20,11 @@ Renode, runs focused and complete managed peripheral suites, and retains its
 board/CPU/console checks. It adds the eighteen DATA-budget cases to the focused
 filter, then recompiles three actual mutations after existing checks. The
 mutation tool requires NUnit assertion failures, restores exact source bytes
-and rebuilds/retests the baseline. Eight mocked subprocess controls exercise the
-runner failure paths; they do not execute C# or Renode. Raw mutation results stay
+and rebuilds/retests the baseline. Twelve host controls exercise the runner failure paths: eight use mocked compiler
+results and four check the small Python process supervisor. Two supervisor
+mutations fail live-descendant assertions. They do not execute C# or Renode.
+The supervisor cleans up its owned process group on return, timeout and caught
+Python exceptions; mutation builds disable shared compilation and node reuse. Raw mutation results stay
 in the runner temporary directory and may disappear when the runner is cleaned;
 test identities and hashes remain in the workflow log. No new firmware, model binary, original image,
 raw transcript or private input is uploaded.
