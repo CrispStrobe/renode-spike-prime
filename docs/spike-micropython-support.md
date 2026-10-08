@@ -20,8 +20,8 @@ python3 tests/tools/stage_prime_micropython_test.py
 ```
 
 The consumed Infrastructure source closure must match public commit
-`8be722f931a5d0b82a2b866478e25efc3232df2f` in
-[the model repository](https://github.com/CrispStrobe/renode-infrastructure-spike-prime/tree/8be722f931a5d0b82a2b866478e25efc3232df2f).
+`1253d925accca23dfda66d5bca61e78498dcb64f` in
+[the model repository](https://github.com/CrispStrobe/renode-infrastructure-spike-prime/tree/1253d925accca23dfda66d5bca61e78498dcb64f).
 The assembler checks the bytes of every consumed model and its MIT license
 against that commit, and refuses modified inputs before creating output. It
 never fetches, resets a checkout or overwrites an existing package. Keep the
@@ -34,9 +34,14 @@ and resume only after the ADC DMA bit is toggled off and on (or ADC reset).
 Re-enabling the DMA stream alone does not rearm the ADC. DDS=1 circular
 transfers continue across buffer completions.
 
-Compared with the preceding restart-qualified 20-file source closure, only
-`STM32DMA.cs` changes; the other 19 inputs, including the MIT license, remain
-byte-identical. Existing Antmicro notices remain with scoped modification
+At the earlier DMA-restart checkpoint, only `STM32DMA.cs` changed against its
+preceding restart-qualified 20-file source closure; the other 19 inputs, including
+the MIT license, remained byte-identical. The current candidate additionally
+changes the LPF2 source for bounded DATA reports; see the
+[exact pair qualification](LPF2-DATA-BUDGET-QUALIFICATION.md). Its compiled model
+and affected NuttX checks passed; separate actual MicroPython application
+qualification remains pending. Earlier application results below retain their
+original source boundary and do not qualify this new pin automatically. Existing Antmicro notices remain with scoped modification
 credits. The source closure remains 20 files and the output manifest 16 files.
 
 The common F4 platform pairs ADC1's DMA2 stream0 request with a separate model
