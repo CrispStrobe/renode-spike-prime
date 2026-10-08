@@ -36,6 +36,39 @@ RX = UUID("6e400002-b5a3-f393-e0a9-e50e24dcca9e")
 TX = UUID("6e400003-b5a3-f393-e0a9-e50e24dcca9e")
 
 
+async def paced_stream_check(air: Air) -> None:
+    """Real TCP + Bumble H4 reset through attach_hci_client, then normal EOF."""
+    accepted = asyncio.get_running_loop().create_future()
+    server = await asyncio.start_server(lambda r, w: accepted.set_result((r, w)),
+                                        "127.0.0.1", 0)
+    station = None
+    writer = None
+    try:
+        port = server.sockets[0].getsockname()[1]
+        station = await air.attach_hci_client("paced-stream", "127.0.0.1", port,
+                                             "02:B1:0E:00:00:D0", gap_s=0.001)
+        reader, writer = await asyncio.wait_for(accepted, 5)
+        writer.write(bytes.fromhex("01030c00"))  # HCI Reset
+        await writer.drain()
+        response = await asyncio.wait_for(reader.readexactly(7), 5)
+        assert response == bytes.fromhex("040e0401030c00"), response
+        writer.close()
+        await writer.wait_closed()
+        await asyncio.wait_for(station.wait_closed(), 5)
+        assert "paced-stream" not in air.stations
+        assert station.extra["abandoned_packets"] == 0
+        assert not station.extra["close_errors"]
+        assert "failure" not in station.extra
+        print("air: paced TCP/Bumble HCI Reset and joined EOF -> PASS")
+    finally:
+        server.close()
+        await server.wait_closed()
+        if writer is not None:
+            writer.close()
+        if station is not None:
+            await air.remove("paced-stream")
+
+
 async def dial_in_peripheral(port: int, name: str, index: int):
     transport = await open_transport(f"tcp-client:127.0.0.1:{port}")
     device = Device.with_hci(name, Address(f"C1:B1:0E:00:00:{index:02X}"),
@@ -126,6 +159,7 @@ async def main() -> int:
     try:
         await asyncio.sleep(1)
         air = Air(f"127.0.0.1:{arguments.hub_port}")
+        await paced_stream_check(air)
         await le_check(air, arguments.hci_port)
         await classic_check(air)
         print("air: PASS")

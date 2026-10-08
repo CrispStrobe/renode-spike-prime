@@ -175,17 +175,39 @@ class PacedSink:
         self.writer = writer
         self.gap_s = gap_s
         self.queue: asyncio.Queue = asyncio.Queue()
+        self.closed = False
+        self.pending = False
+        self.abandoned_packets = 0
+        self.failure = None
         self.task = asyncio.get_running_loop().create_task(self._drain())
 
     def on_packet(self, packet: bytes) -> None:
+        if self.closed or self.task.done():
+            error = self.task.exception() if self.task.done() and not self.task.cancelled() else None
+            raise RuntimeError("HCI packet sink is closed or failed") from error
         self.queue.put_nowait(bytes(packet))
 
     async def _drain(self) -> None:
         while True:
             packet = await self.queue.get()
+            self.pending = True
             self.writer.write(packet)
             await self.writer.drain()
+            self.pending = False
             await asyncio.sleep(self.gap_s)
+
+    async def close(self) -> None:
+        """Abort pending delivery and join the owned task; this is not a flush."""
+        if not self.closed:
+            self.closed = True
+            self.abandoned_packets = self.queue.qsize() + int(self.pending)
+            while not self.queue.empty():
+                self.queue.get_nowait()
+        if not self.task.done():
+            self.task.cancel()
+        result, = await asyncio.gather(self.task, return_exceptions=True)
+        if isinstance(result, Exception):
+            self.failure = result
 
 
 @dataclass
@@ -198,6 +220,11 @@ class Station:
     device: Device | None = None
     kind: str = "hci"
     extra: dict = field(default_factory=dict)
+
+    async def wait_closed(self) -> None:
+        """Await stream completion, propagating a read or delivery failure."""
+        if "pump" in self.extra:
+            await asyncio.shield(self.extra["pump"])
 
 
 class Air:
@@ -242,29 +269,86 @@ class Air:
 
     async def _attach_stream(self, name, reader, writer, address, kind,
                              sink=None) -> Station:
-        link = await self._link(name)
+        try:
+            link = await self._link(name)
+        except BaseException:
+            if isinstance(sink, PacedSink):
+                await sink.close()
+            await self._close_writer(writer)
+            raise
         source = StreamPacketSource()
         sink = sink or StreamPacketSink(writer)
         controller = AirController(name, host_source=source, host_sink=sink,
                                    link=link, public_address=address)
 
+        async def read_packets():
+            while data := await reader.read(4096):
+                source.data_received(data)
+
         async def pump():
+            station.extra["started"].set()
+            read_task = asyncio.get_running_loop().create_task(read_packets())
+            failure = None
             try:
-                while data := await reader.read(4096):
-                    source.data_received(data)
+                if isinstance(sink, PacedSink):
+                    await asyncio.wait((read_task, sink.task), return_when=asyncio.FIRST_COMPLETED)
+                    # A simultaneous EOF must not hide an in-flight write failure.
+                    if sink.task.done():
+                        await sink.task
+                        raise RuntimeError("HCI packet drain stopped unexpectedly")
+                await read_task
+            except BaseException as error:
+                failure = error
+                raise
             finally:
+                station.extra["closing"] = True
                 logger.info("%s: HCI stream closed", name)
                 link.remove_controller(controller)
-                self.stations.pop(name, None)
+                read_task.cancel()
+                read_result, = await asyncio.gather(read_task, return_exceptions=True)
+                read_failure = read_result if isinstance(read_result, Exception) else None
+                station.extra["read_failure"] = read_failure
+                if isinstance(sink, PacedSink):
+                    await sink.close()
+                    station.extra["sink_failure"] = sink.failure
+                    station.extra["abandoned_packets"] = sink.abandoned_packets
+                    if sink.abandoned_packets:
+                        logger.warning("%s: aborted %d queued/in-flight HCI packets", name,
+                                       sink.abandoned_packets)
+                station.extra["close_errors"] = await self._close_writer(writer)
                 if link.writer is not None:
-                    link.writer.close()
+                    station.extra["close_errors"] += await self._close_writer(link.writer)
+                if self.stations.get(name) is station:
+                    self.stations.pop(name, None)
+                if failure is None or isinstance(failure, asyncio.CancelledError):
+                    terminal = read_failure or (sink.failure if isinstance(sink, PacedSink) else None)
+                    if terminal is not None:
+                        raise terminal
+
+        def completed(task):
+            if not task.cancelled() and (error := task.exception()) is not None:
+                station.extra["failure"] = error
+                logger.error("%s: HCI stream delivery failed", name,
+                             exc_info=(type(error), error, error.__traceback__))
 
         station = Station(name, address, controller, kind=kind)
+        station.extra["started"] = asyncio.Event()
         station.extra["pump"] = asyncio.get_running_loop().create_task(pump())
+        station.extra["pump"].add_done_callback(completed)
         station.extra["link"] = link
         self.stations[name] = station
         logger.info("%s: attached %s at %s", name, kind, address)
         return station
+
+    @staticmethod
+    async def _close_writer(writer):
+        try:
+            writer.close()
+            await asyncio.wait_for(writer.wait_closed(), 1)
+        except Exception as error:
+            logger.warning("HCI writer close diagnostic: %s", error)
+            return [error]
+        return []
 
     # -- in-process peer (tests, Scratch Link node) --------------------------
     async def add_peer(self, name: str, address: str,
@@ -283,12 +367,26 @@ class Air:
         return station
 
     async def remove(self, name: str) -> None:
+        station = self.stations.get(name)
+        if station is not None and "pump" in station.extra:
+            task = station.extra["pump"]
+            if (not task.done() and not station.extra.get("removing")
+                    and not station.extra.get("closing")):
+                station.extra["removing"] = True
+                await station.extra["started"].wait()
+                task.cancel()
+            try:
+                await station.wait_closed()
+            except asyncio.CancelledError:
+                if not task.cancelled():
+                    raise
+            return
         station = self.stations.pop(name, None)
         if station is not None and station.extra.get("link") is not None:
             link = station.extra["link"]
             link.remove_controller(station.controller)
             if link.writer is not None:
-                link.writer.close()
+                await self._close_writer(link.writer)
 
 
 async def main() -> None:
