@@ -99,6 +99,23 @@ class MonitorProtocolTest(unittest.TestCase):
         # Older service packages remain usable without a host durability claim.
         old = config(); validate_config(old)
 
+    # Newly authored coverage: BSD-3-Clause, Brickwright contributors2026.
+    def test_addressed_feature_requires_verified_own_firmware_and_closed_metadata(self):
+        value = config()
+        value['identity']['imageSha256'] = 'a'*64
+        value.update(programMailbox=0x20021000,
+                     addressedSensorCapability=dict(abi=1, address=0x08061234, userspaceSha256='a'*64))
+        validate_config(value)
+        for change in ('no_hash', 'no_mailbox', 'other_firmware', 'null', 'foreign_hash'):
+            bad = dict(value, identity=dict(value['identity']))
+            if change == 'no_hash': bad['identity']['imageSha256'] = None
+            if change == 'no_mailbox': del bad['programMailbox']
+            if change == 'other_firmware': bad['identity']['firmware'] = 'brickwright-arena-demo'
+            if change == 'null': bad['addressedSensorCapability'] = None
+            if change == 'foreign_hash': bad['addressedSensorCapability'] = dict(value['addressedSensorCapability'], userspaceSha256='b'*64)
+            with self.subTest(change=change), self.assertRaises(ValueError): validate_config(bad)
+        validate_config(config())
+
     def test_storage_marker_requires_full_firmware_and_flash_bounds(self):
         value = config()
         value.update(programMailbox=0x20021000, programStorageAbiAddress=0x08061234)
