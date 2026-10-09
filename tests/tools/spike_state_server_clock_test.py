@@ -3,6 +3,7 @@
 # Copyright (c) 2026 Brickwright contributors
 """Check the actual monitor snapshot clock without a listener or emulator."""
 import ast
+import struct
 from pathlib import Path
 from types import SimpleNamespace
 import sys
@@ -10,6 +11,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'tools'))
+import spike_nuttx_mailbox as mailbox
 from spike_arena_inputs import PRIME_HUB_PATHS, resolve_prime_hub_models, observe_prime_hub, apply_arena_inputs
 from spike_arena_inputs_test import hub_models, hub_input, Motor
 
@@ -22,7 +24,7 @@ class TimeInterval:
 
 
 class SnapshotClockTests(unittest.TestCase):
-    def snapshot_function(self, interval, ports=None):
+    def snapshot_function(self, interval, ports=None, bus=None):
         tree = ast.parse((ROOT / 'scripts/spike-state-server.py').read_text())
         snapshot = next(node for node in tree.body
                         if isinstance(node, ast.FunctionDef) and node.name == '_snapshot')
@@ -30,7 +32,8 @@ class SnapshotClockTests(unittest.TestCase):
                    if isinstance(node, ast.FunctionDef) and node.name == '_prime_hub_models')
         def observe(config, resolve, seq, clock, generation):
             return {'clockNs': clock, 'seq': seq, 'generation': generation}
-        env = {'integer_types': (int,), 'emulationManager': SimpleNamespace(CurrentEmulation=SimpleNamespace(
+        env = {'monitor': SimpleNamespace(Machine=SimpleNamespace(SystemBus=bus)),
+               'spike_nuttx_mailbox': mailbox, 'integer_types': (int,), 'emulationManager': SimpleNamespace(CurrentEmulation=SimpleNamespace(
                    MasterTimeSource=SimpleNamespace(ElapsedVirtualTime=interval))),
                'ev3_state_observer': SimpleNamespace(observe=observe),
                'resolve_prime_hub_models': resolve_prime_hub_models, 'observe_prime_hub': observe_prime_hub,
@@ -40,6 +43,31 @@ class SnapshotClockTests(unittest.TestCase):
         exec(compile(ast.Module(body=[hub, snapshot], type_ignores=[]),
                      'actual-monitor-snapshot', 'exec'), env)
         return env['_snapshot']
+
+    def test_actual_snapshot_advertises_only_bound_live_addressed_feature(self):
+        base, marker, digest = 0x20021000, 0x08061234, 'a'*64
+        for defect in (None, 'old', 'marker', 'worker', 'hash'):
+            memory = bytearray(112);reads = []
+            struct.pack_into('<I', memory, 0, mailbox.MAGIC)
+            struct.pack_into('<I', memory, 4, 1)
+            struct.pack_into('<I', memory, 60, 0 if defect == 'worker' else 2)
+            def read(address):
+                reads.append(address)
+                return (2 if defect == 'marker' else 1) if address == marker else struct.unpack_from('<I', memory, address-base)[0]
+            bus = SimpleNamespace(ReadDoubleWord=read, ReadBytes=lambda address, count: memory[address-base:address-base+count])
+            config = dict(identity=dict(board='spike-prime', firmware='brickwright-nuttx', transport='none', imageSha256=digest),
+                          paths={}, programMailbox=base)
+            if defect != 'old':
+                config['addressedSensorCapability'] = dict(abi=1, address=marker, userspaceSha256='b'*64 if defect == 'hash' else digest)
+            snapshot = self.snapshot_function(TimeInterval(1_000_000), bus=bus)
+            if defect == 'hash':
+                with self.assertRaises(ValueError): snapshot(config, 1, 1)
+                self.assertNotIn(marker, reads)
+            else:
+                result = snapshot(config, 1, 1)
+                self.assertEqual('nuttx-addressed-distance/v1' in result['target']['capabilities'], defect is None)
+                self.assertEqual(result['sensors'], [])
+                if defect in ('old', 'worker'): self.assertNotIn(marker, reads)
 
     def test_one_sdk_second_is_one_billion_nanoseconds_for_prime_and_ev3(self):
         snapshot = self.snapshot_function(TimeInterval(1_000_000_000))

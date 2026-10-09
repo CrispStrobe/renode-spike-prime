@@ -105,6 +105,7 @@ jobs:
           python3 tests/tools/spike_arena_inputs_test.py
           python3 tests/tools/spike_arena_program_test.py
           python3 tests/platforms/spike-nuttx-mailbox-test.py
+          python3 tests/platforms/spike-addressed-capability-mutants-test.py
           python3 -m json.tool contracts/brick-state/v1/schema.json >/dev/null
           python3 -m py_compile tools/spike_state_bridge.py tools/spike-state-bridge.py
 

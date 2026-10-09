@@ -334,6 +334,9 @@ def _snapshot(config, seq, generation, checkpoint=None, program_uart=None):
                 if "pythonOutputMailbox" in config:
                     lifecycle["nuttxProgramOutput"] = spike_nuttx_mailbox.output(config["pythonOutputMailbox"], bus.ReadDoubleWord, bus.ReadBytes)
                 identity["capabilities"].append("nuttx-program/v1")
+                if spike_nuttx_mailbox.supports_addressed_distance(base,
+                        config.get("addressedSensorCapability"), identity.get("imageSha256"), bus.ReadDoubleWord):
+                    identity["capabilities"].append("nuttx-addressed-distance/v1")
                 if config.get("motorPorts") == 6:
                     identity["capabilities"].append("nuttx-six-motors/v1")
                 if spike_nuttx_mailbox.supports_storage(base, config.get("programStorageAbiAddress"), bus.ReadDoubleWord):

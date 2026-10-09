@@ -198,3 +198,42 @@ The [DATA budget qualification record](LPF2-DATA-BUDGET-QUALIFICATION.md) tracks
 an explicit Infrastructure candidate pin, full model suites and compiled mutation
 controls for exact external UART bursts. Compiled results and own-firmware
 consumer regressions remain pending; firmware/desktop pins remain unchanged.
+
+
+## Addressed-distance live discovery candidate — 2026-10-09
+
+Owner: Codex SPIKE integration, branch
+`feat/addressed-sensor-live-capability-20261009`, base
+`df69192de7a84f56cced783b913fd2b7bb15d9d0`. Scope: NuttX mailbox discovery,
+monitor configuration validation and snapshot capability publication, their
+focused controls, model-workflow registration and this record. No model gitlink,
+firmware, package pin, native program interpreter or sensor topology is changed.
+
+The optional `addressedSensorCapability` configuration object must contain
+exactly `abi`, `address`, `userspaceSha256`: integer version1, an aligned
+userspace flash address and lowercase SHA256 equal to the manifest-bound image
+identity. Present malformed/foreign metadata is rejected before marker access.
+Only own Prime NuttX/transport-none configurations with a program mailbox and
+verified image may declare it. Absent metadata keeps legacy behavior.
+
+`nuttx-addressed-distance/v1` is published only after observing an initialized
+version1 program mailbox, a nonzero even publication and a live marker value1.
+Unready workers and unsupported live values do not advertise it. The operation
+is read-only and runs inside the existing state snapshot; it does not change
+simulated time, issue a program or assert any attached sensor type. Reading
+errors propagate. Configuration and marker validation do not authenticate an
+arbitrary firmware image; use the existing own-source manifest/admission gates.
+
+Host controls exercise the actual snapshot function, old packages, bad hashes,
+closed metadata, mailbox/worker readiness and live marker refusals. Three actual
+Python source mutants for image binding, live marker and readiness must fail
+named assertions, never import/setup errors. These are adapter controls, not
+actual guest qualification. The candidate requires hosted Runtime checks and a
+new clean firmware matrix using its exact Runtime source before adoption.
+
+Next separately declare E/F ultrasonic topology and connect native chooser,
+shared hub/arena inputs and returned device observations. Consumers must require
+both this API capability and the declared topology before emitting addressed
+native/Python calls. Existing default D-distance/E-force and six-motor routes
+retain their contracts. No arbitrary A–F, physical accuracy, stock firmware or
+installed GUI equivalence is claimed.

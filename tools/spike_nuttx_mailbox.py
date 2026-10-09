@@ -7,14 +7,17 @@ Only that verified RAM mailbox is touched; no monitor text or addresses arrive
 from the program client. Execution and time remain owned by NuttX/Renode.
 """
 import struct
+import re
 import sys
 
 MAGIC = 0x42574e50
 SIZE = 112
 try:
     integer_types = (int, long)
+    string_types = (basestring,)
 except NameError:
     integer_types = (int,)
+    string_types = (str,)
 
 
 def validate_base(base):
@@ -34,6 +37,31 @@ def supports_storage(base, address, read_word):
         return False
     validate_storage_abi_address(address)
     _header(base, read_word)
+    return int(read_word(address)) == 1
+
+
+def validate_addressed_sensor_capability(metadata, image_hash):
+    """Package-bound discovery only; no port attachment or acquisition claim."""
+    if (not isinstance(metadata, dict) or
+            set(metadata) != set(('abi', 'address', 'userspaceSha256'))):
+        raise ValueError('invalid addressed sensor capability fields')
+    abi = metadata['abi']
+    digest = metadata['userspaceSha256']
+    if (isinstance(abi, bool) or not isinstance(abi, integer_types) or abi != 1 or
+            not isinstance(digest, string_types) or re.match(r'^[0-9a-f]{64}\Z', digest) is None or
+            digest != image_hash):
+        raise ValueError('addressed sensor capability does not match the verified image/version')
+    return validate_storage_abi_address(metadata['address'])
+
+
+def supports_addressed_distance(base, metadata, image_hash, read_word):
+    if metadata is None:
+        return False
+    address = validate_addressed_sensor_capability(metadata, image_hash)
+    _header(base, read_word)
+    publication = int(read_word(base + 60))
+    if publication == 0 or publication & 1:
+        return False
     return int(read_word(address)) == 1
 
 

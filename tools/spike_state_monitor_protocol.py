@@ -52,6 +52,11 @@ def validate_config(config):
             raise ValueError("storage ABI marker requires our full program firmware")
         import spike_nuttx_mailbox
         spike_nuttx_mailbox.validate_storage_abi_address(config["programStorageAbiAddress"])
+    if "addressedSensorCapability" in config:
+        if "programMailbox" not in config or image_hash is None:
+            raise ValueError("addressed sensor capability requires our verified full program firmware")
+        import spike_nuttx_mailbox
+        spike_nuttx_mailbox.validate_addressed_sensor_capability(config["addressedSensorCapability"], image_hash)
     if "motorPorts" in config:
         value = config["motorPorts"]
         own = firmware == "brickwright-nuttx" and "programMailbox" in config

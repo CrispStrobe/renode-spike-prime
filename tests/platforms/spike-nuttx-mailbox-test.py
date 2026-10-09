@@ -71,6 +71,51 @@ class MailboxTests(unittest.TestCase):
                 mailbox.validate_storage_abi_address(address)
         self.assertEqual(self.writes, [])
 
+    def test_addressed_sensor_metadata_refused_before_any_read(self):
+        marker = 0x08061234
+        good = dict(abi=1, address=marker, userspaceSha256='a'*64)
+        reads = []
+        read = lambda address: reads.append(address) or 1
+        self.assertFalse(mailbox.supports_addressed_distance(self.base, None, None, read))
+        variants = [None, [], dict(good, extra=1), dict(good, userspaceSha256='b'*64),
+                    dict(good, userspaceSha256='a'*64+'\n')]
+        variants += [dict(good, abi=v) for v in (True, 0, 2, 1.0, '1')]
+        variants += [dict(good, address=v) for v in (True, marker+1, 0x20021000, 0x08100000, '0x08061234')]
+        for bad in variants:
+            with self.subTest(metadata=bad), self.assertRaises(ValueError):
+                mailbox.validate_addressed_sensor_capability(bad, 'a'*64)
+        for bad in variants[1:]:
+            with self.subTest(metadata=bad), self.assertRaises(ValueError):
+                mailbox.supports_addressed_distance(self.base, bad, 'a'*64, read)
+        self.assertEqual(reads, [])
+        self.assertEqual(self.writes, [])
+
+    def test_addressed_capability_requires_live_marker_and_ready_mailbox(self):
+        marker = 0x08061234
+        metadata = dict(abi=1, address=marker, userspaceSha256='a'*64)
+        value = [1]
+        reads = []
+        def read(address):
+            reads.append(address)
+            return value[0] if address == marker else self.read(address)
+        self.assertTrue(mailbox.supports_addressed_distance(self.base, metadata, 'a'*64, read))
+        for unsupported in (0, 2, 0xffffffff):
+            value[0] = unsupported
+            self.assertFalse(mailbox.supports_addressed_distance(self.base, metadata, 'a'*64, read))
+        value[0] = 1
+        for publication in (0, 1, 3):
+            self.put(60, publication);reads[:] = []
+            self.assertFalse(mailbox.supports_addressed_distance(self.base, metadata, 'a'*64, read))
+            self.assertNotIn(marker, reads)
+        self.put(60, 2)
+        for offset in (0, 4):
+            old = self.read(self.base + offset);self.put(offset, 0);reads[:] = []
+            with self.assertRaises(ValueError):
+                mailbox.supports_addressed_distance(self.base, metadata, 'a'*64, read)
+            self.assertNotIn(marker, reads)
+            self.put(offset, old)
+        self.assertEqual(self.writes, [])
+
     def test_transaction_and_reply_correlation(self):
         packet = [0x70, 1, 5, 0, 0, 0, 0, 0]
         seq = mailbox.submit(self.base, packet, self.read, self.write)
