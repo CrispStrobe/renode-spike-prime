@@ -12,7 +12,7 @@ Heavy: serialised with flock on /tmp/claude-1000/renode.lock.
 import argparse, os, struct, subprocess, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-RENODE = os.environ.get('RENODE', '/mnt/volume1/code/lego/wt-generic-current-upstream/renode')
+RENODE = os.environ.get('RENODE', 'renode')
 LIB = os.environ.get('SDHLE_LIB') or os.path.join(os.environ.get('CARGO_TARGET_DIR', 'target'), 'release', 'libnrf_softdevice_hle.so')
 LOCK = '/tmp/claude-1000/renode.lock'
 
