@@ -12,6 +12,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'tools'))
 import spike_nuttx_mailbox as mailbox
+import spike_lockstep
 from spike_arena_inputs import PRIME_HUB_PATHS, resolve_prime_hub_models, observe_prime_hub, apply_arena_inputs
 from spike_arena_inputs_test import hub_models, hub_input, Motor
 
@@ -30,17 +31,19 @@ class SnapshotClockTests(unittest.TestCase):
                         if isinstance(node, ast.FunctionDef) and node.name == '_snapshot')
         hub = next(node for node in tree.body
                    if isinstance(node, ast.FunctionDef) and node.name == '_prime_hub_models')
+        lockstep = [node for node in tree.body
+                    if isinstance(node, ast.FunctionDef) and node.name in ('_lockstep_profile', '_electrical_ports')]
         def observe(config, resolve, seq, clock, generation):
             return {'clockNs': clock, 'seq': seq, 'generation': generation}
         env = {'monitor': SimpleNamespace(Machine=SimpleNamespace(SystemBus=bus)),
-               'spike_nuttx_mailbox': mailbox, 'integer_types': (int,), 'emulationManager': SimpleNamespace(CurrentEmulation=SimpleNamespace(
+               'spike_nuttx_mailbox': mailbox, 'spike_lockstep': spike_lockstep, 'integer_types': (int,), 'emulationManager': SimpleNamespace(CurrentEmulation=SimpleNamespace(
                    MasterTimeSource=SimpleNamespace(ElapsedVirtualTime=interval))),
                'ev3_state_observer': SimpleNamespace(observe=observe),
                'resolve_prime_hub_models': resolve_prime_hub_models, 'observe_prime_hub': observe_prime_hub,
                '_resolve': lambda path: next(((ports or {}).get(role) for role, fixed in PRIME_HUB_PATHS.items() if path == fixed), None),
                '_optional': lambda paths, role: (ports or {}).get(role),
                '_kind': lambda device: getattr(device, 'kind', None)}
-        exec(compile(ast.Module(body=[hub, snapshot], type_ignores=[]),
+        exec(compile(ast.Module(body=[hub] + lockstep + [snapshot], type_ignores=[]),
                      'actual-monitor-snapshot', 'exec'), env)
         return env['_snapshot']
 

@@ -47,7 +47,7 @@ jobs:
       # This qualification candidate explicitly advances the offline support
       # closure with its model pin; retain exact public-source verification.
       - name: Fetch the immutable offline profile source reference
-        run: git -C src/Infrastructure fetch --depth 1 origin 1253d925accca23dfda66d5bca61e78498dcb64f
+        run: git -C src/Infrastructure fetch --depth 1 origin 181d9d45567d9afc66a47b57255d34aa51b5ffdd
 
       - name: Run source-only SPIKE Essential gates
         run: |
@@ -103,6 +103,7 @@ jobs:
           python3 tests/tools/ev3_state_observer_test.py
           python3 tests/tools/spike_arena_mailbox_test.py
           python3 tests/tools/spike_arena_inputs_test.py
+          python3 tests/tools/spike_lockstep_test.py
           python3 tests/tools/spike_arena_program_test.py
           python3 tests/platforms/spike-nuttx-mailbox-test.py
           python3 tests/platforms/spike-addressed-capability-mutants-test.py
@@ -173,7 +174,7 @@ jobs:
           # The solution built PeripheralsTests and the runtime together.
           dotnet test "$project" --configuration Release --no-build --no-restore \
             "${common[@]}" \
-            --filter 'FullyQualifiedName~STM32CRCTests|FullyQualifiedName~STM32DMATests|FullyQualifiedName~STM32DMAAbortRearmTests|FullyQualifiedName~STM32DMAReceivePulseTests|FullyQualifiedName~STM32SPITests|FullyQualifiedName~STM32SPIDmaReadTests|FullyQualifiedName~STM32_UARTTests|FullyQualifiedName~STM32F7I2CTests|FullyQualifiedName~TLC5955Tests|FullyQualifiedName~LSM6DS3TRCTests|FullyQualifiedName~LP50XXTests|FullyQualifiedName~GenericSpiFlashW25Q256Tests|FullyQualifiedName~LegoLpf2PortTests|FullyQualifiedName~LegoLpf2DataBudgetTests|FullyQualifiedName~LegoLpf2ElectricalPortTests|FullyQualifiedName~LegoLpf2ElectricalAttachmentTests|FullyQualifiedName~STM32TLCClockTests|FullyQualifiedName~STM32F4I2CStreamTests|FullyQualifiedName~STM32ADCTriggerTests|FullyQualifiedName~STM32ADCDMA|FullyQualifiedName~STM32SYSCFGTests|FullyQualifiedName~BrickPowerControllerTests|FullyQualifiedName~PCMAudioSinkTests|FullyQualifiedName~SpikeFaultSoakTests|FullyQualifiedName~PrimeButtonLadderTests|FullyQualifiedName~STM32TimerBoardClockTests|FullyQualifiedName~STM32TimerRolloverTests|FullyQualifiedName~STM32TimerSoftwareEventTests|FullyQualifiedName~STM32TimerInclusivePeriodTests|FullyQualifiedName~TI_DA8xx_AINTCTests|FullyQualifiedName~TI_DA8xx_Timer64Tests|FullyQualifiedName~TI_DA8xx_PSCTests|FullyQualifiedName~TI_DA8xx_PLLCTests|FullyQualifiedName~TI_DA8xx_SYSCFG0Tests|FullyQualifiedName~TI_DA8xx_EDMA3CCTests|FullyQualifiedName~TI_DA8xx_EDMA3TCTests|FullyQualifiedName~TI_DA8xx_MMCSDTests|FullyQualifiedName~TI_DA8xx_GPIOTests|FullyQualifiedName~TI_DA8xx_SPITests|FullyQualifiedName~ST7586Tests' \
+            --filter 'FullyQualifiedName~STM32CRCTests|FullyQualifiedName~STM32DMATests|FullyQualifiedName~STM32DMAAbortRearmTests|FullyQualifiedName~STM32DMAReceivePulseTests|FullyQualifiedName~STM32SPITests|FullyQualifiedName~STM32SPIDmaReadTests|FullyQualifiedName~STM32_UARTTests|FullyQualifiedName~STM32F7I2CTests|FullyQualifiedName~TLC5955Tests|FullyQualifiedName~LSM6DS3TRCTests|FullyQualifiedName~LP50XXTests|FullyQualifiedName~GenericSpiFlashW25Q256Tests|FullyQualifiedName~LegoLpf2PortTests|FullyQualifiedName~LegoLpf2DataBudgetTests|FullyQualifiedName~LegoLpf2ElectricalPortTests|FullyQualifiedName~LegoLpf2ElectricalAttachmentTests|FullyQualifiedName~LegoLpf2ExternalShaftTests|FullyQualifiedName~STM32TLCClockTests|FullyQualifiedName~STM32F4I2CStreamTests|FullyQualifiedName~STM32ADCTriggerTests|FullyQualifiedName~STM32ADCDMA|FullyQualifiedName~STM32SYSCFGTests|FullyQualifiedName~BrickPowerControllerTests|FullyQualifiedName~PCMAudioSinkTests|FullyQualifiedName~SpikeFaultSoakTests|FullyQualifiedName~PrimeButtonLadderTests|FullyQualifiedName~STM32TimerBoardClockTests|FullyQualifiedName~STM32TimerRolloverTests|FullyQualifiedName~STM32TimerSoftwareEventTests|FullyQualifiedName~STM32TimerInclusivePeriodTests|FullyQualifiedName~TI_DA8xx_AINTCTests|FullyQualifiedName~TI_DA8xx_Timer64Tests|FullyQualifiedName~TI_DA8xx_PSCTests|FullyQualifiedName~TI_DA8xx_PLLCTests|FullyQualifiedName~TI_DA8xx_SYSCFG0Tests|FullyQualifiedName~TI_DA8xx_EDMA3CCTests|FullyQualifiedName~TI_DA8xx_EDMA3TCTests|FullyQualifiedName~TI_DA8xx_MMCSDTests|FullyQualifiedName~TI_DA8xx_GPIOTests|FullyQualifiedName~TI_DA8xx_SPITests|FullyQualifiedName~ST7586Tests' \
             --logger 'console;verbosity=normal'
 
       - name: Run complete managed peripheral suite
@@ -259,6 +260,10 @@ jobs:
             -Wl,-T,stm32f413-throughput.ld -o stm32f413-throughput.elf \
             stm32f413-throughput.S
           test "$(arm-none-eabi-readelf -h stm32f413-throughput.elf | awk '/Entry point/{print $4}')" = 0x8000009
+          arm-none-eabi-gcc -mcpu=cortex-m4 -mthumb -nostdlib \
+            -Wl,-T,stm32f413-throughput.ld -o stm32f413-idle.elf \
+            stm32f413-idle.S
+          test "$(arm-none-eabi-readelf -h stm32f413-idle.elf | awk '/Entry point/{print $4}')" = 0x8000041
 
       - name: Load the source-only SPIKE Prime platform
         run: tests/platforms/spike-prime-platform-load-test.sh
@@ -569,6 +574,23 @@ jobs:
         with:
           name: spike-prime-throughput
           path: /tmp/spike-prime-throughput.json
+
+      - name: Run Robot Lab lockstep on the Prime machine and profile RunFor
+        shell: bash
+        run: |
+          timeout 1500s python3 tests/platforms/SPIKE_Prime/lockstep-state-test.py \
+            --renode "dotnet output/bin/Release/Renode.dll" \
+            --busy tests/platforms/SPIKE_Prime/stm32f413-throughput.elf \
+            --idle tests/platforms/SPIKE_Prime/stm32f413-idle.elf \
+            --result /tmp/spike-prime-lockstep.json --steps 200 --profile
+          { echo '### Robot Lab lockstep (5 ms quanta) and RunFor profile'; echo '```json';
+            cat /tmp/spike-prime-lockstep.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Robot Lab lockstep receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: spike-prime-lockstep
+          path: /tmp/spike-prime-lockstep.json
 
       - name: Compile LPF2 DATA budget mutation controls
         run: |

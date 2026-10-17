@@ -155,7 +155,9 @@ class CheckpointTests(unittest.TestCase):
                                   submit=lambda *args: submitted.append(args[1]) or 42)
         machine = SimpleNamespace(SystemBus=SimpleNamespace(ReadDoubleWord=None, ReadBytes=None, WriteDoubleWord=None),
                                   ObtainPausedState=lambda value: SimpleNamespace(Dispose=lambda: None))
-        env = dict(spike_nuttx_mailbox=mailbox, monitor=SimpleNamespace(Machine=machine))
+        sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'tools'))
+        import spike_lockstep
+        env = dict(spike_nuttx_mailbox=mailbox, spike_lockstep=spike_lockstep, monitor=SimpleNamespace(Machine=machine))
         exec(compile(ast.Module(body=[dispatch], type_ignores=[]), 'actual-dispatch', 'exec'), env)
         config = dict(identity=dict(board='spike-prime', firmware='brickwright-nuttx', transport='none'),
                       paths={}, programMailbox=0x20021000)

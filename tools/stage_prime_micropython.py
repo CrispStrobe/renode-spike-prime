@@ -18,7 +18,7 @@ import subprocess
 from spike_micropython_filesystem import build_seed
 from stage_prime_runtime import CORE, OTHER, stage
 
-INFRASTRUCTURE_COMMIT = "1253d925accca23dfda66d5bca61e78498dcb64f"
+INFRASTRUCTURE_COMMIT = "181d9d45567d9afc66a47b57255d34aa51b5ffdd"
 FILES = (
     "models.cs", "program-uart.cs", "boot-seed.bin",
     "platforms/boards/spike-prime.repl",
@@ -27,7 +27,7 @@ FILES = (
     "scripts/spike-state-server.py", "tools/spike_state_monitor_protocol.py",
     "tools/ev3_state_observer.py", "tools/spike_arena_inputs.py",
     "tools/spike_arena_mailbox.py", "tools/spike_nuttx_mailbox.py",
-    "tools/spike_program_uart.py", "licenses/renode-models-MIT.txt",
+    "tools/spike_program_uart.py", "tools/spike_lockstep.py", "licenses/renode-models-MIT.txt",
     "licenses/brickwright-BSD-3-Clause.txt",
 )
 BOOT = (b"# SPDX-License-Identifier: BSD-3-Clause\n"

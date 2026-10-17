@@ -117,6 +117,11 @@ def validate_arena_inputs(arguments):
 
 
 def apply_arena_inputs(arguments, get_device, hub_models=None):
+    prepare_arena_inputs(arguments, get_device, hub_models)()
+
+
+def prepare_arena_inputs(arguments, get_device, hub_models=None):
+    """Validate and resolve a complete frame; the returned callable applies it."""
     inputs = validate_arena_inputs(arguments)
     pending = []
     for item in inputs["sensors"]:
@@ -152,5 +157,7 @@ def apply_arena_inputs(arguments, get_device, hub_models=None):
         imu = hub["imuRaw"]
         pending.append((fn, tuple([imu["temperature"]] + imu["angularRate"] + imu["acceleration"])))
     # Validate and resolve the complete frame before changing any model.
-    for fn, args in pending:
-        fn(*args)
+    def apply():
+        for fn, args in pending:
+            fn(*args)
+    return apply

@@ -107,3 +107,46 @@ If a pause lands inside the publication interrupt, a 1 ms host yield between
 attempts lets normal guest execution finish publishing. No guest-time step or
 GDB halt is injected. Uninitialized/invalid frames never retry or become
 accepted state.
+
+## Robot Lab lockstep (`lockstep/v1`)
+
+Own NuttX and MicroPython Prime profiles (transport `none`) whose electrical
+port models have the external shaft (Infra `LegoLpf2ElectricalPort`
+`EnableExternalShaft`/`SetShaft`/`TakeDriveAverage`) advertise `lockstep/v1`,
+`motor-bridge-drive/v1` and `external-shaft/v1`. The Robot Lab physics then
+owns time; the emulator advances only inside `lockstep.step`.
+
+- `lockstep.begin {quantumUs: 5000|10000}` stops a free-running emulation,
+  switches every electrical port to the external shaft (permanently for the
+  session; motors attached later inherit it), clears the drive integrators and
+  replies with a snapshot whose `clockNs` is t0.
+- `lockstep.step {quantumUs, expectClockNs, shafts: [{port, positionMdeg,
+  speedMdps}], sensors: [arena.inputs sensors], hub?}` is a closed DTO
+  (unique ports A–F, integer milli-degrees within ±2^31, milli-degrees per
+  second within ±2·10^6, a port is either a shaft or a sensor, the begin
+  quantum). `expectClockNs` must equal the emulator clock exactly, else the
+  step is refused before any model changes. The shafts and sensors are
+  validated and resolved first, then applied on the stopped machine, then
+  `Emulation.RunFor(quantum)` runs on the service thread. A debugger-halted
+  CPU or an emulation resumed by someone else is refused.
+- The reply's `data` is the snapshot taken right after the quantum, and the
+  same object is the stream's next snapshot (`seq` + 1 per step, `clockNs` =
+  `expectClockNs` + quantum). Each motor carries `positionSource: "external"`
+  and `drive: {mean, last, brakingTicks, ticks}`: the 1 kHz H-bridge samples
+  of the quantum, mean/last in 1/10000 duty (−10000…10000), `ticks` =
+  quantum/1 ms. Motors of sessions that never began lockstep carry neither
+  field.
+- `lockstep.end {}` leaves lockstep; the machine stays stopped and the shafts
+  stay external.
+
+While lockstep is active only `lockstep.*`, `state.sample`,
+`nuttx.program.control.submit`, `nuttx.program.storage.submit` and the
+MicroPython UART commands are dispatched; `arena.inputs`, `lpf2.*`,
+`nuttx.program.packet` and the other commands are refused.
+
+`nuttx.program.control.submit {bytes}` (capability
+`nuttx-program-deferred-start/v1`) submits a START (3) or STOP (4) program
+packet to the full firmware's mailbox and returns `{requestSeq}` at once; the
+firmware's reply appears in later snapshots as `lifecycle.nuttxProgramReply`.
+Use it inside lockstep, where `nuttx.program.packet`'s 1.5 s wall wait can
+never see a reply because guest time does not advance between steps.
