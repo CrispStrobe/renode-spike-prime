@@ -25,9 +25,10 @@ if _tools not in sys.path:
     sys.path.insert(0, _tools)
 from spike_state_monitor_protocol import split_frames, validate_command, validate_config, integer_types
 import ev3_state_observer
-from spike_arena_inputs import apply_arena_inputs, resolve_prime_hub_models, observe_prime_hub
+from spike_arena_inputs import apply_arena_inputs, prepare_arena_inputs, resolve_prime_hub_models, observe_prime_hub
 import spike_arena_mailbox
 import spike_nuttx_mailbox
+import spike_lockstep
 PROGRAM_UART_COMMANDS = ('micropython.uart.write', 'micropython.uart.read', 'micropython.uart.close')
 
 _state_server = None
@@ -250,7 +251,22 @@ def _prime_hub_models(config, program_uart):
         return None
 
 
-def _snapshot(config, seq, generation, checkpoint=None, program_uart=None):
+def _lockstep_profile(config):
+    identity = config["identity"]
+    return (identity.get("board") == "spike-prime" and identity.get("transport") == "none" and
+            identity.get("firmware") in ("brickwright-nuttx", "micropython-prime"))
+
+
+def _electrical_ports(config):
+    ports = {}
+    for port_id in "ABCDEF":
+        port = _optional(config["paths"], "port" + port_id)
+        if port is not None:
+            ports[port_id] = port
+    return ports
+
+
+def _snapshot(config, seq, generation, checkpoint=None, program_uart=None, drives=None):
     if config["identity"].get("firmware") == "brickwright-arena-demo":
         bus = monitor.Machine.SystemBus
         try:
@@ -290,6 +306,12 @@ def _snapshot(config, seq, generation, checkpoint=None, program_uart=None):
                            "position": float(device.PositionDegrees if hasattr(device, "PositionDegrees") else device.EncoderDegrees),
                            "speedDps": float(device.AngularVelocityDegreesPerSecond), "stalled": bool(device.Stalled),
                            "demandDirection": -1 if device.Power < 0 else int(device.Power > 0)})
+            # Additive lockstep fields: only once the shaft is external, so
+            # snapshots of sessions that never entered lockstep are unchanged.
+            if bool(getattr(port, "ExternalShaft", False)):
+                motors[-1]["positionSource"] = "external"
+                if drives is not None and port_id in drives:
+                    motors[-1]["drive"] = drives[port_id]
         elif kind == "distance":
             sensors.append({"port": port_id, "kind": kind,
                             "values": {"distanceMillimeters": int(device.DistanceMillimeters)}})
@@ -319,6 +341,9 @@ def _snapshot(config, seq, generation, checkpoint=None, program_uart=None):
         identity["capabilities"].append("prime-hub-io/v1")
     if identity.get("firmware") in ("brickwright-nuttx", "micropython-prime") and identity.get("transport") == "none" and any(_optional(paths, "port" + p) is not None for p in "ABCDEF"):
         identity["capabilities"].append("arena-inputs/v1")
+    if (_lockstep_profile(config) and "arena-inputs/v1" in identity["capabilities"] and
+            spike_lockstep.Lockstep.supported(_electrical_ports(config))):
+        identity["capabilities"].extend(spike_lockstep.CAPABILITIES)
     lifecycle = {"phase": "ready", "generation": topology, "connectionGeneration": generation}
     if identity.get("firmware") == "brickwright-nuttx" and identity.get("transport") == "none":
         if "arena-inputs/v1" in identity["capabilities"]:
@@ -334,6 +359,7 @@ def _snapshot(config, seq, generation, checkpoint=None, program_uart=None):
                 if "pythonOutputMailbox" in config:
                     lifecycle["nuttxProgramOutput"] = spike_nuttx_mailbox.output(config["pythonOutputMailbox"], bus.ReadDoubleWord, bus.ReadBytes)
                 identity["capabilities"].append("nuttx-program/v1")
+                identity["capabilities"].append(spike_lockstep.DEFERRED_START_CAPABILITY)
                 if spike_nuttx_mailbox.supports_addressed_distance(base,
                         config.get("addressedSensorCapability"), identity.get("imageSha256"), bus.ReadDoubleWord):
                     identity["capabilities"].append("nuttx-addressed-distance/v1")
@@ -394,14 +420,17 @@ def _dispatch(config, command, checkpoint=None, program_uart=None):
     if name == "state.sample":
         if args: raise ValueError("state.sample takes no arguments")
         return
-    if name in ("nuttx.program.packet", "nuttx.program.storage.submit"):
+    if name in ("nuttx.program.packet", "nuttx.program.storage.submit", spike_lockstep.DEFERRED_CONTROL_COMMAND):
         if config["identity"].get("firmware") != "brickwright-nuttx" or config["identity"].get("transport") != "none" or "programMailbox" not in config:
             raise ValueError("program packet requires our full simulation firmware")
         if set(args) != set(("bytes",)):
             raise ValueError("program packet takes bytes only")
         bus = monitor.Machine.SystemBus
         packet = spike_nuttx_mailbox.validate_packet(args["bytes"])
+        control = name == spike_lockstep.DEFERRED_CONTROL_COMMAND
         deferred = name == "nuttx.program.storage.submit"
+        if control and (len(packet) != 8 or packet[2] not in spike_lockstep.DEFERRED_CONTROL_OPERATIONS):
+            raise ValueError("program control submit requires a START or STOP packet")
         if checkpoint is not None and checkpoint.busy():
             raise ValueError('host flash checkpoint is pending')
         if checkpoint is not None and packet[2] == 8 and not deferred:
@@ -415,6 +444,10 @@ def _dispatch(config, command, checkpoint=None, program_uart=None):
             sequence = spike_nuttx_mailbox.submit(config["programMailbox"], args["bytes"], bus.ReadDoubleWord, bus.WriteDoubleWord)
         finally:
             paused.Dispose()
+        if control:
+            # Lockstep runs guest time only inside lockstep.step, so the reply
+            # is observed in later snapshots (lifecycle.nuttxProgramReply).
+            return {"requestSeq": int(sequence)}
         if deferred:
             if checkpoint is not None and packet[2] == 8:
                 ident = sum(int(packet[4 + i]) << (8 * i) for i in range(4))
@@ -482,6 +515,39 @@ def _dispatch(config, command, checkpoint=None, program_uart=None):
         raise ValueError("unknown command")
 
 
+class _LockstepEmulator(object):
+    """Renode access for spike_lockstep.Lockstep; paths come from the config only."""
+
+    def __init__(self, config, program_uart):
+        self.config, self.program_uart = config, program_uart
+
+    def clock_ns(self):
+        return int(emulationManager.CurrentEmulation.MasterTimeSource.ElapsedVirtualTime.TotalNanoseconds)
+
+    def is_started(self):
+        return bool(emulationManager.CurrentEmulation.IsStarted)
+
+    def pause(self):
+        emulationManager.CurrentEmulation.PauseAll()
+
+    def run_for_us(self, microseconds):
+        # A debugger-halted CPU would never consume the quantum: refuse instead.
+        for cpu in monitor.Machine.SystemBus.GetCPUs():
+            if str(cpu.ExecutionMode) != "Continuous":
+                raise ValueError("the CPU is halted by the debugger; resume it before lockstep")
+        from System import UInt64
+        from Antmicro.Renode.Time import TimeInterval
+        emulationManager.CurrentEmulation.RunFor(TimeInterval.FromMicroseconds(UInt64(microseconds)))
+
+    def ports(self):
+        return _electrical_ports(self.config)
+
+    def prepare_inputs(self, inputs):
+        paths = self.config["paths"]
+        hub_models = _prime_hub_models(self.config, self.program_uart) if "hub" in inputs else None
+        return prepare_arena_inputs(inputs, lambda port: _resolve(paths["port" + port]).Device, hub_models)
+
+
 class _Server(object):
     def __init__(self, host, port, config):
         address, clients = IPAddress.Parse(host), int(config.get("maxClients", 1))
@@ -498,6 +564,7 @@ class _Server(object):
         if self.config['identity'].get('firmware') == 'micropython-prime':
             from spike_program_uart import ProgramUartBinding
             self.program_uart = ProgramUartBinding(self.config, _resolve, lambda data: Array[Byte](data))
+        self.lockstep = spike_lockstep.Lockstep(_LockstepEmulator(self.config, self.program_uart))
         self.listener = TcpListener(address, port)
         self.listener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, True)
         self.listener.Start(clients)
@@ -529,14 +596,33 @@ class _Server(object):
                 paused.Dispose()
             Thread.Sleep(1)
 
-    def sample(self):
+    def sample(self, snapshot=None):
         with self.state_lock:
             if self.stream is None:
                 return False
-            snapshot = self._synchronized(lambda: _snapshot(self.config, self.seq, self.generation, self.checkpoint, self.program_uart))
+            if snapshot is None:
+                snapshot = self._synchronized(lambda: _snapshot(self.config, self.seq, self.generation, self.checkpoint, self.program_uart))
             self._send(self.stream, snapshot)
             self.seq += 1
             return True
+
+    def _lockstep_command(self, command):
+        # Outside _synchronized: RunFor needs the emulation stopped, not a
+        # paused-state guard that would restart it. The state lock keeps
+        # samples and other commands out of the step.
+        name, args = command["command"], command["arguments"]
+        with self.state_lock:
+            if name == "lockstep.begin":
+                if not _lockstep_profile(self.config):
+                    raise ValueError("lockstep requires our simulation firmware without a transport")
+                self.lockstep.begin(args)
+                drives = None
+            elif name == "lockstep.step":
+                drives = self.lockstep.step(args)
+            else:
+                self.lockstep.end(args)
+                drives = None
+            return _snapshot(self.config, self.seq, self.generation, self.checkpoint, self.program_uart, drives)
 
     def _run(self):
         while self.running:
@@ -582,7 +668,11 @@ class _Server(object):
                         seen.append(request)
                         if len(seen) > 256: seen.pop(0)
                         try:
-                            if command["command"] in ("nuttx.program.packet", "nuttx.program.storage.submit") + PROGRAM_UART_COMMANDS:
+                            if not self.lockstep.allowed(command["command"]):
+                                raise ValueError("command refused while lockstep is active")
+                            if command["command"] in spike_lockstep.COMMANDS:
+                                data = self._lockstep_command(command)
+                            elif command["command"] in ("nuttx.program.packet", "nuttx.program.storage.submit", spike_lockstep.DEFERRED_CONTROL_COMMAND) + PROGRAM_UART_COMMANDS:
                                 data = _dispatch(self.config, command, self.checkpoint, self.program_uart)
                             else:
                                 data = self._synchronized(lambda: _dispatch(self.config, command, self.checkpoint, self.program_uart))
@@ -590,7 +680,10 @@ class _Server(object):
                 result = {"schemaVersion": 1, "type": "result", "requestId": request, "accepted": accepted, "seq": self.seq - 1}
                 if error is not None: result["error"] = error
                 if data is not None: result['data'] = data
-                self._send(stream, result); self.sample()
+                self._send(stream, result)
+                # A lockstep reply's snapshot is the stream's next snapshot,
+                # taken once under the step's paused state; never re-observed.
+                self.sample(data if accepted and command["command"] in spike_lockstep.COMMANDS else None)
 
 
 def mc_spike_state_start(host, port, config_path):

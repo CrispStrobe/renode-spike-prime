@@ -20,8 +20,8 @@ python3 tests/tools/stage_prime_micropython_test.py
 ```
 
 The consumed Infrastructure source closure must match public commit
-`1253d925accca23dfda66d5bca61e78498dcb64f` in
-[the model repository](https://github.com/CrispStrobe/renode-infrastructure-spike-prime/tree/1253d925accca23dfda66d5bca61e78498dcb64f).
+`181d9d45567d9afc66a47b57255d34aa51b5ffdd` in
+[the model repository](https://github.com/CrispStrobe/renode-infrastructure-spike-prime/tree/181d9d45567d9afc66a47b57255d34aa51b5ffdd).
 The assembler checks the bytes of every consumed model and its MIT license
 against that commit, and refuses modified inputs before creating output. It
 never fetches, resets a checkout or overwrites an existing package. Keep the
