@@ -19,7 +19,7 @@ for name, old, new, intended in mutants:
     # The legacy storage helper intentionally has the same marker comparison.
     if name == 'marker':
         start = source.index('def supports_addressed_distance(')
-        end = source.index('def _header(', start)
+        end = source.index('\ndef ', start + 1)
         block = source[start:end]
         assert block.count(old) == 1
         broken = source[:start] + block.replace(old, new) + source[end:]

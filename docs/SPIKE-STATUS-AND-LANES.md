@@ -237,3 +237,18 @@ both this API capability and the declared topology before emitting addressed
 native/Python calls. Existing default D-distance/E-force and six-motor routes
 retain their contracts. No arbitrary A–F, physical accuracy, stock firmware or
 installed GUI equivalence is claimed.
+
+
+## Paused program publication candidate — 2026-10-23
+
+The [coherent publication contract](SPIKE-COHERENT-PUBLICATIONS.md) defines typed
+unavailability at an exact paused lockstep boundary, real status/reply sequence
+metadata and independent control acknowledgement versus status freshness. The
+ordinary blocking path retains strict publication and addressed-sensor readiness
+checks. No firmware/model gitlinks, timing bounds or motion thresholds change.
+
+Focused source controls cover malformed-data refusals, partial and changing
+publications, reply replacement ownership, coupled storage observations and the
+actual lockstep/trailing-sample methods. They are not guest qualification. Hosted
+Runtime checks and an exact-source clean own-firmware consumer matrix remain
+required before adoption; desktop/package pins remain unchanged.
