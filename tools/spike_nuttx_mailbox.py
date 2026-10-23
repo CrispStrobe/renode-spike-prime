@@ -12,6 +12,15 @@ import sys
 
 MAGIC = 0x42574e50
 SIZE = 112
+PUBLICATION_CAPABILITY = 'nuttx-program-publication/v1'
+
+
+class PublicationNotReady(ValueError):
+    """Only sequence-lock unavailability; malformed publications are fatal."""
+    def __init__(self, publication):
+        self.publication = publication
+        ValueError.__init__(self, 'full-firmware publication is not ready or changed')
+
 try:
     integer_types = (int, long)
     string_types = (basestring,)
@@ -65,6 +74,17 @@ def supports_addressed_distance(base, metadata, image_hash, read_word):
     return int(read_word(address)) == 1
 
 
+def supports_lockstep_addressed_distance(base, metadata, image_hash, read_word):
+    """Support admission only, not readiness of an in-progress payload."""
+    if metadata is None:
+        return False
+    address = validate_addressed_sensor_capability(metadata, image_hash)
+    _header(base, read_word)
+    if int(read_word(base + 60)) == 0:
+        return False
+    return int(read_word(address)) == 1
+
+
 def _header(base, read_word):
     validate_base(base)
     if int(read_word(base)) != MAGIC or int(read_word(base + 4)) != 1:
@@ -108,7 +128,7 @@ def submit(base, packet, read_word, write_word):
 
 def reply(base, sequence, read_word, read_bytes):
     _header(base, read_word)
-    if int(read_word(base + 36)) != sequence:
+    if sequence & 1 or int(read_word(base + 36)) != sequence:
         return None
     packet = [int(v) for v in read_bytes(base + 40, 20)]
     if int(read_word(base + 36)) != sequence:
@@ -130,11 +150,11 @@ def storage_request(base, read_word, read_bytes):
     if request == 0:
         return None
     if request & 1 or acknowledged & 1:
-        raise ValueError('full-firmware publication is not ready or changed')
+        raise PublicationNotReady('storage')
     length = int(read_word(base + 12))
     raw = [int(value) for value in read_bytes(base + 16, 20)]
     if request != int(read_word(base + 8)) or acknowledged != int(read_word(base + 36)):
-        raise ValueError('full-firmware publication is not ready or changed')
+        raise PublicationNotReady('storage')
     if len(raw) != 20:
         raise ValueError('invalid full-firmware storage request')
     if raw[2] not in (8, 9):
@@ -160,10 +180,10 @@ def status(base, read_word, read_bytes):
             continue
         if words[2] > 5 or words[4] > 256 or words[12] not in (0, 1, 2, 3):
             raise ValueError('invalid full-firmware program status')
-        return {'clockMs': words[1], 'state': words[2], 'id': words[3], 'pc': words[4],
+        return {'publicationSeq': words[0], 'clockMs': words[1], 'state': words[2], 'id': words[3], 'pc': words[4],
                 'error': words[5] if words[5] < 0x80000000 else words[5] - 0x100000000,
                 'positions': list(words[6:8]), 'speeds': list(words[8:10]), 'duties': list(words[10:12]), 'validPorts': words[12]}
-    raise ValueError('full-firmware publication is not ready or changed')
+    raise PublicationNotReady('status')
 
 
 def validate_output_base(base):
@@ -184,4 +204,57 @@ def output(base, read_word, read_bytes):
         raw = bytearray(read_bytes(base + 12, length))
         if before == int(read_word(base)):
             return {'sequence': before, 'text': raw.decode('utf-8', 'replace'), 'truncated': bool(truncated)}
-    raise ValueError('full-firmware publication is not ready or changed')
+    raise PublicationNotReady('output')
+
+
+def observe_program(config, read_word, read_bytes, allow_unavailable=False):
+    """Read real independent publications; never cache bytes or execute time."""
+    base = config['programMailbox']
+    if int(read_word(base + 60)) == 0:
+        return {}, []
+    _header(base, read_word)
+    lifecycle, capabilities = {}, ['nuttx-program/v1', PUBLICATION_CAPABILITY]
+
+    def observe(name, callback):
+        try:
+            value = callback()
+        except PublicationNotReady:
+            if not allow_unavailable:
+                raise
+            return
+        if value is not None:
+            lifecycle[name] = value
+
+    observe('nuttxProgram', lambda: status(base, read_word, read_bytes))
+    request = int(read_word(base + 8))
+    sequence = int(read_word(base + 36))
+    # The worker copies bytes before publishing reply_seq. An old ACK can be
+    # in replacement while the newer request is pending: never expose it.
+    if request and not (request & 1) and request == sequence:
+        packet = reply(base, sequence, read_word, read_bytes)
+        if (packet is not None and int(read_word(base + 8)) == request and
+                int(read_word(base + 36)) == sequence):
+            lifecycle['nuttxProgramReply'] = packet
+            lifecycle['nuttxProgramReplySeq'] = sequence
+    if 'pythonOutputMailbox' in config:
+        observe('nuttxProgramOutput', lambda: output(config['pythonOutputMailbox'], read_word, read_bytes))
+    admit_distance = supports_lockstep_addressed_distance if allow_unavailable else supports_addressed_distance
+    if admit_distance(base, config.get('addressedSensorCapability'),
+                      config['identity'].get('imageSha256'), read_word):
+        capabilities.append('nuttx-addressed-distance/v1')
+    if config.get('motorPorts') == 6:
+        capabilities.append('nuttx-six-motors/v1')
+    if supports_storage(base, config.get('programStorageAbiAddress'), read_word):
+        capabilities.extend(['nuttx-program-storage/v1', 'nuttx-program-storage-deferred/v1'])
+        observe('nuttxProgramStorage', lambda: storage_request(base, read_word, read_bytes))
+        storage = lifecycle.get('nuttxProgramStorage')
+        if storage is not None and not storage['pending']:
+            packet = lifecycle.get('nuttxProgramReply')
+            if packet is None:
+                if not allow_unavailable:
+                    raise PublicationNotReady('storage-reply')
+                del lifecycle['nuttxProgramStorage']
+            elif (sequence != storage['replySeq'] or packet[2] != storage['operation'] or
+                  sum(packet[4 + i] << (8 * i) for i in range(4)) != storage['programId']):
+                raise ValueError('inconsistent full-firmware storage reply')
+    return lifecycle, capabilities

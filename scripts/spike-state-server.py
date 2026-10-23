@@ -266,7 +266,7 @@ def _electrical_ports(config):
     return ports
 
 
-def _snapshot(config, seq, generation, checkpoint=None, program_uart=None, drives=None):
+def _snapshot(config, seq, generation, checkpoint=None, program_uart=None, drives=None, allow_unavailable=False):
     if config["identity"].get("firmware") == "brickwright-arena-demo":
         bus = monitor.Machine.SystemBus
         try:
@@ -350,30 +350,17 @@ def _snapshot(config, seq, generation, checkpoint=None, program_uart=None, drive
             identity["capabilities"].extend(["arena-clock/v1", "guest-motor-output/v1"])
         if "programMailbox" in config:
             bus = monitor.Machine.SystemBus
-            base = config["programMailbox"]
-            if int(bus.ReadDoubleWord(base + 60)) != 0:
-                lifecycle["nuttxProgram"] = spike_nuttx_mailbox.status(base, bus.ReadDoubleWord, bus.ReadBytes)
-                sequence = int(bus.ReadDoubleWord(base + 36))
-                if sequence:
-                    lifecycle["nuttxProgramReply"] = spike_nuttx_mailbox.reply(base, sequence, bus.ReadDoubleWord, bus.ReadBytes)
-                if "pythonOutputMailbox" in config:
-                    lifecycle["nuttxProgramOutput"] = spike_nuttx_mailbox.output(config["pythonOutputMailbox"], bus.ReadDoubleWord, bus.ReadBytes)
-                identity["capabilities"].append("nuttx-program/v1")
-                identity["capabilities"].append(spike_lockstep.DEFERRED_START_CAPABILITY)
-                if spike_nuttx_mailbox.supports_addressed_distance(base,
-                        config.get("addressedSensorCapability"), identity.get("imageSha256"), bus.ReadDoubleWord):
-                    identity["capabilities"].append("nuttx-addressed-distance/v1")
-                if config.get("motorPorts") == 6:
-                    identity["capabilities"].append("nuttx-six-motors/v1")
-                if spike_nuttx_mailbox.supports_storage(base, config.get("programStorageAbiAddress"), bus.ReadDoubleWord):
-                    identity["capabilities"].extend(["nuttx-program-storage/v1", "nuttx-program-storage-deferred/v1"])
-                    storage_request = spike_nuttx_mailbox.storage_request(base, bus.ReadDoubleWord, bus.ReadBytes)
-                    if storage_request is not None:
-                        lifecycle["nuttxProgramStorage"] = storage_request
+            program, capabilities = spike_nuttx_mailbox.observe_program(
+                config, bus.ReadDoubleWord, bus.ReadBytes, allow_unavailable)
+            lifecycle.update(program)
+            for capability in capabilities:
+                identity['capabilities'].append(capability)
+                if capability == 'nuttx-program/v1':
+                    identity['capabilities'].append(spike_lockstep.DEFERRED_START_CAPABILITY)
     if checkpoint is not None:
         identity['capabilities'].append('nuttx-flash-checkpoint/v1')
         checkpoint_status = checkpoint.status()
-        if checkpoint_status is not None:
+        if checkpoint_status is not None and (not allow_unavailable or 'nuttxProgramStorage' in lifecycle):
             lifecycle['nuttxFlashCheckpoint'] = checkpoint_status
     if program_uart is not None:
         lifecycle['micropythonUart'] = program_uart.status()
@@ -596,12 +583,12 @@ class _Server(object):
                 paused.Dispose()
             Thread.Sleep(1)
 
-    def sample(self, snapshot=None):
+    def sample(self, snapshot=None, allow_unavailable=False):
         with self.state_lock:
             if self.stream is None:
                 return False
             if snapshot is None:
-                snapshot = self._synchronized(lambda: _snapshot(self.config, self.seq, self.generation, self.checkpoint, self.program_uart))
+                snapshot = self._synchronized(lambda: _snapshot(self.config, self.seq, self.generation, self.checkpoint, self.program_uart, allow_unavailable=allow_unavailable))
             self._send(self.stream, snapshot)
             self.seq += 1
             return True
@@ -622,7 +609,7 @@ class _Server(object):
             else:
                 self.lockstep.end(args)
                 drives = None
-            return _snapshot(self.config, self.seq, self.generation, self.checkpoint, self.program_uart, drives)
+            return _snapshot(self.config, self.seq, self.generation, self.checkpoint, self.program_uart, drives, allow_unavailable=True)
 
     def _run(self):
         while self.running:
@@ -683,7 +670,9 @@ class _Server(object):
                 self._send(stream, result)
                 # A lockstep reply's snapshot is the stream's next snapshot,
                 # taken once under the step's paused state; never re-observed.
-                self.sample(data if accepted and command["command"] in spike_lockstep.COMMANDS else None)
+                self.sample(data if accepted and command["command"] in spike_lockstep.COMMANDS else None,
+                            allow_unavailable=bool(accepted and self.lockstep.active and
+                                command['command'] == spike_lockstep.DEFERRED_CONTROL_COMMAND))
 
 
 def mc_spike_state_start(host, port, config_path):
