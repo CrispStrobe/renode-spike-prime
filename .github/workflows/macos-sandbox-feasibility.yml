@@ -409,25 +409,24 @@ jobs:
           NONE=$(ent none)
           # Baseline: unsandboxed, unsigned as built, same layout (does the guest boot on macOS at all?)
           a=$(bundle baseline-nsf layout-nsf org.brickwright.probe.baseline-nsf); run baseline-nsf "$a" direct org.brickwright.probe.baseline-nsf
-          # Renode as the sandboxed process itself (no hardened runtime: the Mac App Store requires the sandbox, not the hardened runtime)
-          for v in nsf-sandbox:layout-nsf single-sandbox:layout-single single-sandbox-extractdir:layout-single nsf-nolgpl-sandbox:layout-nsf-nopacket; do
-            n=${v%%:*}; l=${v#*:}; id=org.brickwright.probe.$n
-            a=$(bundle $n $l $id); signall "$a" $id "$(ent $n $SB $NS $NC $JIT)" "$NONE" 0
-            run $n "$a" direct $id
-          done
-          # Hardened runtime (ad-hoc signing has no Team ID, so library validation must be disabled here)
-          for v in nsf-hardened-jit:"$SB $NS $NC $JIT $DLV" nsf-hardened-jit-uem:"$SB $NS $NC $JIT $UEM $DLV"; do
-            n=${v%%:*}; keys=${v#*:}; id=org.brickwright.probe.$n
-            a=$(bundle $n layout-nsf $id); signall "$a" $id "$(ent $n $keys)" "$NONE" 1
-            run $n "$a" direct $id
-          done
-          # Tauri-shaped: sandboxed main launcher spawns the Renode child (app-sandbox + inherit)
-          n=nsf-parent-child; id=org.brickwright.probe.$n
-          a=$(bundle $n layout-nsf $id); signall "$a" $id "$(ent $n-child $SB $INH)" "$(ent $n $SB $NS $NC $JIT)" 0
-          run $n "$a" parent $id
-          n=nsf-parent-child-hardened; id=org.brickwright.probe.$n
-          a=$(bundle $n layout-nsf $id); signall "$a" $id "$(ent $n-child $SB $INH $JIT $DLV)" "$(ent $n $SB $NS $NC $JIT $DLV)" 1
-          run $n "$a" parent $id
+          # Run 40336239431: Renode signed with app-sandbox and exec'd directly (not as a
+          # bundle main executable launched by LaunchServices) traps in secinit on both
+          # arches; that shape is not the Tauri one and is not repeated here. Every
+          # variant below is Tauri-shaped: sandboxed launcher -> app-sandbox + inherit child.
+          pc() { # name layout child-keys launcher-keys runtime
+            id=org.brickwright.probe.$1
+            a=$(bundle $1 $2 $id); signall "$a" $id "$(ent $1-child $3)" "$(ent $1 $4)" $5
+            run $1 "$a" parent $id; }
+          pc nsf-parent-child layout-nsf "$SB $INH" "$SB $NS $NC" 0
+          pc nsf-parent-child-nolgpl layout-nsf-nopacket "$SB $INH" "$SB $NS $NC" 0
+          pc single-parent-child-extractdir layout-single "$SB $INH" "$SB $NS $NC" 0
+          pc single-parent-child layout-single "$SB $INH" "$SB $NS $NC" 0
+          pc nsf-parent-child-hardened layout-nsf "$SB $INH $JIT $DLV" "$SB $NS $NC $JIT $DLV" 1
+          # Negative controls for the hardened runtime: no allow-jit, and no disable-library-validation.
+          pc nsf-parent-child-hardened-nojit layout-nsf "$SB $INH $DLV" "$SB $NS $NC $DLV" 1
+          pc nsf-parent-child-hardened-nodlv layout-nsf "$SB $INH $JIT" "$SB $NS $NC $JIT" 1
+          # Negative control: no network.server on the sandboxed parent.
+          pc nsf-parent-child-nonet layout-nsf "$SB $INH" "$SB" 0
           ls -la "$HOME/Library/Containers" | grep brickwright || true
           cat "$R"/*/summary.json > "$R/all-summaries.jsonl"; cat "$R/all-summaries.jsonl"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
