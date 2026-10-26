@@ -365,9 +365,9 @@ jobs:
           signall() { # app bundleid renode-entitlements launcher-entitlements runtime(0/1)
             app=$1; o=(); [ "$5" = 1 ] && o=(-o runtime)
             find "$app/Contents/Resources/renode" -type f ! -path '*/renode' -print0 | while IFS= read -r -d '' f; do
-              file -b "$f" | grep -q '^Mach-O' && codesign --force -s - "${o[@]}" "$f" >/dev/null 2>&1; done
-            codesign --force -s - "${o[@]}" --identifier "$2" --entitlements "$3" "$app/Contents/Resources/renode/renode"
-            codesign --force -s - "${o[@]}" --identifier "$2" --entitlements "$4" "$app"
+              file -b "$f" | grep -q '^Mach-O' && codesign --force -s - ${o[@]+"${o[@]}"} "$f" >/dev/null 2>&1; done
+            codesign --force -s - ${o[@]+"${o[@]}"} --identifier "$2" --entitlements "$3" "$app/Contents/Resources/renode/renode"
+            codesign --force -s - ${o[@]+"${o[@]}"} --identifier "$2" --entitlements "$4" "$app"
             codesign --verify --strict --verbose=2 "$app" 2>&1 | tail -n 3; }
           run() { # variant app mode(direct|parent) bundleid
             v=$1; app=$2; mode=$3; id=$4; c="$HOME/Library/Containers/$id/Data"
