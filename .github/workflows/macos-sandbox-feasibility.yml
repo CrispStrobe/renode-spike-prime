@@ -8,12 +8,18 @@ name: macOS portable Renode and App Sandbox feasibility
 
 on:
   workflow_dispatch:
+    inputs:
+      reuse_run:
+        description: 'Probe only: reuse guest and Renode artifacts of this earlier run id of this workflow'
+        required: false
+        default: ''
   pull_request:
     paths:
       - '.github/workflows/macos-sandbox-feasibility.yml'
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: macos-sandbox-feasibility-${{ github.ref }}
@@ -30,6 +36,7 @@ env:
 jobs:
   own-guest:
     name: Source-built own NuttX simulation guest (Linux producer)
+    if: inputs.reuse_run == ''
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -113,6 +120,7 @@ jobs:
           - {runner: macos-14, rid: osx-arm64, hostarch: aarch64}
           # macos-13 was retired by GitHub; macos-15-intel is the x64 label.
           - {runner: macos-15-intel, rid: osx-x64, hostarch: i386}
+    if: inputs.reuse_run == ''
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     steps:
@@ -189,6 +197,7 @@ jobs:
   sandbox-probe:
     name: App Sandbox probe ${{ matrix.rid }}
     needs: [own-guest, renode-macos]
+    if: always() && (inputs.reuse_run != '' || (needs.own-guest.result == 'success' && needs.renode-macos.result == 'success'))
     strategy:
       fail-fast: false
       matrix:
@@ -202,10 +211,14 @@ jobs:
         with:
           name: renode-macos-${{ matrix.rid }}
           path: ${{ runner.temp }}/renode
+          run-id: ${{ inputs.reuse_run || github.run_id }}
+          github-token: ${{ github.token }}
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: own-nuttx-package
           path: ${{ runner.temp }}/nuttx
+          run-id: ${{ inputs.reuse_run || github.run_id }}
+          github-token: ${{ github.token }}
       - name: Write probe tools
         run: |
           set -eu
@@ -252,6 +265,9 @@ jobs:
           start = time.time()
           first = snapshot(start + timeout)
           result = {'firstSnapshotSeconds': round(time.time() - start, 1) if first else None, 'first': summarize(first)}
+          if not first:
+              try: result['monitorOnFailure'] = monitor('mach').decode('utf-8', 'replace')[-6000:]
+              except OSError as e: result['monitorError'] = str(e)
           if first:
               try:
                   monitor('emulation RunFor "4.0"'); time.sleep(2)
@@ -306,12 +322,14 @@ jobs:
           # Same layout without the LGPL Packet.Net assembly.
           ditto "$RUNNER_TEMP/layout-nsf" "$RUNNER_TEMP/layout-nsf-nopacket"
           ls "$RUNNER_TEMP/layout-nsf-nopacket" | grep -i packet || true
-          rm -f "$RUNNER_TEMP/layout-nsf-nopacket/PacketDotNet.dll"
+          rm -f "$RUNNER_TEMP/layout-nsf-nopacket/PacketDotNet.dll" "$RUNNER_TEMP/layout-nsf-nopacket/PacketDotNet.pdb"
+          # Also without the IronPython ensurepip bundle (pip 19.2.3 wheel with its vendored LGPL notice).
+          rm -rf "$RUNNER_TEMP/layout-nsf-nopacket/Lib/ensurepip"
           find "$RUNNER_TEMP/layout-nsf-nopacket" -iname '*packet*' | sed "s#$RUNNER_TEMP/##"
           find "$RUNNER_TEMP/layout-single" "$RUNNER_TEMP/layout-nsf" -ipath '*pip*' | sed "s#$RUNNER_TEMP/##" | head -n 40
       - name: Run variants
         run: |
-          set -u
+          set +e -u
           T="$RUNNER_TEMP"; R="$T/results"; mkdir -p "$R"
           STATE_PORT=39555; MON_PORT=39554
           ent() { # name keys...
@@ -341,13 +359,14 @@ jobs:
             reset=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["boot"]["reset"])' "$res/state-config.json")
             since=$(date '+%Y-%m-%d %H:%M:%S')
             envs=(HOME="$c" TMPDIR="$c/tmp/" DOTNET_DefaultStackSize=0x4000000)
-            [ "$v" = baseline ] && envs=(DOTNET_DefaultStackSize=0x4000000)
-            ( cd "$res" && exec env "${envs[@]}" "$app/Contents/MacOS/$exe" --disable-gui --hide-log -P $MON_PORT \
+            case $v in baseline*) envs=(DOTNET_DefaultStackSize=0x4000000);; esac
+            "$app/Contents/MacOS/renode" --version > "$R/$v/version.txt" 2>&1 < /dev/null & vp=$!; sleep 20; kill $vp 2>/dev/null
+            ( cd "$res" && exec env "${envs[@]}" "$app/Contents/MacOS/$exe" --disable-gui -P $MON_PORT \
                 -e "include @$res/nuttx.resc" -e "sysbus LoadELF @$res/nuttx-user.elf" -e "sysbus LoadELF @$res/nuttx-kernel.elf" \
                 -e 'cpu VectorTableOffset 0x08008000' -e "cpu SP $stack" -e "cpu PC $reset" -e 'emulation RunFor "1.0"' \
                 -e "include @$res/scripts/spike-state-server.py" -e "spike_state_start \"127.0.0.1\" $STATE_PORT @$res/state-config.json" \
                 > "$R/$v/renode.log" 2>&1 ) & pid=$!
-            python3 "$T/tools/client.py" $STATE_PORT $MON_PORT 420 "$R/$v/client.json" > "$R/$v/client.out" 2>&1; crc=$?
+            python3 "$T/tools/client.py" $STATE_PORT $MON_PORT 300 "$R/$v/client.json" > "$R/$v/client.out" 2>&1; crc=$?
             for i in $(seq 1 30); do kill -0 $pid 2>/dev/null || break; sleep 1; done
             kill -0 $pid 2>/dev/null && { kill -TERM $pid; sleep 3; kill -KILL $pid 2>/dev/null; }
             wait $pid; prc=$?
@@ -363,7 +382,9 @@ jobs:
           # V0 baseline: unsandboxed, unsigned layout as built (does our guest boot on macOS at all?)
           a=$(bundle baseline layout-single org.brickwright.probe.baseline renode); run baseline "$a" renode org.brickwright.probe.baseline
           # V1 single-file, sandbox, no hardened runtime (Mac App Store does not require hardened runtime)
-          for v in single-sandbox:layout-single nsf-sandbox:layout-nsf nsf-nopacket-sandbox:layout-nsf-nopacket; do
+          a=$(bundle baseline-nsf layout-nsf org.brickwright.probe.baseline-nsf renode); run baseline-nsf "$a" renode org.brickwright.probe.baseline-nsf
+          a=$(bundle baseline-nolgpl layout-nsf-nopacket org.brickwright.probe.baseline-nolgpl renode); run baseline-nolgpl "$a" renode org.brickwright.probe.baseline-nolgpl
+          for v in single-sandbox:layout-single nsf-sandbox:layout-nsf nsf-nolgpl-sandbox:layout-nsf-nopacket; do
             n=${v%%:*}; l=${v#*:}; id=org.brickwright.probe.$n
             a=$(bundle $n $l $id renode); signlibs "$a"
             codesign --force -s - --entitlements "$(ent $n $SB $NS $NC $JIT)" "$a/Contents/MacOS/renode"
