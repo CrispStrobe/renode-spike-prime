@@ -1,0 +1,392 @@
+name: macOS portable Renode and App Sandbox feasibility
+
+# Feasibility only. Builds the pinned SPIKE Runtime as a portable .NET Renode
+# for macOS, then probes it inside minimal ad-hoc signed sandboxed bundles
+# booting the project's own source-built NuttX simulation guest. No reference
+# or original LEGO firmware is used, fetched or bundled. Nothing is published
+# outside this run's artifacts. This is not a release or App Store build.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/macos-sandbox-feasibility.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-sandbox-feasibility-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  RUNTIME_SHA: 413380963e54b64f94f18d26466e1c6e941be8d2
+  INFRASTRUCTURE_SHA: 1253d925accca23dfda66d5bca61e78498dcb64f
+  TLIB_SHA: d50c868f33fb42954d85b8d06ce6f7d5bac23dd4
+  RESOURCES_SHA: 14b80cde0a136b684f316eb7f6a31aeaae0684bf
+  FIRMWARE_SHA: 91cf0c07784441ac114b85a1705737327db2d9f8
+  LITE_SHA: 8bf40b2c3d29014219bb591b66cc27b43afca7a5
+
+jobs:
+  own-guest:
+    name: Source-built own NuttX simulation guest (Linux producer)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out own firmware
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: CrispStrobe/brickwright-spike-prime-fw
+          ref: ${{ env.FIRMWARE_SHA }}
+          path: firmware
+          persist-credentials: false
+      - name: Check out pinned Runtime (platforms, models, state service)
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ env.RUNTIME_SHA }}
+          path: runtime
+          persist-credentials: false
+      - name: Check out Lite package producer
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: CrispStrobe/brickwright-lite
+          ref: ${{ env.LITE_SHA }}
+          path: lite
+          sparse-checkout: scripts
+          persist-credentials: false
+      - name: Pin Infrastructure gitlink
+        working-directory: runtime
+        run: |
+          test "$(git ls-tree HEAD src/Infrastructure | awk '{print $3}')" = "$INFRASTRUCTURE_SHA"
+          git submodule update --init --depth 1 src/Infrastructure
+          test "$(git -C src/Infrastructure rev-parse HEAD)" = "$INFRASTRUCTURE_SHA"
+      - name: Initialize firmware gitlinks and apply reviewed backports
+        working-directory: firmware
+        run: |
+          git submodule update --init nuttx nuttx-apps
+          python3 tools/apply_nuttx_backports.py
+      - name: Build the pinned tool container
+        working-directory: firmware
+        run: docker build --pull -t nuttx-builder -f docker/Dockerfile.nuttx docker
+      # Only the TI-free simulation profile; the hardware profile is never built.
+      - name: Build own NuttX firmware (simulation profile)
+        working-directory: firmware
+        run: |
+          set -o pipefail
+          make nuttx BOARD_CONFIG=simulation V=1 2>&1 | tee "$RUNNER_TEMP/build.log" | tail -n 20
+      - name: Gate the simulation image and build as TI-free
+        working-directory: firmware
+        run: |
+          python3 tools/check_ti_free_image.py \
+            nuttx/nuttx.bin nuttx/nuttx_user.bin nuttx/nuttx nuttx/nuttx_user.elf \
+            --build-log "$RUNNER_TEMP/build.log" \
+            --build-root nuttx --build-root nuttx-apps --build-root apps \
+            --config nuttx/.config --elf nuttx/nuttx_user.elf
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: Stage the package through the existing Lite producer (source models)
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install --no-install-recommends -y -q binutils-arm-none-eabi
+          # The producer only hashes this path into its pins file; the probe
+          # replaces the Runtime with the macOS build and ignores that pin.
+          printf 'placeholder\n' > "$RUNNER_TEMP/runtime-placeholder"
+          node lite/scripts/prepare-spike-nuttx-package.mjs \
+            firmware runtime runtime/src/Infrastructure "$RUNNER_TEMP/runtime-placeholder" \
+            /tmp/bwprobe/nuttx
+          cd /tmp/bwprobe/nuttx && find . -type f | sort | xargs shasum -a 256 > ../package-sha256.txt
+          cp ../package-sha256.txt nuttx-package-sha256.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: own-nuttx-package
+          path: /tmp/bwprobe/nuttx
+          if-no-files-found: error
+          retention-days: 14
+
+  renode-macos:
+    name: Portable .NET Renode ${{ matrix.rid }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {runner: macos-14, rid: osx-arm64, hostarch: aarch64}
+          # macos-13 was retired by GitHub; macos-15-intel is the x64 label.
+          - {runner: macos-15-intel, rid: osx-x64, hostarch: i386}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    steps:
+      - name: Check out pinned Runtime
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ env.RUNTIME_SHA }}
+          submodules: recursive
+          persist-credentials: false
+      - name: Pin the reviewed support libraries
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: renode/renode-resources
+          ref: ${{ env.RESOURCES_SHA }}
+          path: lib/resources
+          persist-credentials: false
+      - name: Verify exact source pins
+        run: |
+          set -eu
+          test "$(git rev-parse HEAD)" = "$RUNTIME_SHA"
+          test "$(git -C src/Infrastructure rev-parse HEAD)" = "$INFRASTRUCTURE_SHA"
+          test "$(git -C src/Infrastructure/src/Emulator/Cores/tlib rev-parse HEAD)" = "$TLIB_SHA"
+          git submodule foreach --recursive 'test "$(git rev-parse HEAD)" = "$sha1"'
+          uname -a; sw_vers; clang --version | head -1; cmake --version | head -1
+      - name: Record tlib Apple code-buffer strategy (source fact)
+        run: |
+          grep -n -E 'MAP_JIT|pthread_jit_write_protect_np|mach_vm_remap|alloc_code_gen_buf' \
+            src/Infrastructure/src/Emulator/Cores/tlib/tlib-alloc.c || true
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: 8.0.x
+      - name: Build portable Renode (headless, single-file as upstream)
+        run: |
+          set -o pipefail
+          ./build.sh --net --no-gui -t --skip-fetch --host-arch ${{ matrix.hostarch }} 2>&1 | tail -n 40
+          ls -la output/packages
+      - name: Publish a non-single-file layout (separate replaceable files)
+        run: |
+          set -o pipefail
+          dotnet publish src/Renode/Renode_NET.csproj -maxcpucount:1 -c Release -r ${{ matrix.rid }} -f net8.0 \
+            --self-contained true -p:NET=true -p:GUI_DISABLED=true -p:PORTABLE=true \
+            -p:PublishSingleFile=false -o "$RUNNER_TEMP/nsf" 2>&1 | tail -n 20
+          ls "$RUNNER_TEMP/nsf" | head -n 400 | wc -l
+      - name: Assemble artifacts and file inventory
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/out"
+          dmg=$(ls output/packages/*.dmg)
+          cp "$dmg" "$RUNNER_TEMP/out/"
+          mnt=$(mktemp -d)
+          hdiutil attach -nobrowse -readonly -mountpoint "$mnt" "$dmg"
+          ditto "$mnt/Renode.app" "$RUNNER_TEMP/Renode.app"
+          hdiutil detach "$mnt"
+          ( cd "$RUNNER_TEMP/Renode.app" && find . -type f | sort | while read -r f; do
+              printf '%s\t%s\t%s\n' "$(shasum -a 256 "$f" | cut -d' ' -f1)" "$(stat -f %z "$f")" "$f"; done ) \
+            > "$RUNNER_TEMP/out/single-file-inventory.tsv"
+          ( cd "$RUNNER_TEMP/nsf" && find . -type f | sort | while read -r f; do
+              printf '%s\t%s\t%s\n' "$(shasum -a 256 "$f" | cut -d' ' -f1)" "$(stat -f %z "$f")" "$f"; done ) \
+            > "$RUNNER_TEMP/out/non-single-file-inventory.tsv"
+          ( cd "$RUNNER_TEMP/Renode.app" && find . -type f -exec file {} + | grep -E 'Mach-O' ) > "$RUNNER_TEMP/out/macho-single.txt" || true
+          ( cd "$RUNNER_TEMP/nsf" && find . -type f -exec file {} + | grep -E 'Mach-O' ) > "$RUNNER_TEMP/out/macho-nsf.txt" || true
+          ls "$RUNNER_TEMP/Renode.app/Contents/MacOS/licenses" > "$RUNNER_TEMP/out/licenses-list.txt" || true
+          grep -l -i -E 'lesser general public|LGPL|GNU GENERAL PUBLIC' "$RUNNER_TEMP/Renode.app/Contents/MacOS/licenses/"* \
+            | xargs -n1 basename > "$RUNNER_TEMP/out/licenses-gpl-family.txt" || true
+          tar -C "$RUNNER_TEMP" -czf "$RUNNER_TEMP/out/renode-nsf-${{ matrix.rid }}.tar.gz" nsf
+          wc -l "$RUNNER_TEMP"/out/*.tsv "$RUNNER_TEMP"/out/*.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: renode-macos-${{ matrix.rid }}
+          path: ${{ runner.temp }}/out
+          if-no-files-found: error
+          retention-days: 14
+
+  sandbox-probe:
+    name: App Sandbox probe ${{ matrix.rid }}
+    needs: [own-guest, renode-macos]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {runner: macos-14, rid: osx-arm64}
+          - {runner: macos-15-intel, rid: osx-x64}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: renode-macos-${{ matrix.rid }}
+          path: ${{ runner.temp }}/renode
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: own-nuttx-package
+          path: ${{ runner.temp }}/nuttx
+      - name: Write probe tools
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/tools"
+          cat > "$RUNNER_TEMP/tools/client.py" <<'PY'
+          import json, socket, sys, time
+          state_port, monitor_port, timeout, out = int(sys.argv[1]), int(sys.argv[2]), float(sys.argv[3]), sys.argv[4]
+          def snapshot(deadline):
+              while time.time() < deadline:
+                  try:
+                      s = socket.create_connection(('127.0.0.1', state_port), timeout=5)
+                  except OSError:
+                      time.sleep(0.5); continue
+                  s.settimeout(60); buf = b''
+                  while b'\n' not in buf:
+                      chunk = s.recv(65536)
+                      if not chunk: break
+                      buf += chunk
+                  s.close()
+                  if b'\n' in buf: return json.loads(buf.split(b'\n', 1)[0])
+              return None
+          def summarize(snap):
+              if snap is None: return None
+              d = snap.get('display') or {}
+              px = d.get('pixels')
+              lit = sum(1 for v in px if v) if isinstance(px, list) else (len(px.strip('0')) if isinstance(px, str) else None)
+              return {'type': snap.get('type'), 'clockNs': snap.get('clockNs'), 'firmware': (snap.get('target') or {}).get('firmware'),
+                      'display': [d.get('width'), d.get('height')], 'litPixels': lit,
+                      'lifecycleKeys': sorted((snap.get('lifecycle') or {}).keys()),
+                      'motors': len(snap.get('motors') or []), 'power': snap.get('power')}
+          def monitor(cmd):
+              s = socket.create_connection(('127.0.0.1', monitor_port), timeout=10)
+              s.settimeout(300 if cmd != 'quit' else 3); s.sendall((cmd + '\n').encode())
+              data = b''
+              try:
+                  while True:
+                      chunk = s.recv(65536)
+                      if not chunk: break
+                      data += chunk
+                      if cmd == 'quit' or data.count(b'(machine-0)') >= 2: break
+              except socket.timeout:
+                  pass
+              s.close(); return data
+          start = time.time()
+          first = snapshot(start + timeout)
+          result = {'firstSnapshotSeconds': round(time.time() - start, 1) if first else None, 'first': summarize(first)}
+          if first:
+              try:
+                  monitor('emulation RunFor "4.0"'); time.sleep(2)
+                  result['second'] = summarize(snapshot(time.time() + 120))
+              except OSError as e:
+                  result['secondError'] = str(e)
+          try: monitor('quit')
+          except OSError: pass
+          json.dump(result, open(out, 'w'), indent=2)
+          print(json.dumps(result))
+          sys.exit(0 if first else 1)
+          PY
+          cat > "$RUNNER_TEMP/tools/launcher.c" <<'C'
+          // Minimal sandboxed parent: spawns the bundled Renode child, as the
+          // Tauri app would, and waits for it.
+          #include <spawn.h>
+          #include <stdio.h>
+          #include <stdlib.h>
+          #include <string.h>
+          #include <sys/wait.h>
+          #include <mach-o/dyld.h>
+          #include <libgen.h>
+          extern char **environ;
+          int main(int argc, char **argv) {
+              char self[4096]; uint32_t n = sizeof self;
+              if (_NSGetExecutablePath(self, &n) != 0) return 90;
+              char child[4200]; snprintf(child, sizeof child, "%s/renode", dirname(self));
+              argv[0] = child; pid_t pid;
+              int rc = posix_spawn(&pid, child, NULL, NULL, argv, environ);
+              if (rc != 0) { fprintf(stderr, "posix_spawn failed: %s\n", strerror(rc)); return 91; }
+              int status; waitpid(pid, &status, 0);
+              if (WIFSIGNALED(status)) { fprintf(stderr, "child signal %d\n", WTERMSIG(status)); return 128 + WTERMSIG(status); }
+              return WEXITSTATUS(status);
+          }
+          C
+          clang -O2 -o "$RUNNER_TEMP/tools/launcher" "$RUNNER_TEMP/tools/launcher.c"
+          sw_vers; uname -m
+      - name: Prepare Renode layouts
+        run: |
+          set -eu
+          cd "$RUNNER_TEMP/renode"
+          mnt=$(mktemp -d)
+          hdiutil attach -nobrowse -readonly -mountpoint "$mnt" ./*.dmg
+          ditto "$mnt/Renode.app/Contents/MacOS" "$RUNNER_TEMP/layout-single"
+          hdiutil detach "$mnt"
+          tar -xzf renode-nsf-${{ matrix.rid }}.tar.gz -C "$RUNNER_TEMP"
+          # Non-single-file layout: upstream support files plus separate managed/native files.
+          ditto "$RUNNER_TEMP/layout-single" "$RUNNER_TEMP/layout-nsf"
+          rm -f "$RUNNER_TEMP/layout-nsf/renode"
+          ditto "$RUNNER_TEMP/nsf" "$RUNNER_TEMP/layout-nsf"
+          mv "$RUNNER_TEMP/layout-nsf/Renode" "$RUNNER_TEMP/layout-nsf/renode"
+          # Same layout without the LGPL Packet.Net assembly.
+          ditto "$RUNNER_TEMP/layout-nsf" "$RUNNER_TEMP/layout-nsf-nopacket"
+          ls "$RUNNER_TEMP/layout-nsf-nopacket" | grep -i packet || true
+          rm -f "$RUNNER_TEMP/layout-nsf-nopacket/PacketDotNet.dll"
+          find "$RUNNER_TEMP/layout-nsf-nopacket" -iname '*packet*' | sed "s#$RUNNER_TEMP/##"
+          find "$RUNNER_TEMP/layout-single" "$RUNNER_TEMP/layout-nsf" -ipath '*pip*' | sed "s#$RUNNER_TEMP/##" | head -n 40
+      - name: Run variants
+        run: |
+          set -u
+          T="$RUNNER_TEMP"; R="$T/results"; mkdir -p "$R"
+          STATE_PORT=39555; MON_PORT=39554
+          ent() { # name keys...
+            f="$T/ent-$1.plist"; shift
+            { echo '<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict>'
+              for k in "$@"; do echo "<key>$k</key><true/>"; done; echo '</dict></plist>'; } > "$f"; echo "$f"; }
+          bundle() { # variant layout bundleid exe
+            app="$T/apps/$1/SpikeProbe.app"; rm -rf "$T/apps/$1"; mkdir -p "$app/Contents/Resources"
+            ditto "$T/$2" "$app/Contents/MacOS"
+            ditto "$T/nuttx" "$app/Contents/Resources/nuttx"
+            res="$app/Contents/Resources/nuttx"
+            grep -rIl '/tmp/bwprobe/nuttx' "$res" | while read -r f; do sed -i '' "s#/tmp/bwprobe/nuttx#$res#g" "$f"; done
+            cat > "$app/Contents/Info.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict><key>CFBundleIdentifier</key><string>$3</string><key>CFBundleExecutable</key><string>$4</string>
+          <key>CFBundlePackageType</key><string>APPL</string><key>CFBundleName</key><string>SpikeProbe</string><key>LSMinimumSystemVersion</key><string>12.0</string></dict></plist>
+          EOF
+            echo "$app"; }
+          signlibs() { find "$1/Contents" -type f \( -name '*.dylib' -o -name '*.so' \) -exec codesign --force -s - {} \; >/dev/null 2>&1
+                       find "$1/Contents/MacOS" -maxdepth 1 -type f -perm +111 ! -name renode ! -name launcher -exec sh -c 'file "$1" | grep -q Mach-O && codesign --force -s - "$1"' _ {} \; ; }
+          run() { # variant app exe bundleid
+            v=$1; app=$2; exe=$3; id=$4; c="$HOME/Library/Containers/$id/Data"
+            mkdir -p "$R/$v"; codesign -d --entitlements :- "$app/Contents/MacOS/$exe" > "$R/$v/entitlements.plist" 2>/dev/null
+            codesign -dv "$app/Contents/MacOS/$exe" 2> "$R/$v/codesign.txt"; codesign -dv "$app/Contents/MacOS/renode" 2>> "$R/$v/codesign.txt"
+            res="$app/Contents/Resources/nuttx"
+            stack=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["boot"]["stack"])' "$res/state-config.json")
+            reset=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["boot"]["reset"])' "$res/state-config.json")
+            since=$(date '+%Y-%m-%d %H:%M:%S')
+            envs=(HOME="$c" TMPDIR="$c/tmp/" DOTNET_DefaultStackSize=0x4000000)
+            [ "$v" = baseline ] && envs=(DOTNET_DefaultStackSize=0x4000000)
+            ( cd "$res" && exec env "${envs[@]}" "$app/Contents/MacOS/$exe" --disable-gui --hide-log -P $MON_PORT \
+                -e "include @$res/nuttx.resc" -e "sysbus LoadELF @$res/nuttx-user.elf" -e "sysbus LoadELF @$res/nuttx-kernel.elf" \
+                -e 'cpu VectorTableOffset 0x08008000' -e "cpu SP $stack" -e "cpu PC $reset" -e 'emulation RunFor "1.0"' \
+                -e "include @$res/scripts/spike-state-server.py" -e "spike_state_start \"127.0.0.1\" $STATE_PORT @$res/state-config.json" \
+                > "$R/$v/renode.log" 2>&1 ) & pid=$!
+            python3 "$T/tools/client.py" $STATE_PORT $MON_PORT 420 "$R/$v/client.json" > "$R/$v/client.out" 2>&1; crc=$?
+            for i in $(seq 1 30); do kill -0 $pid 2>/dev/null || break; sleep 1; done
+            kill -0 $pid 2>/dev/null && { kill -TERM $pid; sleep 3; kill -KILL $pid 2>/dev/null; }
+            wait $pid; prc=$?
+            sleep 2
+            sudo log show --style compact --start "$since" --predicate 'eventMessage CONTAINS[c] "deny" OR eventMessage CONTAINS[c] "Sandbox" OR eventMessage CONTAINS[c] "code signature" OR eventMessage CONTAINS[c] "library validation"' 2>/dev/null \
+              | grep -i -E 'renode|launcher|spikeprobe|sandbox|deny' | grep -v -E 'mdworker|Spotlight|com.apple.(WebKit|Safari)' | head -n 400 > "$R/$v/sandbox-log.txt"
+            printf '{"variant":"%s","clientExit":%s,"processExit":%s,"denyLines":%s}\n' "$v" "$crc" "$prc" "$(grep -c -i deny "$R/$v/sandbox-log.txt")" | tee "$R/$v/summary.json"
+            tail -n 40 "$R/$v/renode.log"; cat "$R/$v/client.out"; head -n 40 "$R/$v/sandbox-log.txt"
+          }
+          SB=com.apple.security.app-sandbox; NS=com.apple.security.network.server; NC=com.apple.security.network.client
+          JIT=com.apple.security.cs.allow-jit; UEM=com.apple.security.cs.allow-unsigned-executable-memory
+          DLV=com.apple.security.cs.disable-library-validation; INH=com.apple.security.inherit
+          # V0 baseline: unsandboxed, unsigned layout as built (does our guest boot on macOS at all?)
+          a=$(bundle baseline layout-single org.brickwright.probe.baseline renode); run baseline "$a" renode org.brickwright.probe.baseline
+          # V1 single-file, sandbox, no hardened runtime (Mac App Store does not require hardened runtime)
+          for v in single-sandbox:layout-single nsf-sandbox:layout-nsf nsf-nopacket-sandbox:layout-nsf-nopacket; do
+            n=${v%%:*}; l=${v#*:}; id=org.brickwright.probe.$n
+            a=$(bundle $n $l $id renode); signlibs "$a"
+            codesign --force -s - --entitlements "$(ent $n $SB $NS $NC $JIT)" "$a/Contents/MacOS/renode"
+            run $n "$a" renode $id
+          done
+          # V2/V3 hardened runtime (ad-hoc signing has no Team ID, so library validation must be disabled)
+          for v in nsf-hardened-jit:"$SB $NS $NC $JIT $DLV" nsf-hardened-jit-uem:"$SB $NS $NC $JIT $UEM $DLV"; do
+            n=${v%%:*}; keys=${v#*:}; id=org.brickwright.probe.$n
+            a=$(bundle $n layout-nsf $id renode); signlibs "$a"
+            codesign --force -s - -o runtime --entitlements "$(ent $n $keys)" "$a/Contents/MacOS/renode"
+            run $n "$a" renode $id
+          done
+          # V4 parent/child: sandboxed launcher spawns renode child (app-sandbox + inherit), like the Tauri app
+          n=nsf-parent-child; id=org.brickwright.probe.$n
+          a=$(bundle $n layout-nsf $id launcher); cp "$T/tools/launcher" "$a/Contents/MacOS/launcher"; signlibs "$a"
+          codesign --force -s - --entitlements "$(ent $n-child $SB $INH)" "$a/Contents/MacOS/renode"
+          codesign --force -s - --entitlements "$(ent $n $SB $NS $NC $JIT)" "$a/Contents/MacOS/launcher"
+          run $n "$a" launcher $id
+          ls -la "$HOME/Library/Containers" | grep brickwright || true
+          cat "$R"/*/summary.json > "$R/all-summaries.jsonl"; cat "$R/all-summaries.jsonl"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: sandbox-probe-${{ matrix.rid }}
+          path: ${{ runner.temp }}/results
+          retention-days: 14
