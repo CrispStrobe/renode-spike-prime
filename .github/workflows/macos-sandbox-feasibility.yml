@@ -13,6 +13,10 @@ on:
         description: 'Probe only: reuse guest and Renode artifacts of this earlier run id of this workflow'
         required: false
         default: ''
+      reuse_renode_run:
+        description: 'Rebuild the guest but reuse the Renode artifacts of this earlier run id'
+        required: false
+        default: ''
   pull_request:
     paths:
       - '.github/workflows/macos-sandbox-feasibility.yml'
@@ -92,16 +96,19 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
-      - name: Stage the package through the existing Lite producer (source models)
+      - name: Stage the package through the existing Lite producer (compiled models)
         run: |
           sudo apt-get update -q
           sudo apt-get install --no-install-recommends -y -q binutils-arm-none-eabi
           # The producer only hashes this path into its pins file; the probe
           # replaces the Runtime with the macOS build and ignores that pin.
           printf 'placeholder\n' > "$RUNNER_TEMP/runtime-placeholder"
+          # Compiled models: this Runtime already contains the Prime models, so
+          # including models.cs fails (first probe run 40308804034).
           node lite/scripts/prepare-spike-nuttx-package.mjs \
             firmware runtime runtime/src/Infrastructure "$RUNNER_TEMP/runtime-placeholder" \
-            /tmp/bwprobe/nuttx
+            /tmp/bwprobe/nuttx --compiled-models
+          ! grep -q models.cs /tmp/bwprobe/nuttx/nuttx.resc
           cd /tmp/bwprobe/nuttx && find . -type f | sort | xargs shasum -a 256 > ../package-sha256.txt
           cp ../package-sha256.txt nuttx-package-sha256.txt
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -120,7 +127,7 @@ jobs:
           - {runner: macos-14, rid: osx-arm64, hostarch: aarch64}
           # macos-13 was retired by GitHub; macos-15-intel is the x64 label.
           - {runner: macos-15-intel, rid: osx-x64, hostarch: i386}
-    if: inputs.reuse_run == ''
+    if: inputs.reuse_run == '' && inputs.reuse_renode_run == ''
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     steps:
@@ -197,7 +204,7 @@ jobs:
   sandbox-probe:
     name: App Sandbox probe ${{ matrix.rid }}
     needs: [own-guest, renode-macos]
-    if: always() && (inputs.reuse_run != '' || (needs.own-guest.result == 'success' && needs.renode-macos.result == 'success'))
+    if: always() && (inputs.reuse_run != '' || (needs.own-guest.result == 'success' && (inputs.reuse_renode_run != '' || needs.renode-macos.result == 'success')))
     strategy:
       fail-fast: false
       matrix:
@@ -211,7 +218,7 @@ jobs:
         with:
           name: renode-macos-${{ matrix.rid }}
           path: ${{ runner.temp }}/renode
-          run-id: ${{ inputs.reuse_run || github.run_id }}
+          run-id: ${{ inputs.reuse_run || inputs.reuse_renode_run || github.run_id }}
           github-token: ${{ github.token }}
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
@@ -359,21 +366,22 @@ jobs:
             reset=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["boot"]["reset"])' "$res/state-config.json")
             since=$(date '+%Y-%m-%d %H:%M:%S')
             envs=(HOME="$c" TMPDIR="$c/tmp/" DOTNET_DefaultStackSize=0x4000000)
-            case $v in baseline*) envs=(DOTNET_DefaultStackSize=0x4000000);; esac
+            case $v in baseline*) envs=(DOTNET_DefaultStackSize=0x4000000);; *extractdir*) envs+=(DOTNET_BUNDLE_EXTRACT_BASE_DIR="$c/tmp/");; esac
             "$app/Contents/MacOS/renode" --version > "$R/$v/version.txt" 2>&1 < /dev/null & vp=$!; sleep 20; kill $vp 2>/dev/null
             ( cd "$res" && exec env "${envs[@]}" "$app/Contents/MacOS/$exe" --disable-gui -P $MON_PORT \
                 -e "include @$res/nuttx.resc" -e "sysbus LoadELF @$res/nuttx-user.elf" -e "sysbus LoadELF @$res/nuttx-kernel.elf" \
                 -e 'cpu VectorTableOffset 0x08008000' -e "cpu SP $stack" -e "cpu PC $reset" -e 'emulation RunFor "1.0"' \
                 -e "include @$res/scripts/spike-state-server.py" -e "spike_state_start \"127.0.0.1\" $STATE_PORT @$res/state-config.json" \
                 > "$R/$v/renode.log" 2>&1 ) & pid=$!
-            python3 "$T/tools/client.py" $STATE_PORT $MON_PORT 300 "$R/$v/client.json" > "$R/$v/client.out" 2>&1; crc=$?
+            python3 "$T/tools/client.py" $STATE_PORT $MON_PORT 240 "$R/$v/client.json" > "$R/$v/client.out" 2>&1; crc=$?
             for i in $(seq 1 30); do kill -0 $pid 2>/dev/null || break; sleep 1; done
             kill -0 $pid 2>/dev/null && { kill -TERM $pid; sleep 3; kill -KILL $pid 2>/dev/null; }
             wait $pid; prc=$?
             sleep 2
-            sudo log show --style compact --start "$since" --predicate 'eventMessage CONTAINS[c] "deny" OR eventMessage CONTAINS[c] "Sandbox" OR eventMessage CONTAINS[c] "code signature" OR eventMessage CONTAINS[c] "library validation"' 2>/dev/null \
-              | grep -i -E 'renode|launcher|spikeprobe|sandbox|deny' | grep -v -E 'mdworker|Spotlight|com.apple.(WebKit|Safari)' | head -n 400 > "$R/$v/sandbox-log.txt"
-            printf '{"variant":"%s","clientExit":%s,"processExit":%s,"denyLines":%s}\n' "$v" "$crc" "$prc" "$(grep -c -i deny "$R/$v/sandbox-log.txt")" | tee "$R/$v/summary.json"
+            sudo log show --style compact --start "$since" --predicate 'process == "renode" OR process == "launcher" OR eventMessage CONTAINS "renode(" OR eventMessage CONTAINS "launcher(" OR eventMessage CONTAINS[c] "SpikeProbe"' 2>/dev/null \
+              | head -n 600 > "$R/$v/sandbox-log.txt"
+            mkdir -p "$R/$v/crash"; find "$HOME/Library/Logs/DiagnosticReports" -newermt "$since" \( -iname 'renode*' -o -iname 'launcher*' \) -exec cp {} "$R/$v/crash/" \; 2>/dev/null
+            printf '{"variant":"%s","clientExit":%s,"processExit":%s,"denyLines":%s,"crashReports":%s}\n' "$v" "$crc" "$prc" "$(grep -c 'deny(' "$R/$v/sandbox-log.txt")" "$(ls "$R/$v/crash" | wc -l | tr -d ' ')" | tee "$R/$v/summary.json"
             tail -n 40 "$R/$v/renode.log"; cat "$R/$v/client.out"; head -n 40 "$R/$v/sandbox-log.txt"
           }
           SB=com.apple.security.app-sandbox; NS=com.apple.security.network.server; NC=com.apple.security.network.client
@@ -384,7 +392,7 @@ jobs:
           # V1 single-file, sandbox, no hardened runtime (Mac App Store does not require hardened runtime)
           a=$(bundle baseline-nsf layout-nsf org.brickwright.probe.baseline-nsf renode); run baseline-nsf "$a" renode org.brickwright.probe.baseline-nsf
           a=$(bundle baseline-nolgpl layout-nsf-nopacket org.brickwright.probe.baseline-nolgpl renode); run baseline-nolgpl "$a" renode org.brickwright.probe.baseline-nolgpl
-          for v in single-sandbox:layout-single nsf-sandbox:layout-nsf nsf-nolgpl-sandbox:layout-nsf-nopacket; do
+          for v in nsf-sandbox:layout-nsf single-sandbox:layout-single single-sandbox-extractdir:layout-single nsf-nolgpl-sandbox:layout-nsf-nopacket; do
             n=${v%%:*}; l=${v#*:}; id=org.brickwright.probe.$n
             a=$(bundle $n $l $id renode); signlibs "$a"
             codesign --force -s - --entitlements "$(ent $n $SB $NS $NC $JIT)" "$a/Contents/MacOS/renode"
