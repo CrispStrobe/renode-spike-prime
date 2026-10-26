@@ -162,6 +162,11 @@ jobs:
       - name: Build portable Renode (headless, single-file as upstream)
         run: |
           set -o pipefail
+          # Hosted macOS runners intermittently fail 'hdiutil create' with
+          # 'Resource busy' (runs 40308798502, 40336234971, osx-x64). Retry only
+          # that packaging command in this checkout; build inputs are unchanged.
+          sed -i '' 's|^hdiutil create \(.*\)$|for i in 1 2 3 4 5; do hdiutil create \1 \&\& break; echo "hdiutil retry $i"; sleep 20; done; test -s $OUTPUT/renode-$VERSION-dotnet.$RID-portable.dmg|' tools/packaging/make_osx_portable_dotnet.sh
+          grep -n 'hdiutil' tools/packaging/make_osx_portable_dotnet.sh
           ./build.sh --net --no-gui -t --skip-fetch --host-arch ${{ matrix.hostarch }} 2>&1 | tail -n 40
           ls -la output/packages
       - name: Publish a non-single-file layout (separate replaceable files)
