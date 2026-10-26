@@ -333,7 +333,7 @@ jobs:
           # Also without the IronPython ensurepip bundle (pip 19.2.3 wheel with its vendored LGPL notice).
           rm -rf "$RUNNER_TEMP/layout-nsf-nopacket/Lib/ensurepip"
           find "$RUNNER_TEMP/layout-nsf-nopacket" -iname '*packet*' | sed "s#$RUNNER_TEMP/##"
-          find "$RUNNER_TEMP/layout-single" "$RUNNER_TEMP/layout-nsf" -ipath '*pip*' | sed "s#$RUNNER_TEMP/##" | head -n 40
+          find "$RUNNER_TEMP/layout-single" "$RUNNER_TEMP/layout-nsf" -ipath '*pip*' | sed "s#$RUNNER_TEMP/##" | head -n 40 || true
       - name: Run variants
         run: |
           set +e -u
