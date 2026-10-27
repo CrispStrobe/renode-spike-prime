@@ -1,0 +1,125 @@
+name: SPIKE Renode for macOS (multi-file layout)
+
+# Reusable build of the SPIKE Runtime for macOS as a multi-file (non-single-file)
+# .NET layout suitable for a signed, sandboxed app bundle:
+#   renode/            Renode host, managed assemblies, .dylib files, support files
+#   renode/tlib/       translate-arm-m-le.so as a separate, replaceable file
+#                      (loaded in place via RENODE_TLIB_DIRECTORY, see
+#                      ShippedTranslationLibraries in the Infrastructure fork)
+#   renode/licenses/   Renode notices plus the .NET runtime notices
+# Packet.Net (LGPL-3.0) and IronPython's bundled ensurepip/pip wheel are not
+# included: the SPIKE guest does not use them. Output is unsigned; signing is the
+# consumer's job. Callable from other public repositories (workflow_call).
+
+on:
+  workflow_call:
+    inputs:
+      runtime_ref:
+        description: 'Exact renode-spike-prime commit to build'
+        required: true
+        type: string
+      resources_sha:
+        description: 'Exact renode/renode-resources commit'
+        required: false
+        type: string
+        default: 14b80cde0a136b684f316eb7f6a31aeaae0684bf
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: SPIKE Renode ${{ matrix.rid }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {runner: macos-14, rid: osx-arm64, hostarch: aarch64}
+          # macos-13 is retired; macos-15-intel is the hosted x64 label.
+          - {runner: macos-15-intel, rid: osx-x64, hostarch: i386}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    steps:
+      - name: Check out exact Runtime
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: CrispStrobe/renode-spike-prime
+          ref: ${{ inputs.runtime_ref }}
+          submodules: recursive
+          persist-credentials: false
+      - name: Pin the reviewed support libraries
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: renode/renode-resources
+          ref: ${{ inputs.resources_sha }}
+          path: lib/resources
+          persist-credentials: false
+      - name: Verify exact source pins
+        env:
+          RUNTIME_REF: ${{ inputs.runtime_ref }}
+        run: |
+          set -eu
+          test "$(git rev-parse HEAD)" = "$RUNTIME_REF"
+          git submodule foreach --recursive 'test "$(git rev-parse HEAD)" = "$sha1"'
+          echo "runtime=$(git rev-parse HEAD) infrastructure=$(git -C src/Infrastructure rev-parse HEAD) tlib=$(git -C src/Infrastructure/src/Emulator/Cores/tlib rev-parse HEAD)"
+          grep -q 'class ShippedTranslationLibraries' src/Infrastructure/src/Emulator/Main/Utilities/ShippedTranslationLibraries.cs
+          grep -q RENODE_SERVER_BIND_ADDRESS src/Infrastructure/src/Emulator/Main/Utilities/SocketServerProvider.cs
+          sw_vers; uname -m
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: 8.0.x
+      - name: Build portable Renode (upstream packaging, for its support files and notices)
+        run: |
+          set -o pipefail
+          # 'hdiutil create' intermittently fails with 'Resource busy' on hosted
+          # runners; retry only that packaging command.
+          sed -i '' 's|^hdiutil create \(.*\)$|for i in 1 2 3 4 5; do hdiutil create \1 \&\& break; echo "hdiutil retry $i"; sleep 20; done; test -s $OUTPUT/renode-$VERSION-dotnet.$RID-portable.dmg|' tools/packaging/make_osx_portable_dotnet.sh
+          ./build.sh --net --no-gui -t --skip-fetch --host-arch ${{ matrix.hostarch }} 2>&1 | tail -n 30
+      - name: Publish the multi-file layout
+        run: |
+          set -o pipefail
+          dotnet publish src/Renode/Renode_NET.csproj -maxcpucount:1 -c Release -r ${{ matrix.rid }} -f net8.0 \
+            --self-contained true -p:NET=true -p:GUI_DISABLED=true -p:PORTABLE=true \
+            -p:PublishSingleFile=false -o "$RUNNER_TEMP/nsf" 2>&1 | tail -n 10
+      - name: Assemble the SPIKE layout
+        run: |
+          set -eu
+          L="$RUNNER_TEMP/spike/renode"; mkdir -p "$L"
+          mnt=$(mktemp -d)
+          hdiutil attach -nobrowse -readonly -mountpoint "$mnt" output/packages/*.dmg
+          ditto "$mnt/Renode.app/Contents/MacOS" "$L"
+          hdiutil detach "$mnt"
+          # Replace the single-file host by the multi-file publish.
+          rm -f "$L/renode" "$L/macos_run.command" "$L/macos_run.sh" "$L/renode-test" "$L/renode-test''"
+          rm -rf "$L/tests"
+          ditto "$RUNNER_TEMP/nsf" "$L"
+          mv "$L/Renode" "$L/renode"
+          # Not used by the SPIKE guest: Packet.Net (LGPL-3.0), ensurepip/pip wheel.
+          rm -f "$L/PacketDotNet.dll" "$L/PacketDotNet.pdb"
+          rm -rf "$L/Lib/ensurepip"
+          # tlib as a separate file, loaded in place via RENODE_TLIB_DIRECTORY.
+          mkdir -p "$L/tlib"
+          cp src/Infrastructure/src/Emulator/Cores/bin/Release/lib/translate-arm-m-le.so "$L/tlib/"
+          # .NET runtime notices, from the runtime pack this layout was published with.
+          dn="${DOTNET_ROOT:-$(dirname "$(command -v dotnet)")}"
+          ls "$dn"
+          cp "$dn/LICENSE.txt" "$L/licenses/dotnet-runtime-0-license"
+          cp "$dn/ThirdPartyNotices.txt" "$L/licenses/dotnet-runtime-1-license"
+          test -s "$L/licenses/dotnet-runtime-0-license" && test -s "$L/licenses/dotnet-runtime-1-license"
+          test ! -e "$L/PacketDotNet.dll" && test ! -e "$L/Lib/ensurepip" && test -s "$L/tlib/translate-arm-m-le.so"
+          test -f "$L/.renode-root"
+          ( cd "$L" && find . -type f | LC_ALL=C sort | while read -r f; do
+              printf '%s\t%s\t%s\n' "$(shasum -a 256 "$f" | cut -d' ' -f1)" "$(stat -f %z "$f")" "$f"; done ) > "$RUNNER_TEMP/spike/inventory.tsv"
+          ( cd "$L" && find . -type f -exec file {} + | grep 'Mach-O' | cut -d: -f1 | LC_ALL=C sort ) > "$RUNNER_TEMP/spike/macho.txt"
+          ls "$L/licenses" > "$RUNNER_TEMP/spike/licenses.txt"
+          printf '{"rid":"%s","runtime":"%s","infrastructure":"%s","tlib":"%s","resources":"%s"}\n' \
+            "${{ matrix.rid }}" "$(git rev-parse HEAD)" "$(git -C src/Infrastructure rev-parse HEAD)" \
+            "$(git -C src/Infrastructure/src/Emulator/Cores/tlib rev-parse HEAD)" "${{ inputs.resources_sha }}" > "$RUNNER_TEMP/spike/provenance.json"
+          wc -l "$RUNNER_TEMP"/spike/*.tsv "$RUNNER_TEMP"/spike/*.txt; cat "$RUNNER_TEMP/spike/provenance.json"
+          tar -C "$RUNNER_TEMP/spike" -czf "$RUNNER_TEMP/renode-spike-macos-${{ matrix.rid }}.tar.gz" renode inventory.tsv macho.txt licenses.txt provenance.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: renode-spike-macos-${{ matrix.rid }}
+          path: ${{ runner.temp }}/renode-spike-macos-${{ matrix.rid }}.tar.gz
+          if-no-files-found: error
+          retention-days: 14
