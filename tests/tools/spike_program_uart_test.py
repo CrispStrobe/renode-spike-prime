@@ -11,6 +11,9 @@ import tempfile
 from types import SimpleNamespace
 import unittest
 
+import spike_lockstep_test as lockstep_tests
+from spike_lockstep_test import Session, Stream, command, default_ports
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'tools'))
 from spike_program_uart import ProgramUartBinding, COMMANDS, validate_request
@@ -140,6 +143,58 @@ class ProgramUartTests(unittest.TestCase):
         bad = config(); bad['identity']['firmware'] = 'brickwright-nuttx'
         with self.assertRaises(ValueError): env['_dispatch'](bad, command, program_uart=binding)
         with self.assertRaises(ValueError): env['_dispatch'](config(), command)
+
+
+class ProgramUartConnectionTests(unittest.TestCase):
+    """The native launch owns the UART; state connections observe that route."""
+    def session(self):
+        session = Session(default_ports())
+        terminal = Terminal()
+        route = {'external:programUart': terminal}
+        session.server.config.update(config())
+        session.server.program_uart = ProgramUartBinding(config(), route.__getitem__, list)
+        return session, terminal
+
+    def connections(self, session, *streams):
+        return lockstep_tests.ConnectionOwnershipTests().connections(session.server, *streams)
+
+    def test_reconnect_continues_the_same_native_uart_fifo_and_generation(self):
+        session, terminal = self.session()
+        first = Stream([command('read1', COMMANDS[1], {'generation': 7, 'maxBytes': 1})])
+        second = Stream([command('wrong', COMMANDS[1], {'generation': 8, 'maxBytes': 2}),
+                         command('read2', COMMANDS[1], {'generation': 7, 'maxBytes': 2}),
+                         command('write2', COMMANDS[0], {'generation': 7, 'bytes': [13]})])
+        one, two = self.connections(session, first, second)
+        self.assertEqual(one[0]['data'], {'generation': 7, 'bytes': [0]})
+        self.assertEqual([m['accepted'] for m in two], [False, True, True])
+        self.assertEqual(two[1]['data'], {'generation': 7, 'bytes': [255, 4]})
+        self.assertEqual(terminal.writes, [[13]])
+        self.assertFalse(terminal.IsDisposed)
+        for stream, generation in [(first, 2), (second, 3)]:
+            snapshots = [m for m in stream.messages() if m['type'] == 'snapshot']
+            self.assertTrue(snapshots)
+            for snapshot in snapshots:
+                self.assertEqual(snapshot['lifecycle']['connectionGeneration'], generation)
+                self.assertEqual(snapshot['lifecycle']['micropythonUart'],
+                                 {'generation': 7, 'state': 'ready'})
+
+    def test_close_survives_reconnect_but_leaves_state_service_available(self):
+        session, terminal = self.session()
+        first = Stream([command('close', COMMANDS[2], {'generation': 7})])
+        second = Stream([command('read', COMMANDS[1], {'generation': 7, 'maxBytes': 1}),
+                         command('write', COMMANDS[0], {'generation': 7, 'bytes': [13]}),
+                         command('sample', 'state.sample', {})])
+        one, two = self.connections(session, first, second)
+        self.assertTrue(one[0]['accepted'])
+        self.assertEqual(one[0]['data'], {'generation': 7, 'closed': True})
+        self.assertEqual([m['accepted'] for m in two], [False, False, True])
+        self.assertEqual(terminal.writes, [])
+        self.assertTrue(terminal.IsDisposed)
+        snapshots = [m for m in second.messages() if m['type'] == 'snapshot']
+        self.assertEqual(len(snapshots), 4)
+        for snapshot in snapshots:
+            self.assertEqual(snapshot['lifecycle']['micropythonUart'],
+                             {'generation': 7, 'state': 'closed'})
 
 
 if __name__ == '__main__':

@@ -149,13 +149,13 @@ not actual Renode thread shutdown, socket timeout timing or guest execution.
 
 **Still open in R04:**
 
-1. *Program UART ownership.* `ProgramUartBinding` (`tools/spike_program_uart.py`)
-   lives on the `_Server` and outlives every client. `micropython.uart.close` sets
-   `closed` for the server's lifetime, so one client's close disables the UART
-   for all later clients, and bytes one client left unread may reach the next.
-   Decide the contract (per connection or per server, stated in
-   `docs/spike-program-uart.md`), then test it through `connections()` with two
-   clients.
+1. *Program UART ownership: host contract covered.* The native launch and
+   `programUartGeneration` own the route, independently of TCP connections.
+   Reconnect intentionally continues the same FIFO; close remains permanent.
+   `docs/spike-program-uart.md` states this lifecycle, and two-client tests in
+   `spike_program_uart_test.py` cover unread output, generation mismatch,
+   persistent close and continuing state sampling. Actual native-launch
+   replacement qualification remains a consumer R06 task.
 2. *Slow or vanished reader.* `_send` writes under `WriteTimeout`; a client that
    stops reading makes the write throw. The throwing-`Write` host regression
    above now covers cleanup and replacement. Still run an actual Renode socket
