@@ -56,17 +56,35 @@ separately labeled. An entrypoint hash alone does not identify its shared
 libraries or establish an installed consumer's runtime closure.
 
 On 2026-10-28, firmware source `91cf0c07784441ac114b85a1705737327db2d9f8`
-passed the ordinary robot, six-motor, thirty-cycle workload and all six storage
-phases on macOS with stock Renode 1.16.1 and source-staged Infrastructure
-`bb2c96fd2656f686d4b06683df4ece234f33b206`. The workload had 133 observations,
-21,312 KiB observed RSS growth and a 492,944 KiB sampled peak. The six-motor
-regression retained its three-degree position tolerance and had 146 observations.
-These results do not qualify the new compiled Linux Runtime, an installed GUI,
-concurrent Bluetooth traffic or physical hardware.
+passed the robot baseline, six-motor regression, thirty-cycle motor/sensor/storage
+workload and all six cold-storage phases on independently compiled Linux and
+macOS Runtime builds. Both bind Infrastructure
+`bb2c96fd2656f686d4b06683df4ece234f33b206` and support resources
+`9d7824771f3db67663950cae06f5bb7f89fbf33b`.
+The [receipt](receipts/2026-10-28-nuttx-guest-qualification.json) binds images,
+qualification sources, private build inventories and original phase receipts.
 
-The initial workload completed all thirty cycles but failed an incorrect
-max-minus-min RSS comparison. Host memory reclamation lowered that minimum;
-the test counted a decrease as growth. Its original receipt is retained. The
-corrected comparison uses R04's fixed post-warmup baseline and preserves the
-64 MiB threshold; a fresh complete invocation passed. Controls reject growth one
-KiB beyond the bound and ensure reclamation never lowers the baseline.
+| Compiled host | Workload observations | Sampled peak RSS | Post-warmup RSS growth |
+| --- | ---: | ---: | ---: |
+| Linux | 275 | 360,268 KiB | 1,056 KiB |
+| macOS | 275 | 373,504 KiB | 2,928 KiB |
+
+Six-motor position tolerance remains three degrees. Every cold-storage phase
+passed independently on both compiled hosts. These results do not establish
+installed GUI acceptance, concurrent Bluetooth traffic or physical durability.
+
+Preserved failures explain the final fixture. The first Linux workload exposed
+a previously queued pressed force sample; a guest release-wait now precedes
+motor power. Its successor exposed asynchronous braking/encoder completion;
+the fixture now observes actual terminal state within the unchanged one-guest-
+second bound. Neither repair substitutes completion or sensor data.
+
+The first macOS source-extension run used an incorrect max-minus-min RSS
+comparison. The corrected comparison uses R04's fixed post-warmup baseline and
+keeps the 64 MiB threshold; controls reject one KiB beyond it and ensure
+reclamation never lowers that baseline. Later stock-Runtime/source-extension
+runs completed the functional workload, but one still exceeded the unchanged
+RSS-growth guard. That original failure remains retained and the legacy route
+has no resource qualification claim. The separately built current compiled
+macOS Runtime passed the same final fixture and unchanged resource guards;
+it is the compiled result reported above.
