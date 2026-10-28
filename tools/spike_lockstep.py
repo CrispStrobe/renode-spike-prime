@@ -14,7 +14,8 @@ closed DTO checks and the session rules:
   snapshot reports. A clock other than ``expectClockNs`` is refused before
   anything changes.
 * ``lockstep.end {}`` leaves lockstep; the machine stays paused and the shafts
-  stay external (the model never switches back).
+  stay external (the model never switches back). A connection that ends
+  without it leaves lockstep the same way: the next client starts afresh.
 
 While lockstep is active only the commands in ``ALLOWED_DURING_LOCKSTEP`` are
 dispatched: nothing may run guest time outside a step.
@@ -177,6 +178,10 @@ class Lockstep(object):
             raise ValueError('lockstep.end takes no arguments')
         if not self.active:
             raise ValueError('lockstep is not active')
+        self.active = False
+
+    def abandon(self):
+        """End lockstep, if active, for a connection that is gone."""
         self.active = False
 
 

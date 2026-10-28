@@ -124,6 +124,43 @@ admitted work terminates or fails explicitly, state/clock sequences remain valid
 cleanup touches only the owned session, and repeated recovery has bounded growth.
 Doable now; long soak follows short deterministic failure regressions.
 
+**Progress (2026-10-28).** Stop and replacement ownership are covered for the
+state services. `close()` on the monitor service closes the connected stream, and
+no line read after the stop is dispatched. A lockstep ends with the connection
+that began it (`Lockstep.abandon()` in `_Server._run`), so the next client starts
+afresh. The source-only `BoundedStateServer` shuts down its clients on `close()`
+and can be started again. Regressions: `ConnectionOwnershipTests` in
+`tests/tools/spike_lockstep_test.py`, which drives the real `_Server._run` through
+a fake listener (`connections()`), and two cases in `spike_state_socket_test.py`.
+
+**Still open in R04**, each with a regression that fails first:
+
+1. *Program UART ownership.* `ProgramUartBinding` (`tools/spike_program_uart.py`)
+   lives on the `_Server` and outlives every client. `micropython.uart.close` sets
+   `closed` for the server's lifetime, so one client's close disables the UART
+   for all later clients, and bytes one client left unread may reach the next.
+   Decide the contract (per connection or per server, stated in
+   `docs/spike-program-uart.md`), then test it through `connections()` with two
+   clients.
+2. *Slow or vanished reader.* `_send` writes under `WriteTimeout`; a client that
+   stops reading makes the write throw. Add a `Stream` whose `Write` raises
+   and check that `_run` records `last_error`, abandons the lockstep, and serves
+   the next client.
+3. *Restart.* `mc_spike_state_stop` then `mc_spike_state_start` builds a new
+   `_Server` while the machine keeps the old lockstep's paused state and external
+   shafts. Test that the new server's first snapshot and `lockstep.begin` are
+   valid on that machine.
+4. *Bounded growth and workloads.* `tools/spike-fault-resource-soak.py` (its test
+   skips without Renode) needs a real Renode run: on the Mac, Renode 1.16.1;
+   heavy builds go to CI. Repeat connect, command and disconnect cycles and
+   record host RSS, threads and file descriptors separately from guest virtual
+   time. Done when growth is bounded over N cycles and every admitted command
+   completes or fails explicitly.
+
+Keep the source-text assertions intact: `spike_state_socket_test` matches literal
+lines of `scripts/spike-state-server.py`, and `spike_program_publication_test`
+loads `_client` by name.
+
 ## R05 — Adopt models and advance unchanged-image milestones
 
 **Start:** `tools/stage_prime_micropython.py`,

@@ -5,6 +5,7 @@ import pathlib
 import socket
 import sys
 import unittest
+from contextlib import suppress
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
@@ -98,6 +99,37 @@ class SocketTest(unittest.TestCase):
         client.sendall(("\n".join(commands) + "\n").encode())
         self.assertTrue(receive_line(stream)["accepted"]); receive_line(stream)
         self.assertTrue(receive_line(stream)["accepted"]); receive_line(stream)
+        stream.close(); client.close()
+
+    def restart(self, **limits):
+        self.server.close()
+        identity = {"board": "spike-prime", "firmware": "brickwright-nuttx",
+                    "transport": "none", "imageSha256": None}
+        self.server = BoundedStateServer(self.machine, identity, {"power": "power"},
+                                         DeterministicClock(), execute=lambda callback: callback(),
+                                         **limits)
+        self.endpoint = self.server.start()
+
+    def test_close_disconnects_clients_and_dispatches_nothing_after(self):
+        # A read timeout longer than close()'s join: the client is still
+        # connected when close() returns unless close() disconnects it.
+        self.restart(socket_timeout=5)
+        client, stream = self.connect(); receive_line(stream)
+        self.server.close()
+        command = {"schemaVersion": 1, "type": "command", "requestId": "late",
+                   "expectedSeq": 0, "command": "power.set-battery-millivolts",
+                   "arguments": {"value": 7000}}
+        with suppress(OSError):
+            client.sendall((json.dumps(command) + "\n").encode())
+        self.assertEqual(stream.readline(), b"")
+        self.assertEqual(self.machine.models["power"].BatteryMillivolts, 7200)
+        stream.close(); client.close()
+
+    def test_a_closed_server_starts_again(self):
+        self.server.close()
+        self.endpoint = self.server.start()
+        client, stream = self.connect()
+        self.assertEqual(receive_line(stream)["type"], "snapshot")
         stream.close(); client.close()
 
     def test_endpoint_and_limits_fail_closed(self):

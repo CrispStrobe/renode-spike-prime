@@ -392,5 +392,65 @@ class DeferredControlTests(unittest.TestCase):
         self.assertIn(name, spike_lockstep.ALLOWED_DURING_LOCKSTEP)
 
 
+class ConnectionOwnershipTests(unittest.TestCase):
+    """R04: a lockstep and its commands belong to the connection that began them."""
+
+    def connections(self, server, *clients):
+        """Serve each line list as one accepted connection through _Server._run."""
+        streams, pending = [], list(clients)
+
+        def accept():
+            if not pending:
+                server.running = False
+                raise IOError('listener stopped')
+            stream = Stream(pending.pop(0))
+            streams.append(stream)
+            return types.SimpleNamespace(GetStream=lambda: stream, Close=lambda: None)
+
+        server.listener = types.SimpleNamespace(AcceptTcpClient=accept)
+        server._run()
+        return [[m for m in s.messages() if m['type'] == 'result'] for s in streams]
+
+    def test_a_lost_client_does_not_hand_its_lockstep_to_the_next(self):
+        session = Session(default_ports())
+        # The first stream ends without lockstep.end: that client is gone.
+        first, second = self.connections(
+            session.server, [command('begin', 'lockstep.begin', {'quantumUs': 5000})],
+            [command('begin2', 'lockstep.begin', {'quantumUs': 10000})])
+        self.assertTrue(first[0]['accepted'])
+        self.assertTrue(second[0]['accepted'], second[0].get('error'))
+        self.assertEqual(session.server.lockstep.quantum, 10000)
+        self.assertFalse(session.emulation.IsStarted)  # paused, as after lockstep.end
+        self.assertFalse(session.server.lockstep.active)
+
+    def test_a_command_read_after_close_is_not_dispatched(self):
+        session = Session(default_ports())
+        server = session.server
+
+        class Racing(Stream):
+            def Read(self, buffer, offset, count):
+                # close() runs on the monitor thread while this read is
+                # blocked; the whole command line then arrives in one read.
+                server.running = False
+                chunk, self.input = self.input, b''
+                buffer[offset:offset + len(chunk)] = chunk
+                return len(chunk)
+
+        stream = Racing([command('begin', 'lockstep.begin', {'quantumUs': 5000})])
+        server._client(types.SimpleNamespace(GetStream=lambda: stream), 1)
+        self.assertEqual([m for m in stream.messages() if m['type'] == 'result'], [])
+        self.assertFalse(server.lockstep.active)
+        self.assertTrue(session.emulation.IsStarted)
+
+    def test_close_closes_the_connected_stream(self):
+        session = Session(default_ports())
+        server, closed = session.server, []
+        server.listener = types.SimpleNamespace(Stop=lambda: closed.append('listener'))
+        server.stream = types.SimpleNamespace(Close=lambda: closed.append('stream'))
+        server.close()
+        self.assertEqual(closed, ['listener', 'stream'])
+        self.assertFalse(server.running)
+
+
 if __name__ == '__main__':
     unittest.main()

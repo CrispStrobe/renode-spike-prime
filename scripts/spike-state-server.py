@@ -559,6 +559,14 @@ class _Server(object):
 
     def close(self):
         self.running = False; self.listener.Stop()
+        # Stopping the listener leaves an accepted client connected: close its
+        # stream too, so a blocked Read ends and nothing more is dispatched.
+        stream = self.stream
+        if stream is not None:
+            try:
+                stream.Close()
+            except Exception:
+                pass
 
     def _send(self, stream, message):
         wire = Encoding.UTF8.GetBytes(json.dumps(message, ensure_ascii=True, allow_nan=False, separators=(",", ":"), sort_keys=True) + "\n")
@@ -626,6 +634,11 @@ class _Server(object):
                 print("SPIKE state client error: {0}".format(exception))
             finally:
                 self.stream = None
+                # A lockstep belongs to the connection that began it. A client
+                # lost without lockstep.end must not hand it to the next one;
+                # the machine stays paused, as after lockstep.end.
+                with self.state_lock:
+                    self.lockstep.abandon()
                 client.Close()
 
     def _client(self, client, generation):
@@ -643,6 +656,8 @@ class _Server(object):
             except ValueError:
                 return
             for line in lines:
+                if not self.running:
+                    return
                 accepted, error, data = True, None, None
                 try:
                     command = validate_command(json.loads(line))
