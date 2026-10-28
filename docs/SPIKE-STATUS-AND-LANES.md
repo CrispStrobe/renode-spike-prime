@@ -147,30 +147,31 @@ preserves external shaft position and clock, and a fresh begin/step succeeds.
 The .NET listener and thread startup are faked; this establishes host logic,
 not actual Renode thread shutdown, socket timeout timing or guest execution.
 
-**Still open in R04:**
+**Connection recovery qualified on Renode (2026-10-28).**
+`tests/platforms/SPIKE_Prime/state-session-recovery-test.py` runs a public
+source-built Cortex-M guest with the actual state service and six port models.
+On Renode 1.16.1 with the pinned Infrastructure sources it passed 50 reconnect
+cycles, five monitor stop/start cycles on the same paused machine, exact-clock
+motor/sensor steps and a non-reading socket kept open through recovery.
+The write failed after 273 of 4,096 queued snapshots; a fresh connection then
+began lockstep. After ten warmup cycles, host RSS high-water growth was 5,936 KiB,
+threads stayed at 30 and descriptors at 433. These are host resources; guest
+virtual time is recorded separately. The [source-bound receipt](receipts/2026-10-28-state-session-recovery.json)
+contains the runtime, model, guest, service and test hashes.
 
-1. *Program UART ownership: host contract covered.* The native launch and
-   `programUartGeneration` own the route, independently of TCP connections.
-   Reconnect intentionally continues the same FIFO; close remains permanent.
-   `docs/spike-program-uart.md` states this lifecycle, and two-client tests in
-   `spike_program_uart_test.py` cover unread output, generation mismatch,
-   persistent close and continuing state sampling. Actual native-launch
-   replacement qualification remains a consumer R06 task.
-2. *Slow or vanished reader.* `_send` writes under `WriteTimeout`; a client that
-   stops reading makes the write throw. The throwing-`Write` host regression
-   above now covers cleanup and replacement. Still run an actual Renode socket
-   timeout/disconnect scenario and record recovery; host fakes do not measure
-   the real timeout.
-3. *Restart.* `mc_spike_state_stop` then `mc_spike_state_start` builds a new
-   `_Server` while the machine keeps the old lockstep's paused state and external
-   shafts. The host stop/start test above covers the first snapshot and a new
-   begin/step. Repeat it under Renode to cover real monitor/thread lifecycle.
-4. *Bounded growth and workloads.* `tools/spike-fault-resource-soak.py` (its test
-   skips without Renode) needs a real Renode run: on the Mac, Renode 1.16.1;
-   heavy builds go to CI. Repeat connect, command and disconnect cycles and
-   record host RSS, threads and file descriptors separately from guest virtual
-   time. Done when growth is bounded over N cycles and every admitted command
-   completes or fails explicitly.
+The native launch and `programUartGeneration` own a UART route independently of
+TCP state connections. Reconnect intentionally continues its FIFO; close remains
+permanent. `docs/spike-program-uart.md` states the lifecycle and two-client host
+tests cover unread output, generation mismatch, persistent close and continuing
+state sampling. No runtime change was needed for this selected contract.
+
+The model workflow now runs the 50-cycle recovery gate against its compiled
+Runtime and uploads a separate receipt. The local result above uses source-staged
+models on stock Renode; compiled CI qualification must pass independently.
+This closes the four connection/UART/recovery items left by #64 within their
+stated scope. A full concurrent NuttX program/storage workload and native-launch
+replacement qualification remain separate guest/consumer work (R01/R03/R06);
+this public CPU guest does not establish those behaviors.
 
 Keep the source-text assertions intact: `spike_state_socket_test` matches literal
 lines of `scripts/spike-state-server.py`, and `spike_program_publication_test`

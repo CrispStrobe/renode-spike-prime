@@ -1,0 +1,54 @@
+{
+  "cycles": 50,
+  "restarts": 5,
+  "virtualNs": 260000000,
+  "slowReaderRecovered": true,
+  "slowReaderSnapshots": 273,
+  "resourceSamples": [
+    {
+      "cycle": 10,
+      "rssKiB": 336592,
+      "threads": 30,
+      "fds": 433
+    },
+    {
+      "cycle": 20,
+      "rssKiB": 337408,
+      "threads": 30,
+      "fds": 433
+    },
+    {
+      "cycle": 30,
+      "rssKiB": 339376,
+      "threads": 30,
+      "fds": 433
+    },
+    {
+      "cycle": 40,
+      "rssKiB": 339872,
+      "threads": 30,
+      "fds": 433
+    },
+    {
+      "cycle": 50,
+      "rssKiB": 342528,
+      "threads": 30,
+      "fds": 433
+    }
+  ],
+  "growth": {
+    "rssKiB": 5936,
+    "threads": 0,
+    "fds": 0
+  },
+  "guestSha256": "291944ecc8ead23197e5b692538d8eceeb3f4816394970075e6094cf7f2a96a2",
+  "runtimeSha256": "8bcefcc46659ebfeb9c759b11c3d5817020b82cd0dddca5fa2db0d9f5de884ab",
+  "scope": "source-built CPU guest, motor/sensor state service; no NuttX program/storage qualification",
+  "modelsSha256": "53f1581c1c2c529d5dd41b82be4863a8c3b2f89c1e461b4862acecc1f6b6779a",
+  "qualificationDate": "2026-10-28",
+  "runtimeVersion": "1.16.1",
+  "runtimeProfile": "source-staged stock Renode on macOS arm64",
+  "infrastructureSource": "bb2c96fd2656f686d4b06683df4ece234f33b206",
+  "stateServiceSha256": "714914f9c72ad3eea0917214e5ea7116d1363a83f11fe965af53eb212de984bc",
+  "testSha256": "1f70145997ffe2284977c39afcda9be7fe5d1595c747cf82a8eda0803ac35880"
+}
