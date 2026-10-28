@@ -133,7 +133,21 @@ and can be started again. Regressions: `ConnectionOwnershipTests` in
 `tests/tools/spike_lockstep_test.py`, which drives the real `_Server._run` through
 a fake listener (`connections()`), and two cases in `spike_state_socket_test.py`.
 
-**Still open in R04**, each with a regression that fails first:
+**Host recovery coverage (2026-10-28).** `ConnectionOwnershipTests` now injects
+write failure at the initial snapshot and at the begin/step replies and their
+snapshots. It checks `last_error`, stream/client cleanup before replacement,
+lockstep abandonment, reset sequence numbers, the new connection generation and
+exact virtual-time advancement. All five cases fail against the monitor service
+before #64 and pass with it. If a step ran before its reply was lost, the next
+client observes the advanced clock; it does not replay that step.
+
+A second host test calls the real monitor stop/start commands and constructs a
+new `_Server` on the same paused emulator/port stand-ins. Its first snapshot
+preserves external shaft position and clock, and a fresh begin/step succeeds.
+The .NET listener and thread startup are faked; this establishes host logic,
+not actual Renode thread shutdown, socket timeout timing or guest execution.
+
+**Still open in R04:**
 
 1. *Program UART ownership.* `ProgramUartBinding` (`tools/spike_program_uart.py`)
    lives on the `_Server` and outlives every client. `micropython.uart.close` sets
@@ -143,13 +157,14 @@ a fake listener (`connections()`), and two cases in `spike_state_socket_test.py`
    `docs/spike-program-uart.md`), then test it through `connections()` with two
    clients.
 2. *Slow or vanished reader.* `_send` writes under `WriteTimeout`; a client that
-   stops reading makes the write throw. Add a `Stream` whose `Write` raises
-   and check that `_run` records `last_error`, abandons the lockstep, and serves
-   the next client.
+   stops reading makes the write throw. The throwing-`Write` host regression
+   above now covers cleanup and replacement. Still run an actual Renode socket
+   timeout/disconnect scenario and record recovery; host fakes do not measure
+   the real timeout.
 3. *Restart.* `mc_spike_state_stop` then `mc_spike_state_start` builds a new
    `_Server` while the machine keeps the old lockstep's paused state and external
-   shafts. Test that the new server's first snapshot and `lockstep.begin` are
-   valid on that machine.
+   shafts. The host stop/start test above covers the first snapshot and a new
+   begin/step. Repeat it under Renode to cover real monitor/thread lifecycle.
 4. *Bounded growth and workloads.* `tools/spike-fault-resource-soak.py` (its test
    skips without Renode) needs a real Renode run: on the Mac, Renode 1.16.1;
    heavy builds go to CI. Repeat connect, command and disconnect cycles and

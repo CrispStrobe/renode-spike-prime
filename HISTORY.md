@@ -1,5 +1,12 @@
 # Completed simulation work
 
+- R04 host recovery tests now cover a reader write failure at five reply/frame
+  boundaries, cleanup before the next connection, and stop/start on the same
+  paused emulator stand-in. The new reader cases reject the implementation
+  before #64; the current service needs no runtime change. Six affected host
+  suites pass (57 tests). Actual Renode timeout, restart and resource-soak
+  qualification remain pending.
+
 - Session ownership (R04): stopping the monitor state service now closes the
   connected client's stream and dispatches no line read after the stop; before,
   a command arriving after `close()` still ran (a `lockstep.begin` paused the

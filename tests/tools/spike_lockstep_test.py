@@ -11,6 +11,7 @@ extrapolated from its anchor, TakeDriveAverage). No emulator or listener.
 import json
 from pathlib import Path
 import sys
+import tempfile
 import types
 import unittest
 
@@ -403,11 +404,12 @@ class ConnectionOwnershipTests(unittest.TestCase):
             if not pending:
                 server.running = False
                 raise IOError('listener stopped')
-            stream = Stream(pending.pop(0))
+            item = pending.pop(0)
+            stream = item if isinstance(item, Stream) else Stream(item)
             streams.append(stream)
             return types.SimpleNamespace(GetStream=lambda: stream, Close=lambda: None)
 
-        server.listener = types.SimpleNamespace(AcceptTcpClient=accept)
+        server.listener = types.SimpleNamespace(AcceptTcpClient=accept, Stop=lambda: None)
         server._run()
         return [[m for m in s.messages() if m['type'] == 'result'] for s in streams]
 
@@ -422,6 +424,115 @@ class ConnectionOwnershipTests(unittest.TestCase):
         self.assertEqual(session.server.lockstep.quantum, 10000)
         self.assertFalse(session.emulation.IsStarted)  # paused, as after lockstep.end
         self.assertFalse(session.server.lockstep.active)
+
+    def test_a_failed_write_releases_the_session_and_serves_the_next_client(self):
+        # Fail the initial snapshot, begin reply/snapshot, or step reply/snapshot.
+        # A step can have completed before its reply is lost; never replay it.
+        for fail_at in range(5):
+            with self.subTest(fail_at=fail_at):
+                session = Session(default_ports())
+                server, origin = session.server, session.emulation.ns
+                closed, cleanup = [], []
+
+                class VanishedReader(Stream):
+                    writes = 0
+                    def Write(self, wire, offset, count):
+                        self.writes += 1
+                        if self.writes == fail_at + 1:
+                            raise IOError('reader write timed out')
+                        super(VanishedReader, self).Write(wire, offset, count)
+
+                lost = VanishedReader([
+                    command('begin', 'lockstep.begin', {'quantumUs': 5000}),
+                    step('step', origin),
+                    command('must-not-run', 'lockstep.begin', {'quantumUs': 5000})])
+                clock = origin + (5000000 if fail_at >= 3 else 0)
+                replacement = Stream([
+                    command('begin2', 'lockstep.begin', {'quantumUs': 10000}),
+                    step('step2', clock, quantum=10000)])
+                pending = [lost, replacement]
+
+                def accept():
+                    if not pending:
+                        server.running = False
+                        raise IOError('listener stopped')
+                    if len(pending) == 1:
+                        # Observe cleanup before the replacement is admitted.
+                        cleanup.append((server.lockstep.active, server.stream,
+                                        server.last_error, list(closed)))
+                    stream = pending.pop(0)
+                    return types.SimpleNamespace(GetStream=lambda: stream,
+                                                 Close=lambda: closed.append(stream))
+
+                server.listener = types.SimpleNamespace(AcceptTcpClient=accept)
+                server._run()
+                self.assertEqual(cleanup, [(False, None, 'reader write timed out', [lost])])
+                messages = replacement.messages()
+                results = [m for m in messages if m['type'] == 'result']
+                self.assertEqual([m['requestId'] for m in results], ['begin2', 'step2'])
+                self.assertEqual([m['accepted'] for m in results], [True, True])
+                snapshots = [m for m in messages if m['type'] == 'snapshot']
+                self.assertEqual(len(snapshots), 3)
+                self.assertEqual([m['seq'] for m in snapshots], [0, 1, 2])
+                self.assertEqual([m['lifecycle']['connectionGeneration'] for m in snapshots], [3, 3, 3])
+                self.assertEqual(snapshots[0]['clockNs'], clock)
+                self.assertEqual(snapshots[-1]['clockNs'], clock + 10000000)
+                self.assertEqual(session.emulation.runs,
+                                 ([5000] if fail_at >= 3 else []) + [10000])
+                self.assertEqual(closed, [lost, replacement])
+                self.assertEqual(server.generation, 3)
+                self.assertFalse(server.lockstep.active)
+                self.assertFalse(session.emulation.IsStarted)
+                self.assertEqual(lost.WriteTimeout, server.timeout)
+                self.assertNotIn('must-not-run', [m.get('requestId') for m in lost.messages()])
+
+    def test_monitor_stop_start_preserves_the_paused_machine_and_can_step_again(self):
+        session = Session(default_ports())
+        env, old = session.env, session.server
+        origin = session.emulation.ns
+        session.run([command('begin', 'lockstep.begin', {'quantumUs': 5000}),
+                     step('step', origin, shafts=[
+                         {'port': 'A', 'positionMdeg': 90000, 'speedMdps': 0}])])
+        self.assertTrue(old.lockstep.active)
+        self.assertFalse(session.emulation.IsStarted)
+        old.listener = types.SimpleNamespace(Stop=lambda: None)
+        old.stream.Close = lambda: None
+        env['_state_server'] = old
+        env['mc_spike_state_stop']()
+        self.assertIsNone(env['_state_server'])
+
+        # Instantiate the real _Server via the real monitor start command.
+        # Only .NET networking/thread startup is replaced; the same machine,
+        # clock, ports and external shaft state survive the restart.
+        env['IPAddress'] = types.SimpleNamespace(Parse=lambda host: host, IsLoopback=lambda address: True)
+        env['SocketOptionLevel'] = types.SimpleNamespace(Socket=0)
+        env['SocketOptionName'] = types.SimpleNamespace(ReuseAddress=0)
+        env['TcpListener'] = lambda address, port: types.SimpleNamespace(
+            Server=types.SimpleNamespace(SetSocketOption=lambda *args: None),
+            Start=lambda clients: None, Stop=lambda: None, LocalEndpoint='loopback-test')
+        env['ThreadStart'] = lambda callback: callback
+        env['Thread'] = lambda callback: types.SimpleNamespace(Start=lambda: None)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'state.json'
+            path.write_text(json.dumps(old.config))
+            env['mc_spike_state_start']('127.0.0.1', 0, str(path))
+        new = env['_state_server']
+        self.assertIsNot(new, old)
+        self.assertFalse(new.lockstep.active)
+        stream = Stream([command('begin2', 'lockstep.begin', {'quantumUs': 10000}),
+                         step('step2', origin + 5000000, quantum=10000)])
+        results, = self.connections(new, stream)
+        self.assertEqual([m['accepted'] for m in results], [True, True])
+        snapshots = [m for m in stream.messages() if m['type'] == 'snapshot']
+        self.assertEqual(snapshots[0]['clockNs'], origin + 5000000)
+        self.assertEqual([m['seq'] for m in snapshots], [0, 1, 2])
+        motor = next(m for m in snapshots[0]['motors'] if m['port'] == 'A')
+        self.assertEqual(motor['positionSource'], 'external')
+        self.assertEqual(motor['position'], 90.0)
+        self.assertEqual(session.emulation.runs, [5000, 10000])
+        self.assertEqual(snapshots[-1]['clockNs'], origin + 15000000)
+        self.assertFalse(session.emulation.IsStarted)
+        env['mc_spike_state_stop']()
 
     def test_a_command_read_after_close_is_not_dispatched(self):
         session = Session(default_ports())
