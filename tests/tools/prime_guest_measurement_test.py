@@ -12,6 +12,17 @@ import prime_guest_measurement as measurement
 
 
 class MeasurementTests(unittest.TestCase):
+    def test_growth_keeps_the_post_warmup_baseline_across_reclamation(self):
+        def sample(rss, cycle=10, wall=15):
+            return {'rssKiB':rss,'wallSeconds':wall,'progress':{'cycle':cycle}}
+        samples=[sample(900000,9),sample(100000),sample(10000),sample(110000)]
+        self.assertEqual(measurement.workload_growth(samples),10000)
+        self.assertEqual(measurement.workload_growth([sample(100000),sample(165536)]),65536)
+        with self.assertRaisesRegex(RuntimeError,'growth exceeded'):
+            measurement.workload_growth([sample(100000),sample(165537)])
+        with self.assertRaisesRegex(RuntimeError,'insufficient'):
+            measurement.workload_growth([sample(100000),sample(200000,wall=14)])
+
     def test_real_child_exit_and_guard_failures_leave_receipts(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
