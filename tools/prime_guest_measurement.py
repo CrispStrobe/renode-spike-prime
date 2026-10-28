@@ -19,7 +19,7 @@ def process_rss_kib(pid):
     return int(result.stdout.strip()) if result.stdout.strip() else None
 
 
-def run_measured(command, log, receipt, timeout_seconds, ceiling_kib=1536*1024):
+def run_measured(command, log, receipt, timeout_seconds, ceiling_kib=1536*1024, progress=None):
     samples, failure = [], None
     start = time.monotonic()
     process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT)
@@ -28,7 +28,13 @@ def run_measured(command, log, receipt, timeout_seconds, ceiling_kib=1536*1024):
             elapsed = time.monotonic() - start
             rss = process_rss_kib(process.pid)
             if rss is not None:
-                samples.append({'wallSeconds': elapsed, 'rssKiB': rss})
+                sample = {'wallSeconds': elapsed, 'rssKiB': rss}
+                if progress is not None and progress.exists():
+                    try:
+                        sample['progress'] = json.loads(progress.read_text())
+                    except json.JSONDecodeError:
+                        pass # the observer may sample an in-progress write
+                samples.append(sample)
                 if rss > ceiling_kib:
                     raise RuntimeError('emulator exceeded the fixed RSS ceiling (%d KiB)' % ceiling_kib)
             if elapsed >= timeout_seconds:
@@ -36,6 +42,13 @@ def run_measured(command, log, receipt, timeout_seconds, ceiling_kib=1536*1024):
             time.sleep(1)
         if not samples:
             raise RuntimeError('emulator exited without a resource observation')
+        if progress is not None and process.returncode == 0:
+            measured = [s['rssKiB'] for s in samples if s['wallSeconds'] >= 15
+                        and s.get('progress', {}).get('cycle', 0) >= 10]
+            if len(measured) < 2:
+                raise RuntimeError('insufficient post-warmup workload RSS observations')
+            if max(measured)-min(measured) > 64*1024:
+                raise RuntimeError('workload RSS range exceeded 64 MiB after warmup')
         return process.returncode
     except BaseException as error:
         failure = str(error)
@@ -48,6 +61,8 @@ def run_measured(command, log, receipt, timeout_seconds, ceiling_kib=1536*1024):
                                        'wallSeconds': time.monotonic()-start,
                                        'returncode': process.returncode, 'failure': failure,
                                        'ceilingKiB': ceiling_kib,
+                                       'growthBoundKiB': 64*1024 if progress is not None else None,
+                                       'warmup': {'minimumWallSeconds': 15, 'minimumCycles': 10} if progress is not None else None,
                                        'observedPeakKiB': max((s['rssKiB'] for s in samples), default=None),
                                        'samples': samples}, indent=2)+'\n')
         receipt.chmod(0o600)

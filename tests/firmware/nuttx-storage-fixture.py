@@ -81,6 +81,23 @@ try:
         exchange(header(8,302));snapshot('python')
         exchange(header(9,301),-2)
         if status('wrong-id-preserved')['id']!=302:raise Exception('failed load replaced committed program')
+    elif phase=='faultwrite':
+        exchange(header(9,301))
+        payload=struct.pack('<8i',2,75,0,0,0,0,0,0)
+        upload(301,payload)
+        flash=self.Machine['sysbus.spi2.primeStorageMux.primeStorage']
+        failures=int(flash.InjectedProgramFailures)
+        flash.FailNextProgramOperations=1
+        exchange(header(8,301))
+        if int(flash.InjectedProgramFailures)!=failures+1:raise Exception('requested NOR program fault did not occur')
+        observations.append({'scenario':'replacement-save-program-fault','injectedFailures':1})
+        snapshot('faultrestore')
+    elif phase=='faultrestore':
+        reply=exchange(header(9,301))
+        count=struct.unpack('<H',str(bytearray(reply)[14:16]))[0]
+        if count!=2:raise Exception('acknowledged fault-recovered replacement did not survive cold restart')
+        exchange(header(3,301));run(200)
+        if status('fault-recovered-cold-execution')['state']!=3:raise Exception('fault-recovered program failed')
     elif phase=='corrupt':
         # Build a distinct live program before attempting the damaged saved
         # record. A failed LOAD must preserve the live program and raw medium.

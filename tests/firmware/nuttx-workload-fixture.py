@@ -14,7 +14,7 @@ try:
                 if rc!=expected:raise Exception('unexpected packet result '+str(rc)+' expected '+str(expected))
                 return
         raise Exception('workload packet exceeded one guest second')
-    for cycle in range(20):
+    for cycle in range(30):
         ident=400+cycle
         apply_arena_inputs({'sensors':[{'port':'E','kind':'force','values':{'forcePercent':0,'pressed':False}}],'loads':[]},device)
         positions=[float(device(p).PositionDegrees) for p in 'AB']
@@ -44,7 +44,9 @@ try:
         request(header(8,ident));request(header(9,ident))
         state=observe('workload-restored-'+str(cycle))
         if state['id']!=ident or state['state']!=1:raise Exception('saved workload did not restore READY')
-    result={'passed':True,'cycles':20,'observations':observations}
+        with open(_bw_nuttx_config['progress'],'w') as progress:
+            progress.write(json.dumps({'cycle':cycle+1,'guestClockMs':state['clockMs']}))
+    result={'passed':True,'cycles':30,'observations':observations}
 except Exception as error:
     result={'passed':False,'error':str(error),'observations':observations}
 with open(_bw_nuttx_config['result'],'w') as output:

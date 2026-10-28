@@ -11,6 +11,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import shutil
 import struct
 import subprocess
 import sys
@@ -104,7 +105,7 @@ def main():
     runtime = output / 'runtime'
     staging = stage_compiled if args.compiled_runtime else stage
     staging(args.infrastructure.resolve(), runtime, True)
-    phases = ('write', 'native', 'python', 'corrupt') if args.storage_test else ('robot',)
+    phases = ('write', 'native', 'python', 'corrupt', 'faultwrite', 'faultrestore') if args.storage_test else ('robot',)
     for phase in phases:
         config = output / (phase + '-config.json' if args.storage_test else 'config.json')
         report = output / (phase + '-result.json') if args.storage_test else output / 'result.json'
@@ -130,6 +131,7 @@ def main():
             lines += ['python "from System.IO import File; storage=self.Machine[\'sysbus.spi2.primeStorageMux.primeStorage\']; storage.UnderlyingMemory.WriteBytes(0,File.ReadAllBytes(\'' + str(output / (phase + '-flash.bin')) + '\'))"']
         fixture = 'nuttx-storage-fixture.py' if args.storage_test else ('nuttx-workload-fixture.py' if args.workload_test else ('nuttx-six-motor-fixture.py' if args.all_motors_test else 'nuttx-robot-fixture.py'))
         settings['fixtureRoot'] = str(root / 'tests/firmware')
+        settings['progress'] = str(output / 'workload-progress.json')
         config.write_text(json.dumps(settings))
         if args.trace_scheduler:
             lines += ['sysbus LogPeripheralAccess timer9 true']
@@ -148,7 +150,8 @@ def main():
         scenario.chmod(0o600)
         with (output / (phase + '-run.log' if args.storage_test else 'run.log')).open('wb') as log:
             returncode = run_measured([str(args.renode.resolve()), '--disable-xwt', '--console', '--plain', str(scenario)],
-                                      log, output / (phase+'-resources.json'), args.timeout_seconds)
+                                      log, output / (phase+'-resources.json'), args.timeout_seconds,
+                                      progress=Path(settings['progress']) if args.workload_test else None)
         if report.exists(): report.chmod(0o600)
         if returncode or not report.exists() or json.loads(report.read_text()).get('passed') is not True:
             raise SystemExit('Full NuttX ' + phase + ' scenarios failed; inspect private output')
@@ -156,6 +159,7 @@ def main():
         if args.storage_test and phase == 'write':
             mutation = corrupt_program_snapshot(output / 'native-flash.bin', output / 'corrupt-flash.bin')
             (output / 'corruption.json').write_text(json.dumps(mutation, indent=2) + '\n')
+            shutil.copyfile(output / 'native-flash.bin', output / 'faultwrite-flash.bin')
         for snapshot in output.glob('*-flash.bin'): snapshot.chmod(0o600)
     print('Full protected NuttX ' + ('restart persistence' if args.storage_test else 'robot program') + ' scenarios passed.')
 
