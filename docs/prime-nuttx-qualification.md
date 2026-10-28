@@ -98,8 +98,10 @@ separate emulator processes to restore, load and execute each program. It
 checks missing/wrong IDs, upload/execution busy rejection, READY after load
 and no automatic load on boot. Generated flash snapshots are private local
 test artifacts; the launcher does not accept client-selected storage paths.
-A passing test establishes the tested clean-restart cases, not power-loss
-durability, physical flash timing or full filesystem compatibility.
+The additional corrupt-record and injected-program-failure phases are specified
+in [the workload and cold recovery contract](PRIME-GUEST-WORKLOAD-QUALIFICATION.md).
+A passing test establishes these finite synthetic restart/fault cases, not
+physical power-loss durability, flash timing or full filesystem compatibility.
 
 On 2026-10-02, the source-built protected firmware passed the SAVE/LOAD
 write phase and both fresh-process restart phases for native and completed

@@ -7,14 +7,32 @@ Generated configs/results/logs go only into a NEW private output directory.
 No images are fetched and no physical hub connection is used.
 """
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import re
+import shutil
 import struct
 import subprocess
 import sys
 from stage_prime_runtime import stage, stage_compiled
 from spike_nuttx_mailbox import validate_base
+from prime_guest_measurement import run_measured
+
+
+def corrupt_program_snapshot(source, target):
+    """Damage one saved program payload; preserve filesystem metadata and input."""
+    data = bytearray(source.read_bytes())
+    marker = struct.pack('<4s4BIII', b'BWP1', 1, 0, 0, 0, 301, 256, 4096)
+    offset = data.find(marker)
+    if offset < 0 or data.find(marker, offset + 1) >= 0:
+        raise ValueError('expected exactly one saved native program record')
+    data[offset + len(marker)] ^= 1
+    with target.open('xb') as output:
+        output.write(data)
+    target.chmod(0o600)
+    return {'offset': offset + len(marker), 'sourceSha256': hashlib.sha256(source.read_bytes()).hexdigest(),
+            'damagedSha256': hashlib.sha256(data).hexdigest()}
 
 
 def vector(elf):
@@ -45,10 +63,11 @@ def main():
     parser.add_argument('--blank-flash-test', action='store_true', help='Qualify slow first-boot erased-flash scanning instead of a source-generated empty filesystem')
     parser.add_argument('--all-motors-test', action='store_true', help='Exercise native/Python control and cancellation on six attached motors')
     parser.add_argument('--storage-test', action='store_true', help='Save native/Python programs and restore flash in fresh processes')
+    parser.add_argument('--workload-test', action='store_true', help='Repeat actual guest motor/sensor, cancellation and storage transactions')
     parser.add_argument('--compiled-runtime', action='store_true', help='Use the supplied Runtime compiled models; stage offline board data without source extensions')
     parser.add_argument('--timeout-seconds', type=int, default=600)
     args = parser.parse_args()
-    if args.storage_test and args.all_motors_test: raise ValueError('choose one qualification profile')
+    if sum((args.storage_test, args.all_motors_test, args.workload_test)) > 1: raise ValueError('choose one qualification profile')
     if not 60 <= args.timeout_seconds <= 1800: raise ValueError('qualification timeout must be 60-1800 seconds')
     root = Path(__file__).resolve().parents[1]
     output, firmware = args.output.resolve(), args.firmware_root.resolve()
@@ -68,6 +87,13 @@ def main():
     if ramlog_size > 32768 or not 0x20000000 <= ramlog_base < ramlog_base + ramlog_size <= 0x20020000:
         raise ValueError('kernel RAM log exceeds the protected kernel memory')
     output.mkdir(mode=0o700, parents=True)
+    inputs = {'kernelSha256': hashlib.sha256(kernel.read_bytes()).hexdigest(),
+              'userspaceSha256': hashlib.sha256(user.read_bytes()).hexdigest(),
+              'runtimeSha256': hashlib.sha256(args.renode.resolve().read_bytes()).hexdigest(),
+              'qualificationSources': {str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest()
+                                       for path in [Path(__file__).resolve(), root / 'tools/prime_guest_measurement.py',
+                                                    *sorted((root / 'tests/firmware').glob('nuttx-*-fixture.py'))]}}
+    (output / 'input-identities.json').write_text(json.dumps(inputs, indent=2)+'\n')
     seed_tool = firmware / 'tools/make_simulation_littlefs_seed.py'
     seed = None
     if not args.blank_flash_test and seed_tool.is_file():
@@ -79,7 +105,7 @@ def main():
     runtime = output / 'runtime'
     staging = stage_compiled if args.compiled_runtime else stage
     staging(args.infrastructure.resolve(), runtime, True)
-    phases = ('write', 'native', 'python') if args.storage_test else ('robot',)
+    phases = ('write', 'native', 'python', 'corrupt', 'faultwrite', 'faultrestore') if args.storage_test else ('robot',)
     for phase in phases:
         config = output / (phase + '-config.json' if args.storage_test else 'config.json')
         report = output / (phase + '-result.json') if args.storage_test else output / 'result.json'
@@ -103,7 +129,10 @@ def main():
             lines += ['port'+name+' Attach "motor"' for name in 'CDEF']
         if args.storage_test and phase != 'write':
             lines += ['python "from System.IO import File; storage=self.Machine[\'sysbus.spi2.primeStorageMux.primeStorage\']; storage.UnderlyingMemory.WriteBytes(0,File.ReadAllBytes(\'' + str(output / (phase + '-flash.bin')) + '\'))"']
-        fixture = 'nuttx-storage-fixture.py' if args.storage_test else ('nuttx-six-motor-fixture.py' if args.all_motors_test else 'nuttx-robot-fixture.py')
+        fixture = 'nuttx-storage-fixture.py' if args.storage_test else ('nuttx-workload-fixture.py' if args.workload_test else ('nuttx-six-motor-fixture.py' if args.all_motors_test else 'nuttx-robot-fixture.py'))
+        settings['fixtureRoot'] = str(root / 'tests/firmware')
+        settings['progress'] = str(output / 'workload-progress.json')
+        config.write_text(json.dumps(settings))
         if args.trace_scheduler:
             lines += ['sysbus LogPeripheralAccess timer9 true']
         lines += ['emulation RunFor "1.0"',
@@ -120,12 +149,17 @@ def main():
         scenario.write_text('\n'.join(lines))
         scenario.chmod(0o600)
         with (output / (phase + '-run.log' if args.storage_test else 'run.log')).open('wb') as log:
-            result = subprocess.run([str(args.renode.resolve()), '--disable-xwt', '--console', '--plain', str(scenario)],
-                                    stdout=log, stderr=subprocess.STDOUT, timeout=args.timeout_seconds)
+            returncode = run_measured([str(args.renode.resolve()), '--disable-xwt', '--console', '--plain', str(scenario)],
+                                      log, output / (phase+'-resources.json'), args.timeout_seconds,
+                                      progress=Path(settings['progress']) if args.workload_test else None)
         if report.exists(): report.chmod(0o600)
-        if result.returncode or not report.exists() or json.loads(report.read_text()).get('passed') is not True:
+        if returncode or not report.exists() or json.loads(report.read_text()).get('passed') is not True:
             raise SystemExit('Full NuttX ' + phase + ' scenarios failed; inspect private output')
         report.chmod(0o600)
+        if args.storage_test and phase == 'write':
+            mutation = corrupt_program_snapshot(output / 'native-flash.bin', output / 'corrupt-flash.bin')
+            (output / 'corruption.json').write_text(json.dumps(mutation, indent=2) + '\n')
+            shutil.copyfile(output / 'native-flash.bin', output / 'faultwrite-flash.bin')
         for snapshot in output.glob('*-flash.bin'): snapshot.chmod(0o600)
     print('Full protected NuttX ' + ('restart persistence' if args.storage_test else 'robot program') + ' scenarios passed.')
 

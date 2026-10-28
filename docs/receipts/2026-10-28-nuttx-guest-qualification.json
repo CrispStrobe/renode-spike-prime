@@ -1,0 +1,180 @@
+{
+  "schema": 1,
+  "firmwareSource": "91cf0c07784441ac114b85a1705737327db2d9f8",
+  "qualificationSource": "f68abac19f14754d3759e8cbe9bc8ded6d5f5f60",
+  "infrastructure": "bb2c96fd2656f686d4b06683df4ece234f33b206",
+  "resources": "9d7824771f3db67663950cae06f5bb7f89fbf33b",
+  "images": {
+    "kernelSha256": "953be23440359b327a5f7ef6d3d704003d8d0c272d8fea83f035736bf290fd15",
+    "userspaceSha256": "9ed800e046a78a2599f5aa2bd9dccf5bf1858258e65326d776e7529570920985",
+    "qualificationSources": {
+      "tools/check_prime_nuttx.py": "87ef94b3cae22a314657de4564f693194ac1d55188a25c03d21f7af56935de49",
+      "tools/prime_guest_measurement.py": "e730f5b2905b925252266d685355c48d6ce06eacfc47a3fddd25b933fcb10023",
+      "tests/firmware/nuttx-robot-fixture.py": "87e8ebe97b307b5b81487dfd2df0410849c3102ee335a779695e291aa7e30b08",
+      "tests/firmware/nuttx-six-motor-fixture.py": "40c663cff66caece73b59ca432a070c3c1387e8425dae826b52e78ee739735ee",
+      "tests/firmware/nuttx-storage-fixture.py": "a6ea21e8e05b6f5c3f574f5d6c980f0511e74c16879e0958577abf77aedfb633",
+      "tests/firmware/nuttx-workload-fixture.py": "073c91c659b37f429329e35ca56b385deab7cc109f154496ae0baf5bb3c7ebf1"
+    }
+  },
+  "compiledRuns": {
+    "linux": {
+      "workload": {
+        "passed": true,
+        "observations": 275,
+        "wallSeconds": 751.0693294659723,
+        "sampledPeakKiB": 360268,
+        "growthKiB": 1056,
+        "resultReceiptSha256": "e2233890e3ce8bef47684775712db8476c92beaa615e378858efc0f3d61d2493",
+        "resourceReceiptSha256": "01c8a0d8e0fa673e2107622ba5bfed41252c24ea9b46b5888af834c7023c9dca"
+      },
+      "sixMotors": {
+        "passed": true,
+        "observations": 148,
+        "wallSeconds": 242.3398145319661,
+        "sampledPeakKiB": 358416,
+        "growthKiB": null,
+        "resultReceiptSha256": "d2e53e48506a41a027a99613f40ce7ab9a4836ec1cfef1869387a60f97024234",
+        "resourceReceiptSha256": "da95bc052bf8b17900fd37478d4ab2a31a9948b7ae5ea604c36c0a435ba19c8b"
+      },
+      "storage": {
+        "write": {
+          "passed": true,
+          "observations": 4,
+          "wallSeconds": 329.695939696976,
+          "sampledPeakKiB": 413448,
+          "growthKiB": null,
+          "resultReceiptSha256": "90d86414b8a4a24890eb2710f22ba26f954d79dd11777f3424e3b34f7695b023",
+          "resourceReceiptSha256": "3f5a9f004020804c77a52ee16766ef41319c96da020adf34e595dcb5e55a111b"
+        },
+        "native": {
+          "passed": true,
+          "observations": 4,
+          "wallSeconds": 63.160429931012914,
+          "sampledPeakKiB": 415264,
+          "growthKiB": null,
+          "resultReceiptSha256": "b7f0726ee066055f126ac8f50b160c9e015e3e8d73db6880aa9c1ee700727c14",
+          "resourceReceiptSha256": "f912800affe309a0fda41eeca79519747d3fa407d2e8b3ecb845dba0ce6a5608"
+        },
+        "python": {
+          "passed": true,
+          "observations": 4,
+          "wallSeconds": 68.11586898006499,
+          "sampledPeakKiB": 412724,
+          "growthKiB": null,
+          "resultReceiptSha256": "eda719a54e68465279c781b43690dd3f7c548b6fc338139193145cb063921ba9",
+          "resourceReceiptSha256": "1b24d756f6c021b15d7e5788eb393ecb2e5eae65527621f9d18d1cde37212aad"
+        },
+        "corrupt": {
+          "passed": true,
+          "observations": 3,
+          "wallSeconds": 98.3837335909484,
+          "sampledPeakKiB": 543388,
+          "growthKiB": null,
+          "resultReceiptSha256": "2f93c18abdd35ffacbe568079bb34b3b2264dc6149b7fa1993fab93af3b41685",
+          "resourceReceiptSha256": "8f5197778e3a26a67d64d713bcaa11ac88e8fee8e7453484d1f1618afabe7597"
+        },
+        "faultwrite": {
+          "passed": true,
+          "observations": 2,
+          "wallSeconds": 100.35390009405091,
+          "sampledPeakKiB": 411760,
+          "growthKiB": null,
+          "resultReceiptSha256": "25ed590c30857a51c49cd73651736670cca577eaabee7bfc74f5c46c2129f075",
+          "resourceReceiptSha256": "9f24331708305a0ba4b497647f7dfc8966e2f2b68b1a26b0f8ab3ef4562f84bb"
+        },
+        "faultrestore": {
+          "passed": true,
+          "observations": 2,
+          "wallSeconds": 90.26596543996129,
+          "sampledPeakKiB": 415016,
+          "growthKiB": null,
+          "resultReceiptSha256": "eb5fcab6ca4869e37307486d2d68cc6916f1b79273e6cade197cacd093c7ca87",
+          "resourceReceiptSha256": "8e76c13c346e180689b66309231c7ea09b32b03d8adbaedca04853eafbe3fd52"
+        }
+      },
+      "buildReceiptSha256": "138f5713e68c8e3452f61d6794002882e91d142bbe3d18194af71d1aa0a50d4d",
+      "runtimeBuildSource": "b7aca81430ee2e1ea6706102fefc3c573ae1aa0c",
+      "entrypointSha256": "cdc11fcd0d1c97583fe8059462bf2dde8b582fcd034212ba36994195d2ec2793"
+    },
+    "macos": {
+      "workload": {
+        "passed": true,
+        "observations": 275,
+        "wallSeconds": 88.71699220803566,
+        "sampledPeakKiB": 373504,
+        "growthKiB": 2928,
+        "resultReceiptSha256": "59d524f89082f0365bc631b42362a30dd2e9969e58807247953d3ae151ed07ba",
+        "resourceReceiptSha256": "481180e9051699a60f27e0ec5a082743345549f56ab07a069924d6476519144a"
+      },
+      "sixMotors": {
+        "passed": true,
+        "observations": 148,
+        "wallSeconds": 62.47330425004475,
+        "sampledPeakKiB": 382336,
+        "growthKiB": null,
+        "resultReceiptSha256": "eddaae1e7e8003f99c30beb7a4a35c5698a80db05cecf7737460e9230e582642",
+        "resourceReceiptSha256": "4b93e283b4c2058d768e741877cb58c0a0feddd8bfb50f3c9206e110949bd3b5"
+      },
+      "storage": {
+        "write": {
+          "passed": true,
+          "observations": 4,
+          "wallSeconds": 39.28083970886655,
+          "sampledPeakKiB": 367760,
+          "growthKiB": null,
+          "resultReceiptSha256": "8733ebfe4850d47853fd1574e4fd1a8a31ec8496e672eff7d6d9007f547164a7",
+          "resourceReceiptSha256": "59f6c8b4659b48f2d55063e5604305b8dd0f96f348e256ad5f4f44e64d2ec7b4"
+        },
+        "native": {
+          "passed": true,
+          "observations": 4,
+          "wallSeconds": 8.072209833888337,
+          "sampledPeakKiB": 428672,
+          "growthKiB": null,
+          "resultReceiptSha256": "5892b51c748017fdcb6ae7908b07677a1cd393fdef886e44e86bf0f9064977b9",
+          "resourceReceiptSha256": "f3936b774cdc23ee10956ea85a61d1c2aad0d0701923cd15cad0729704b04846"
+        },
+        "python": {
+          "passed": true,
+          "observations": 4,
+          "wallSeconds": 8.067324416013435,
+          "sampledPeakKiB": 403968,
+          "growthKiB": null,
+          "resultReceiptSha256": "5f20ad73c59260d99ef1816d517c1ff020ec4e2e427f3d79fb73136e4e7944b2",
+          "resourceReceiptSha256": "f75b2016cccd82beb86d4148c78ec48e1c8591e2ece8591e2ffc9d61cfbd0a70"
+        },
+        "corrupt": {
+          "passed": true,
+          "observations": 3,
+          "wallSeconds": 9.067117542028427,
+          "sampledPeakKiB": 417584,
+          "growthKiB": null,
+          "resultReceiptSha256": "fe59bdcb08274562d381b83c20946c6f74ad91def01289b4f3090f1d8ff60fc4",
+          "resourceReceiptSha256": "0d20e92fe3e893543e063afc265a49a5950625a2b1590ad765d0914fc6a99fe7"
+        },
+        "faultwrite": {
+          "passed": true,
+          "observations": 2,
+          "wallSeconds": 9.070389749947935,
+          "sampledPeakKiB": 330640,
+          "growthKiB": null,
+          "resultReceiptSha256": "ebb8bd8b6ed96007323b9721b832b6e61ff470189da598415d328341c517c63d",
+          "resourceReceiptSha256": "44f1456ce964d77c661b4a9c4be5ed732be48cd362f05e45839f2825b4847b89"
+        },
+        "faultrestore": {
+          "passed": true,
+          "observations": 2,
+          "wallSeconds": 10.126739291008562,
+          "sampledPeakKiB": 328368,
+          "growthKiB": null,
+          "resultReceiptSha256": "a401ea61c6d7c1ceddbed402506f216c3be5349815456034785c1f75dba84e87",
+          "resourceReceiptSha256": "233ff87248b857d07f06068fcf8beb746ab1eb271d81148e5b8bb9d7b4e35d04"
+        }
+      },
+      "buildReceiptSha256": "ddd1052dc1f6d9e126784a9616235409286b1e90943f84d9f654c076c1a3877f",
+      "runtimeBuildSource": "f68abac19f14754d3759e8cbe9bc8ded6d5f5f60",
+      "entrypointSha256": "a12e0b9d7449e93067796c8a58ac20f1b23f5296046cd36439eab1c33a31468c"
+    }
+  },
+  "scope": "actual protected NuttX guest; compiled Runtime; sampled process RSS; no physical silicon or installed GUI claim"
+}
