@@ -21,6 +21,7 @@ env:
   FIRMWARE_SHA: 91cf0c07784441ac114b85a1705737327db2d9f8
   LITE_SHA: 8bf40b2c3d29014219bb591b66cc27b43afca7a5
   LITE_STAGER_SHA: 1c2c9565037b2645272b940f54d0354036b83f29
+  LITE_FIXED_SHA: f33415756004cc2865f76a2706e2ab045aa7be7e
 
 jobs:
   own-guest:
@@ -132,6 +133,14 @@ jobs:
           repository: CrispStrobe/brickwright-lite
           ref: ${{ env.LITE_STAGER_SHA }}
           path: lite
+          sparse-checkout: scripts
+          persist-credentials: false
+      - name: Check out the fixed Lite profile code
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: CrispStrobe/brickwright-lite
+          ref: ${{ env.LITE_FIXED_SHA }}
+          path: lite-fixed
           sparse-checkout: scripts
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -291,22 +300,151 @@ jobs:
             uptime
           }
           F="$T/staged/resources/nuttx"
-          # Hypothesis: the frozen scenario's relative @platforms/... resolves against
-          # Renode's own bundled (unstaged) platforms, not the package's staged copy.
-          variant() { d="$T/pkg-$1"; rm -rf "$d"; cp -R "$F" "$d"; sed -i '' "$2" "$d/nuttx.resc"; echo "== $1"; cat "$d/nuttx.resc"; }
-          variant abs-repl "s#@platforms/#@$T/pkg-abs-repl/platforms/#"
-          variant origin "s#@platforms/#\$ORIGIN/platforms/#"
-          variant origin-at "s#@platforms/#@\$ORIGIN/platforms/#"
-          run direct-frozen "$F" direct
-          run direct-frozen-abs-repl "$T/pkg-abs-repl" direct
-          run direct-frozen-origin "$T/pkg-origin" direct
-          run direct-frozen-origin-at "$T/pkg-origin-at" direct
-          for v in direct-frozen direct-frozen-abs-repl direct-frozen-origin direct-frozen-origin-at; do
-            echo "== $v"; grep -E "Downloading|LoadPlatformDescription|Including|Error|error" "$R/$v/renode.log" | head -5; done
+          # Freeze again with the fixed Lite profile code ($ORIGIN-anchored platform path).
+          mkdir -p "$T/fixed"; node --input-type=module -e "import {freezeResourceProfile} from '$GITHUB_WORKSPACE/lite-fixed/scripts/lib/spike-resource-profile.mjs'; await freezeResourceProfile('nuttx', '$F', '$T/fixed/nuttx', '$T/fixed')"
+          grep LoadPlatformDescription "$F/nuttx.resc" "$T/fixed/nuttx/nuttx.resc"
+          run direct-frozen-old "$F" direct
+          run direct-frozen-fixed "$T/fixed/nuttx" direct
+          run sandbox-frozen-fixed "$T/fixed/nuttx" sandbox
           cat "$R"/*/summary.json > "$R/all-summaries.jsonl"; cat "$R/all-summaries.jsonl"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: timing-${{ matrix.runner }}
+          path: ${{ runner.temp }}/results
+          retention-days: 14
+
+  linux-timing:
+    name: Timing ubuntu (frozen old vs fixed)
+    needs: own-guest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ env.RUNTIME_SHA }}
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: renode/renode-resources
+          ref: ${{ env.RESOURCES_SHA }}
+          path: lib/resources
+          persist-credentials: false
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: CrispStrobe/brickwright-lite
+          ref: ${{ env.LITE_STAGER_SHA }}
+          path: lite-old
+          sparse-checkout: scripts
+          persist-credentials: false
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: CrispStrobe/brickwright-lite
+          ref: ${{ env.LITE_FIXED_SHA }}
+          path: lite-fixed
+          sparse-checkout: scripts
+          persist-credentials: false
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: 8.0.x
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: Build headless Runtime
+        run: |
+          set -o pipefail
+          ./build.sh --net --no-gui --skip-fetch 2>&1 | tail -n 5
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: own-nuttx-package
+          path: /tmp/bwprobe/nuttx
+      - name: Write probe tools
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/tools"
+          cat > "$RUNNER_TEMP/tools/client.py" <<'PY'
+          import json, socket, sys, time
+          state_port, monitor_port, timeout, out = int(sys.argv[1]), int(sys.argv[2]), float(sys.argv[3]), sys.argv[4]
+          def snapshot(deadline):
+              while time.time() < deadline:
+                  try:
+                      s = socket.create_connection(('127.0.0.1', state_port), timeout=5)
+                  except OSError:
+                      time.sleep(0.5); continue
+                  s.settimeout(60); buf = b''
+                  while b'\n' not in buf:
+                      chunk = s.recv(65536)
+                      if not chunk: break
+                      buf += chunk
+                  s.close()
+                  if b'\n' in buf: return json.loads(buf.split(b'\n', 1)[0])
+              return None
+          def summarize(snap):
+              if snap is None: return None
+              d = snap.get('display') or {}
+              px = d.get('pixels')
+              lit = sum(1 for v in px if v) if isinstance(px, list) else (len(px.strip('0')) if isinstance(px, str) else None)
+              return {'type': snap.get('type'), 'clockNs': snap.get('clockNs'), 'firmware': (snap.get('target') or {}).get('firmware'),
+                      'display': [d.get('width'), d.get('height')], 'litPixels': lit,
+                      'lifecycleKeys': sorted((snap.get('lifecycle') or {}).keys()),
+                      'motors': len(snap.get('motors') or []), 'power': snap.get('power')}
+          def monitor(cmd):
+              s = socket.create_connection(('127.0.0.1', monitor_port), timeout=10)
+              s.settimeout(300 if cmd != 'quit' else 3); s.sendall((cmd + '\n').encode())
+              data = b''
+              try:
+                  while True:
+                      chunk = s.recv(65536)
+                      if not chunk: break
+                      data += chunk
+                      if cmd == 'quit' or data.count(b'(machine-0)') >= 2: break
+              except socket.timeout:
+                  pass
+              s.close(); return data
+          start = time.time()
+          first = snapshot(start + timeout)
+          result = {'firstSnapshotSeconds': round(time.time() - start, 1) if first else None, 'first': summarize(first)}
+          if not first:
+              try: result['monitorOnFailure'] = monitor('mach').decode('utf-8', 'replace')[-6000:]
+              except OSError as e: result['monitorError'] = str(e)
+          if first:
+              try:
+                  monitor('emulation RunFor "4.0"'); time.sleep(2)
+                  result['second'] = summarize(snapshot(time.time() + 120))
+              except OSError as e:
+                  result['secondError'] = str(e)
+          try: monitor('quit')
+          except OSError: pass
+          json.dump(result, open(out, 'w'), indent=2)
+          print(json.dumps(result))
+          sys.exit(0 if first else 1)
+          PY
+      - name: Freeze with old and fixed Lite code and time each
+        run: |
+          set +e -u
+          T="$RUNNER_TEMP"; R="$T/results"; mkdir -p "$R"
+          freeze() { mkdir -p "$T/res-$1"; node --input-type=module -e "import {freezeResourceProfile} from '$GITHUB_WORKSPACE/$2/scripts/lib/spike-resource-profile.mjs'; await freezeResourceProfile('nuttx', '/tmp/bwprobe/nuttx', '$T/res-$1/nuttx', '$T/res-$1')"; grep LoadPlatformDescription "$T/res-$1/nuttx/nuttx.resc"; }
+          freeze old lite-old; freeze fixed lite-fixed
+          run() { v=$1; res=$2; mkdir -p "$R/$v"
+            stack=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["boot"]["stack"])' "$res/state-config.json")
+            reset=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["boot"]["reset"])' "$res/state-config.json")
+            ( cd "$res" && exec "$GITHUB_WORKSPACE/renode" --disable-gui -P 39554 \
+                -e "include @$res/nuttx.resc" -e "sysbus LoadELF @$res/nuttx-user.elf" -e "sysbus LoadELF @$res/nuttx-kernel.elf" \
+                -e 'cpu VectorTableOffset 0x08008000' -e "cpu SP $stack" -e "cpu PC $reset" -e 'emulation RunFor "1.0"' \
+                -e "include @$res/scripts/spike-state-server.py" -e "spike_state_start \"127.0.0.1\" 39555 @$res/state-config.json" \
+                > "$R/$v/renode.log" 2>&1 ) &
+            python3 "$T/tools/client.py" 39555 39554 900 "$R/$v/client.json" > "$R/$v/client.out" 2>&1; crc=$?
+            sleep 5; sudo fuser -k -n tcp 39554 39555 2>/dev/null; sleep 3
+            printf '{"runner":"ubuntu-24.04","variant":"%s","clientExit":%s,"toFirstSnapshotSeconds":"%s","svdDownload":%s}\n' "$v" "$crc" \
+              "$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("firstSnapshotSeconds"))' "$R/$v/client.json" 2>/dev/null)" \
+              "$(grep -c 'Downloading https' "$R/$v/renode.log")" | tee "$R/$v/summary.json"; }
+          run frozen-old "$T/res-old/nuttx"
+          run frozen-fixed "$T/res-fixed/nuttx"
+          cat "$R"/*/summary.json > "$R/all-summaries.jsonl"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: timing-ubuntu
           path: ${{ runner.temp }}/results
           retention-days: 14
