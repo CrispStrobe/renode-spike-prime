@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import sys
 import tempfile
+import struct
 import unittest
 from unittest.mock import patch
 
@@ -46,7 +47,11 @@ class CompiledRouteTests(unittest.TestCase):
     def test_checker_compiled_route_does_not_include_models(self):
         output = self.root / 'result'
         firmware = self.root / 'firmware'
-        def simulated_run(command, **kwargs):
+        (firmware / 'nuttx').mkdir(parents=True)
+        (firmware / 'nuttx/nuttx').write_bytes(b'synthetic kernel')
+        (firmware / 'nuttx/nuttx_user.elf').write_bytes(b'synthetic userspace')
+        (self.root / 'unused').write_bytes(b'synthetic runtime')
+        def simulated_run(command, *args, **kwargs):
             script = output / 'check.resc'
             text = script.read_text()
             self.assertNotIn('include @', text)
@@ -55,16 +60,36 @@ class CompiledRouteTests(unittest.TestCase):
             settings = json.loads((output / 'config.json').read_text())
             self.assertEqual(settings['electricalModelRoute'], 'compiled-runtime')
             (output / 'result.json').write_text('{"passed": true}')
-            return type('Result', (), {'returncode': 0})()
+            return 0
         argv = ['check_prime_nuttx.py', '--firmware-root', str(firmware),
                 '--infrastructure', str(self.infrastructure), '--renode', str(self.root / 'unused'),
                 '--output', str(output), '--compiled-runtime', '--all-motors-test']
         with patch.object(sys, 'argv', argv), patch.object(checker, 'vector', return_value=(0x20010000, 0x08008001)), \
              patch.object(checker.subprocess, 'check_output', side_effect=[
                  '20021000 D g_bw_program_debug\n', '20000100 00001000 D g_sysbuffer\n']), \
-             patch.object(checker.subprocess, 'run', side_effect=simulated_run), \
+             patch.object(checker, 'run_measured', side_effect=simulated_run), \
              patch.object(checker, 'stage', side_effect=AssertionError('source route must not execute')):
             checker.main()
+
+    def test_saved_record_damage_changes_only_payload_and_preserves_original(self):
+        marker = struct.pack('<4s4BIII', b'BWP1', 1, 0, 0, 0, 301, 256, 4096)
+        original = b'filesystem-metadata' + marker + bytes(4096) + b'crc'
+        source, target = self.root / 'flash.bin', self.root / 'damaged.bin'
+        source.write_bytes(original)
+        receipt = checker.corrupt_program_snapshot(source, target)
+        damaged = target.read_bytes()
+        self.assertEqual(source.read_bytes(), original)
+        differences = [i for i, (a, b) in enumerate(zip(original, damaged)) if a != b]
+        self.assertEqual(differences, [len(b'filesystem-metadata') + len(marker)])
+        self.assertEqual(damaged[differences[0]], 1)
+        self.assertNotEqual(receipt['sourceSha256'], receipt['damagedSha256'])
+        with self.assertRaises(FileExistsError):
+            checker.corrupt_program_snapshot(source, target)
+        for invalid in (b'no matching record', original + marker):
+            source.write_bytes(invalid)
+            with self.assertRaisesRegex(ValueError, 'exactly one'):
+                checker.corrupt_program_snapshot(source, self.root / 'refused.bin')
+            self.assertFalse((self.root / 'refused.bin').exists())
 
 
 if __name__ == '__main__':

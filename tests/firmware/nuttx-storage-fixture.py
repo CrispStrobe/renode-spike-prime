@@ -81,6 +81,19 @@ try:
         exchange(header(8,302));snapshot('python')
         exchange(header(9,301),-2)
         if status('wrong-id-preserved')['id']!=302:raise Exception('failed load replaced committed program')
+    elif phase=='corrupt':
+        # Build a distinct live program before attempting the damaged saved
+        # record. A failed LOAD must preserve the live program and raw medium.
+        payload=struct.pack('<8i',2,50,0,0,0,0,0,0)
+        upload(399,payload)
+        before=bytearray(self.Machine['sysbus.spi2.primeStorageMux.primeStorage'].UnderlyingMemory.ReadBytes(0,0x2000000))
+        exchange(header(9,301),-74) # pinned NuttX EBADMSG
+        state=status('corrupt-load-preserved')
+        if state['id']!=399 or state['state']!=1:raise Exception('corrupt load replaced live program')
+        after=bytearray(self.Machine['sysbus.spi2.primeStorageMux.primeStorage'].UnderlyingMemory.ReadBytes(0,0x2000000))
+        if before!=after:raise Exception('failed load modified persistent media')
+        exchange(header(3,399));run(200)
+        if status('preserved-program-complete')['state']!=3:raise Exception('preserved program failed')
     else:
         ident=301 if phase=='native' else 302
         reply=exchange(header(9,ident))
