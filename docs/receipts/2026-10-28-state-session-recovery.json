@@ -1,43 +1,57 @@
 {
   "cycles": 50,
   "restarts": 5,
-  "virtualNs": 260000000,
+  "virtualNs": 960000000,
+  "warmupCycles": 140,
+  "warmupRestarts": 14,
+  "minimumWarmupSeconds": 15,
+  "measuredVirtualNs": 250000000,
   "slowReaderRecovered": true,
-  "slowReaderSnapshots": 273,
+  "slowReaderSnapshots": 271,
   "resourceSamples": [
     {
       "cycle": 10,
-      "rssKiB": 336592,
+      "poolThreads": 9,
+      "retiredThreadsAlive": 0,
+      "rssKiB": 277920,
       "threads": 30,
       "fds": 433
     },
     {
       "cycle": 20,
-      "rssKiB": 337408,
+      "poolThreads": 9,
+      "retiredThreadsAlive": 0,
+      "rssKiB": 270096,
       "threads": 30,
       "fds": 433
     },
     {
       "cycle": 30,
-      "rssKiB": 339376,
+      "poolThreads": 9,
+      "retiredThreadsAlive": 0,
+      "rssKiB": 206992,
       "threads": 30,
       "fds": 433
     },
     {
       "cycle": 40,
-      "rssKiB": 339872,
+      "poolThreads": 9,
+      "retiredThreadsAlive": 0,
+      "rssKiB": 197328,
       "threads": 30,
       "fds": 433
     },
     {
       "cycle": 50,
-      "rssKiB": 342528,
+      "poolThreads": 9,
+      "retiredThreadsAlive": 0,
+      "rssKiB": 190160,
       "threads": 30,
       "fds": 433
     }
   ],
   "growth": {
-    "rssKiB": 5936,
+    "rssKiB": 0,
     "threads": 0,
     "fds": 0
   },
@@ -50,5 +64,5 @@
   "runtimeProfile": "source-staged stock Renode on macOS arm64",
   "infrastructureSource": "bb2c96fd2656f686d4b06683df4ece234f33b206",
   "stateServiceSha256": "714914f9c72ad3eea0917214e5ea7116d1363a83f11fe965af53eb212de984bc",
-  "testSha256": "1f70145997ffe2284977c39afcda9be7fe5d1595c747cf82a8eda0803ac35880"
+  "testSha256": "f397b8e5ac2ea7c8a7914cb46479851a41f10ff50e7a8428f382e0d3eb46abb1"
 }

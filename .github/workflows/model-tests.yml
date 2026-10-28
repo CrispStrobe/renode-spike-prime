@@ -601,6 +601,7 @@ jobs:
             --result /tmp/spike-prime-session-recovery.json --cycles 50
 
       - name: Upload state session recovery receipt
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: spike-prime-session-recovery

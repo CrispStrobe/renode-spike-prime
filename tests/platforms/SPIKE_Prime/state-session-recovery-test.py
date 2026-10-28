@@ -48,10 +48,19 @@ def run(args, work):
     config_path.write_text(json.dumps(config))
     status_path = work / 'service.json'
     probe = work / 'probe.py'
-    probe.write_text('def mc_r04_record(path):\n'
+    probe.write_text('_r04_retired = []\n'
+                     'def mc_r04_stop():\n'
+                     '    old = _state_server\n'
+                     '    mc_spike_state_stop()\n'
+                     '    if old is not None: _r04_retired.append(old.thread)\n'
+                     'def mc_r04_record(path):\n'
                      '    import json\n'
+                     '    from System.Threading import ThreadPool\n'
+                     '    _r04_retired[:] = [t for t in _r04_retired if t.IsAlive]\n'
                      '    with open(str(path), "w") as output:\n'
-                     '        json.dump({"lastError": _state_server.last_error, "seq": _state_server.seq}, output)\n')
+                     '        json.dump({"lastError": _state_server.last_error, "seq": _state_server.seq,\n'
+                     '                   "retiredThreadsAlive": len(_r04_retired),\n'
+                     '                   "poolThreads": int(getattr(ThreadPool, "ThreadCount", -1))}, output)\n')
     start = 'spike_state_start "127.0.0.1" %d "%s"' % (port, config_path)
     script = work / 'recovery.resc'
     script.write_text('\n'.join(GATE.platform_lines(args.models, args.guest) + [
@@ -65,7 +74,36 @@ def run(args, work):
                 process.stdin.write((command + '\n').encode())
                 process.stdin.flush()
 
-            for cycle in range(args.cycles):
+            def service_status():
+                status_path.unlink(missing_ok=True)
+                monitor('r04_record "%s"' % status_path)
+                deadline = time.monotonic() + 5
+                while time.monotonic() < deadline:
+                    if status_path.exists():
+                        try:
+                            return json.loads(status_path.read_text())
+                        except json.JSONDecodeError:
+                            pass
+                    time.sleep(0.01)
+                raise SystemExit('FAIL: service diagnostic did not finish')
+
+            def terminated_threads():
+                deadline = time.monotonic() + 5
+                while True:
+                    status = service_status()
+                    if status['retiredThreadsAlive'] == 0:
+                        return status
+                    GATE.require(time.monotonic() < deadline, 'stopped service threads terminate within 5 s')
+                    time.sleep(0.01)
+
+            # A cycle count alone is not a runtime warmup: fast Linux cycles
+            # can finish before CLR/IronPython worker initialization settles.
+            # Apply the same workload for both at least ten cycles and fifteen
+            # wall seconds; retain the original resource bounds afterwards.
+            cycle, measured, warmup_cycles, warmup_restarts = 0, 0, None, 0
+            warmup_started = time.monotonic()
+            measurement_origin = None
+            while measured < args.cycles:
                 client = GATE.Client(port, time.time() + 60)
                 try:
                     if clock is not None:
@@ -77,13 +115,13 @@ def run(args, work):
                         'quantumUs': 5000, 'expectClockNs': frame['clockNs'],
                         'shafts': [{'port': 'A', 'positionMdeg': cycle * 1000, 'speedMdps': 0}],
                         'sensors': [{'port': 'D', 'kind': 'distance',
-                                     'values': {'distanceMillimeters': 100 + cycle}}]})
+                                     'values': {'distanceMillimeters': 100 + cycle % 1000}}]})
                     GATE.require(result['accepted'], 'motor/sensor step accepted')
                     GATE.require(frame['motors'][0]['positionSource'] == 'external', 'external shaft survives')
                     clock = frame['clockNs']
                     if (cycle + 1) % 10 == 0:
                         # Stop while a client owns lockstep; restart on this same machine.
-                        monitor('spike_state_stop\n' + start)
+                        monitor('r04_stop\n' + start)
                         client.sock.settimeout(5)
                         GATE.require(client.file.readline() == b'', 'monitor stop closes connected client')
                         restarts += 1
@@ -93,12 +131,24 @@ def run(args, work):
                     # Odd cycles disconnect without end, exercising abandonment.
                 finally:
                     client.close()
-                if (cycle + 1) % 10 == 0:
+                cycle += 1
+                if cycle % 10 == 0:
+                    terminated_threads()
+                if warmup_cycles is None:
+                    if cycle >= 10 and cycle % 10 == 0 and time.monotonic() - warmup_started >= 15:
+                        warmup_cycles, warmup_restarts = cycle, restarts
+                        restarts, measurement_origin = 0, clock
+                    continue
+                measured += 1
+                if measured % 10 == 0:
                     # Sample with a connected stream so descriptor counts are comparable.
                     settled = GATE.Client(port, time.time() + 10)
                     try:
                         GATE.require(settled.initial['clockNs'] == clock, 'restart preserved clock')
-                        samples.append(dict(cycle=cycle + 1, **resources(process.pid)))
+                        status = terminated_threads()
+                        samples.append(dict(cycle=measured, poolThreads=status['poolThreads'],
+                                            retiredThreadsAlive=status['retiredThreadsAlive'],
+                                            **resources(process.pid)))
                     finally:
                         settled.close()
 
@@ -107,7 +157,7 @@ def run(args, work):
             # Start a fresh listener so last_error cannot come from an earlier
             # client timing out during a resource sample.
             status_path.unlink(missing_ok=True)
-            monitor('spike_state_stop\n' + start + '\nr04_record "%s"' % status_path)
+            monitor('r04_stop\n' + start + '\nr04_record "%s"' % status_path)
             ready_deadline = time.monotonic() + 10
             while not status_path.exists():
                 GATE.require(time.monotonic() < ready_deadline, 'fresh listener started')
@@ -152,24 +202,30 @@ def run(args, work):
             finally:
                 vanished.close()
             GATE.require(len(samples) >= 3, 'at least three resource samples after warmup')
-            # First sample follows ten cycles and one restart, warming dynamic code.
             growth = {key: max(s[key] for s in samples) - samples[0][key]
                       for key in ('rssKiB', 'threads', 'fds')}
-            GATE.require(growth['rssKiB'] <= 64 * 1024, 'RSS growth <= 64 MiB after warmup')
-            GATE.require(growth['threads'] <= 4, 'thread growth <= 4 after warmup')
-            GATE.require(growth['fds'] <= 2, 'descriptor growth <= 2 after warmup')
             runtime = Path(shlex.split(args.renode)[-1])
             closure = (Path(args.models) / 'models.cs') if args.models else GATE.ROOT / 'src/Infrastructure'
             model_identity = ({'modelsSha256': hashlib.sha256(closure.read_bytes()).hexdigest()}
                               if args.models else {'infrastructureSource': subprocess.check_output(
                                   ['git', '-C', str(closure), 'rev-parse', 'HEAD'], text=True).strip()})
-            return dict({'cycles': args.cycles, 'restarts': restarts, 'virtualNs': clock,
+            result = dict({'cycles': args.cycles, 'restarts': restarts, 'virtualNs': clock,
+                    'warmupCycles': warmup_cycles, 'warmupRestarts': warmup_restarts,
+                    'minimumWarmupSeconds': 15, 'measuredVirtualNs': clock - measurement_origin,
                     'slowReaderRecovered': True, 'slowReaderSnapshots': sequence,
                     'resourceSamples': samples, 'growth': growth,
                     'guestSha256': hashlib.sha256(Path(args.guest).read_bytes()).hexdigest(),
                     'runtimeSha256': hashlib.sha256(runtime.read_bytes()).hexdigest(),
                     'scope': 'source-built CPU guest, motor/sensor state service; no NuttX program/storage qualification'},
                     **model_identity)
+            # Preserve measurements before checking bounds, including on CI
+            # failures. Never discard the evidence behind a resource refusal.
+            args.result.write_text(json.dumps(result, indent=2) + '\n')
+            print(json.dumps(result), flush=True)
+            GATE.require(growth['rssKiB'] <= 64 * 1024, 'RSS growth <= 64 MiB after warmup')
+            GATE.require(growth['threads'] <= 4, 'thread growth <= 4 after warmup')
+            GATE.require(growth['fds'] <= 2, 'descriptor growth <= 2 after warmup')
+            return result
         finally:
             process.terminate()
             try:

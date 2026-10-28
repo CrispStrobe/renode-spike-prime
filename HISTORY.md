@@ -1,5 +1,13 @@
 # Completed simulation work
 
+- R04 resource qualification now uses both elapsed time and workload cycles
+  for warmup. The first compiled Linux attempt failed the thread-growth bound;
+  that failure and the initial local receipt are retained. The stronger gate
+  waits for retired state-service threads to terminate, records CLR pool
+  counts and preserves samples on failure, keeping all resource bounds.
+  The updated Mac run passed 50 measured cycles after 140 warmup cycles, with
+  no sampled RSS, thread or descriptor growth.
+
 - R04 recovery passed 50 connection cycles and five paused-machine monitor
   restarts on stock Renode 1.16.1 with pinned source-staged models. A real
   non-reading socket failed during a 4,096-snapshot burst, and the next client

@@ -153,9 +153,10 @@ source-built Cortex-M guest with the actual state service and six port models.
 On Renode 1.16.1 with the pinned Infrastructure sources it passed 50 reconnect
 cycles, five monitor stop/start cycles on the same paused machine, exact-clock
 motor/sensor steps and a non-reading socket kept open through recovery.
-The write failed after 273 of 4,096 queued snapshots; a fresh connection then
-began lockstep. After ten warmup cycles, host RSS high-water growth was 5,936 KiB,
-threads stayed at 30 and descriptors at 433. These are host resources; guest
+The write failed after 271 of 4,096 queued snapshots; a fresh connection then
+began lockstep. After a minimum 15-second/ten-cycle warmup (140 cycles in this
+run), sampled RSS high-water growth was 0 KiB, threads stayed at 30 and
+descriptors at 433. All retired service threads terminated before sampling. These are host resources; guest
 virtual time is recorded separately. The [source-bound receipt](receipts/2026-10-28-state-session-recovery.json)
 contains the runtime, model, guest, service and test hashes.
 
@@ -164,6 +165,15 @@ TCP state connections. Reconnect intentionally continues its FIFO; close remains
 permanent. `docs/spike-program-uart.md` states the lifecycle and two-client host
 tests cover unread output, generation mismatch, persistent close and continuing
 state sampling. No runtime change was needed for this selected contract.
+
+The [initial observation](receipts/2026-10-28-state-session-recovery-initial.json)
+is retained. The first compiled Linux CI attempt failed the unchanged thread
+bound after a cycle-only warmup; its samples were not retained by that first
+gate. [The failed run](https://github.com/CrispStrobe/renode-spike-prime/actions/runs/40727787726)
+remains available. The updated gate warms the same workload for at least 15
+wall seconds as well as ten cycles, requires stopped service threads to
+terminate within five seconds, records CLR pool counts and retains resource
+measurements even when a bound fails. RSS/thread/descriptor bounds are unchanged.
 
 The model workflow now runs the 50-cycle recovery gate against its compiled
 Runtime and uploads a separate receipt. The local result above uses source-staged
