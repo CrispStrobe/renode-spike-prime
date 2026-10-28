@@ -1,5 +1,14 @@
 # Completed simulation work
 
+- Session ownership (R04): stopping the monitor state service now closes the
+  connected client's stream and dispatches no line read after the stop; before,
+  a command arriving after `close()` still ran (a `lockstep.begin` paused the
+  machine). A client lost without `lockstep.end` no longer hands its lockstep to
+  the next connection, which could not begin its own and inherited the old
+  owner's stepping. The source-only socket service closes its clients the same
+  way and can be started again after `close()`. Host regressions only; no guest
+  run.
+
 - Correction: the first full-platform name assertion was not valid evidence.
   Renode echoed its input command before reporting an `AssertionError`, and
   the shell matched the success text in that echo. The replacement gate rejects

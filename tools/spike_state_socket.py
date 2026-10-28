@@ -57,6 +57,8 @@ class BoundedStateServer:
         self._stop = threading.Event()
         self._slots = threading.BoundedSemaphore(max_clients)
         self._threads = set()
+        self._clients = set()
+        self._lock = threading.Lock()
 
     @property
     def endpoint(self):
@@ -72,26 +74,37 @@ class BoundedStateServer:
         listener.listen(self.max_clients)
         listener.settimeout(0.1)
         self._listener = listener
-        thread = threading.Thread(target=self._accept_loop, name="spike-state-accept", daemon=True)
+        # Each start has its own stop event: a thread left over from an earlier
+        # run cannot be revived by this one.
+        self._stop = threading.Event()
+        thread = threading.Thread(target=self._accept_loop, args=(listener, self._stop),
+                                  name="spike-state-accept", daemon=True)
         thread.start()
         self._threads.add(thread)
         return self.endpoint
 
     def close(self):
         self._stop.set()
-        if self._listener:
+        listener, self._listener = self._listener, None
+        if listener:
             with suppress(OSError):
-                self._listener.close()
-            self._listener = None
+                listener.close()
+        # Closing the listener leaves accepted clients connected: shut them
+        # down, so a blocked recv ends and nothing more is dispatched.
+        with self._lock:
+            clients = tuple(self._clients)
+        for client in clients:
+            with suppress(OSError):
+                client.shutdown(socket.SHUT_RDWR)
         for thread in tuple(self._threads):
             if thread is not threading.current_thread():
                 thread.join(timeout=1)
         self._threads.clear()
 
-    def _accept_loop(self):
-        while not self._stop.is_set():
+    def _accept_loop(self, listener, stop):
+        while not stop.is_set():
             try:
-                client, _ = self._listener.accept()
+                client, _ = listener.accept()
             except socket.timeout:
                 continue
             except OSError:
@@ -99,23 +112,27 @@ class BoundedStateServer:
             if not self._slots.acquire(blocking=False):
                 client.close()
                 continue
-            thread = threading.Thread(target=self._serve_client, args=(client,), daemon=True)
+            thread = threading.Thread(target=self._serve_client, args=(client, stop), daemon=True)
             self._threads.add(thread)
             thread.start()
 
-    def _serve_client(self, client):
+    def _serve_client(self, client, stop):
+        with self._lock:
+            self._clients.add(client)
         session = LiveStateSession(RenodeModelObserver(self.machine, self.identity, self.paths))
         session.connect()
         client.settimeout(self.socket_timeout)
         pending = bytearray()
         try:
+            if stop.is_set():
+                return
             self._sample_and_send(client, session)
-            while not self._stop.is_set():
+            while not stop.is_set():
                 chunk = client.recv(MAX_READ_BYTES)
                 if not chunk:
                     break
                 pending.extend(chunk)
-                while b"\n" in pending:
+                while b"\n" in pending and not stop.is_set():
                     raw, _, remainder = pending.partition(b"\n")
                     pending = bytearray(remainder)
                     if not raw or len(raw) > self.line_limit:
@@ -131,6 +148,8 @@ class BoundedStateServer:
             pass
         finally:
             session.disconnect()
+            with self._lock:
+                self._clients.discard(client)
             with suppress(OSError):
                 client.close()
             self._slots.release()
