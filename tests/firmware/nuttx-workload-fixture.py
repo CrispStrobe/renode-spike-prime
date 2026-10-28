@@ -40,8 +40,14 @@ try:
             if observe('workload-cancelled-'+str(cycle))['state']!=4:raise Exception('cancel not retained')
         else:
             apply_arena_inputs({'sensors':[{'port':'E','kind':'force','values':{'forcePercent':75,'pressed':True}}],'loads':[]},device)
-            run(200)
-            complete('workload sensor completion',observe('workload-completed-'+str(cycle)))
+            # Sensor delivery and braking finish asynchronously. Observe the
+            # guest's terminal state, bounded to one guest second, rather than
+            # assuming both fresh encoder reports arrive at a fixed delay.
+            for attempt in range(100):
+                run(10)
+                state=observe('workload-terminal-wait-'+str(cycle))
+                if state['state'] in (3,5):break
+            complete('workload sensor completion',state)
         for p in 'AB':
             if device(p).Power!=0:raise Exception('terminal workload left motor powered')
         request(header(8,ident));request(header(9,ident))
