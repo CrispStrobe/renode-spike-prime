@@ -19,11 +19,14 @@ try:
         apply_arena_inputs({'sensors':[{'port':'E','kind':'force','values':{'forcePercent':0,'pressed':False}}],'loads':[]},device)
         positions=[float(device(p).PositionDegrees) for p in 'AB']
         sign=1 if cycle%2==0 else -1
-        rows=[(1,0,200*sign,0),(1,1,-200*sign,0),(3,3,1,0),(0,0,0,0)]
+        # The force sensor reports every 100 ms. Observe release through the
+        # actual guest before powering either motor; a host setter is not proof
+        # that the guest's previously queued pressed sample has drained.
+        rows=[(5,3,1,0),(1,0,200*sign,0),(1,1,-200*sign,0),(3,3,1,0),(0,0,0,0)]
         upload(ident,''.join(struct.pack('<4i',*row) for row in rows))
         run(100)
         state=observe('workload-running-'+str(cycle))
-        if state['state']!=2 or state['pc']!=2:raise Exception('sensor wait did not retain running motors')
+        if state['state']!=2 or state['pc']!=3:raise Exception('sensor wait did not retain running motors')
         for p,initial,direction in zip('AB',positions,(sign,-sign)):
             if (float(device(p).PositionDegrees)-initial)*direction<=0.1 or device(p).Power==0:
                 raise Exception('workload motor motion absent or wrong direction')
