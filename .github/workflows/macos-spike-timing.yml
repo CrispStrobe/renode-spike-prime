@@ -113,10 +113,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {runner: macos-14, rid: osx-arm64}
+          # Run 40649468110: frozen package ~80x slower on every runner; macos-15 suffices.
           - {runner: macos-15, rid: osx-arm64}
-          - {runner: macos-latest, rid: osx-arm64}
-          - {runner: macos-15-intel, rid: osx-x64}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
     steps:
@@ -292,12 +290,19 @@ jobs:
               "$(grep -c 'No more samples' "$R/$v/renode.log")" "$(wc -l < "$R/$v/renode.log" | tr -d ' ')" | tee "$R/$v/summary.json"
             uptime
           }
-          cp -R "$T/nuttx" "$T/pkg-unfrozen"
-          run direct-unfrozen "$T/pkg-unfrozen" direct
-          run direct-frozen "$T/staged/resources/nuttx" direct
-          cp -R "$T/nuttx" "$T/pkg-unfrozen2"
-          run sandbox-unfrozen "$T/pkg-unfrozen2" sandbox
-          run sandbox-frozen "$T/staged/resources/nuttx" sandbox
+          F="$T/staged/resources/nuttx"
+          # Hypothesis: the frozen scenario's relative @platforms/... resolves against
+          # Renode's own bundled (unstaged) platforms, not the package's staged copy.
+          variant() { d="$T/pkg-$1"; rm -rf "$d"; cp -R "$F" "$d"; sed -i '' "$2" "$d/nuttx.resc"; echo "== $1"; cat "$d/nuttx.resc"; }
+          variant abs-repl "s#@platforms/#@$T/pkg-abs-repl/platforms/#"
+          variant origin "s#@platforms/#\$ORIGIN/platforms/#"
+          variant origin-at "s#@platforms/#@\$ORIGIN/platforms/#"
+          run direct-frozen "$F" direct
+          run direct-frozen-abs-repl "$T/pkg-abs-repl" direct
+          run direct-frozen-origin "$T/pkg-origin" direct
+          run direct-frozen-origin-at "$T/pkg-origin-at" direct
+          for v in direct-frozen direct-frozen-abs-repl direct-frozen-origin direct-frozen-origin-at; do
+            echo "== $v"; grep -E "Downloading|LoadPlatformDescription|Including|Error|error" "$R/$v/renode.log" | head -5; done
           cat "$R"/*/summary.json > "$R/all-summaries.jsonl"; cat "$R/all-summaries.jsonl"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
