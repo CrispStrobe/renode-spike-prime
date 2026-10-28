@@ -1,5 +1,28 @@
 # Completed simulation work
 
+- R04 resource qualification now uses both elapsed time and workload cycles
+  for warmup. The first compiled Linux attempt failed the thread-growth bound;
+  that failure and the initial local receipt are retained. The stronger gate
+  waits for retired state-service threads to terminate, records CLR pool
+  counts and preserves samples on failure, keeping all resource bounds.
+  The updated Mac run passed 50 measured cycles after 140 warmup cycles, with
+  no sampled RSS, thread or descriptor growth.
+
+- R04 recovery passed 50 connection cycles and five paused-machine monitor
+  restarts on stock Renode 1.16.1 with pinned source-staged models. A real
+  non-reading socket failed during a 4,096-snapshot burst, and the next client
+  recovered while that socket remained open. Host RSS growth after warmup was
+  5,936 KiB with unchanged thread/descriptor counts. The public source-built
+  guest exercises motor/sensor state, not a NuttX program/storage workload.
+  The compiled Runtime workflow now runs the same gate independently.
+
+- R04 host recovery tests now cover a reader write failure at five reply/frame
+  boundaries, cleanup before the next connection, and stop/start on the same
+  paused emulator stand-in. The new reader cases reject the implementation
+  before #64; the current service needs no runtime change. Six affected host
+  suites pass (59 tests). Renode timeout/restart/resource evidence is recorded
+  separately below.
+
 - Session ownership (R04): stopping the monitor state service now closes the
   connected client's stream and dispatches no line read after the stop; before,
   a command arriving after `close()` still ran (a `lockstep.begin` paused the

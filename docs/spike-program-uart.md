@@ -14,6 +14,24 @@ Write acceptance means queued, not consumed by firmware. Read is immediate;
 clients implement their own bounded polling deadlines. Close disposes only the
 configured UART, leaving the state service and shared hub model available.
 
+The native launch and its `programUartGeneration` own the UART for the entire
+route lifetime; individual TCP state-service connections do not own it.
+Disconnect/reconnect preserves queued input, unread output and the same UART
+generation. A replacement connection deliberately resumes that FIFO, rather
+than receiving a fresh program session. `connectionGeneration` changes when
+TCP reconnects; it is separate from `programUartGeneration`.
+
+`micropython.uart.close` permanently disposes this native route. Reconnecting
+or restarting the state listener cannot reopen the disposed external. A later
+connection sees `closed` and its UART reads/writes fail, while state sampling
+remains available. Starting another program session requires the native owner
+to attach a new external with a fresh generation and matching launch config;
+replacing the configured external under an existing binding is refused.
+Clients that require private output must request a fresh native launch, rather
+than treating a TCP reconnect as an ownership boundary. Two-connection host
+tests in `spike_program_uart_test.py` cover FIFO continuation, generation
+mismatch, persistent close and continued state sampling.
+
 The native launch config identifies `spike-prime`, `micropython-prime`, transport
 `none`, a canonical admitted image SHA-256, `paths.programUart` as a fixed
 `external:NAME`, and `programUartGeneration`. The service retains the exact

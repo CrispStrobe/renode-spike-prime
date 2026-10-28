@@ -72,7 +72,12 @@ class Client(object):
                     raise SystemExit('state service never listened')
                 time.sleep(0.2)
         self.file = self.sock.makefile('rwb')
-        self.seq, self.count = self.read()['seq'], 0
+        self.initial = self.read()
+        self.seq, self.count = self.initial['seq'], 0
+
+    def close(self):
+        self.file.close()
+        self.sock.close()
 
     def read(self):
         line = self.file.readline()
