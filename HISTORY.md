@@ -1,5 +1,12 @@
 # Completed simulation work
 
+- Protected NuttX qualification now covers thirty mixed motor/sensor/program/
+  storage cycles, stale-ID Stop refusal, six cold-storage phases including
+  corrupt-record preservation and a modeled NOR program failure, and retained
+  per-process RSS/wall-time evidence. The macOS source-staged route passes;
+  compiled Runtime and installed-consumer qualification remain separate. See
+  `docs/PRIME-GUEST-WORKLOAD-QUALIFICATION.md` for exact scope and retained failures.
+
 - R04 resource qualification now uses both elapsed time and workload cycles
   for warmup. The first compiled Linux attempt failed the thread-growth bound;
   that failure and the initial local receipt are retained. The stronger gate
