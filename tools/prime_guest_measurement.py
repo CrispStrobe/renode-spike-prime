@@ -10,7 +10,11 @@ import time
 def process_rss_kib(pid):
     status = Path('/proc') / str(pid) / 'status'
     if status.exists():
-        for line in status.read_text().splitlines():
+        try:
+            lines = status.read_text().splitlines()
+        except FileNotFoundError:
+            return None # the child can exit between poll and the read
+        for line in lines:
             if line.startswith('VmRSS:'):
                 return int(line.split()[1])
         return None

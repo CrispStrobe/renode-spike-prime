@@ -21,10 +21,16 @@ class MeasurementTests(unittest.TestCase):
                         ('timeout', 0, 1536*1024, TimeoutError),
                         ('memory', 5, 1, RuntimeError)):
                     receipt = root/(label+'.json')
+                    release = root/(label+'.release')
+                    def observed(pid):
+                        release.write_text('sampled')
+                        return 1024
                     # Real owned subprocess; only RSS values are controlled to
                     # make the ceiling branch independent of host load.
-                    with patch.object(measurement, 'process_rss_kib', return_value=1024):
-                        command = [sys.executable, '-c', 'import time; time.sleep(0.05)']
+                    with patch.object(measurement, 'process_rss_kib', side_effect=observed):
+                        command = [sys.executable, '-c',
+                                   'import pathlib,sys,time\n'
+                                   'while not pathlib.Path(sys.argv[1]).exists(): time.sleep(0.01)', str(release)]
                         if failure:
                             with self.assertRaises(failure):
                                 measurement.run_measured(command, log, receipt, timeout, ceiling)
