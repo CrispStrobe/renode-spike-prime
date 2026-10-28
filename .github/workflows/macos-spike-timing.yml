@@ -1,0 +1,450 @@
+name: macOS SPIKE first-second timing
+
+# Profiles the wall time of the own NuttX guest's first emulated second
+# (emulation RunFor "1.0") across hosted runners, unfrozen vs frozen guest
+# package, unsandboxed vs sandboxed Tauri-shaped bundle, and Linux. The signed
+# installed test (Lite release dry run 40507444319) needed ~550 s on
+# macos-latest while macos-14 probes needed ~7 s. Timing only, no release.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/macos-spike-timing.yml'
+
+permissions:
+  contents: read
+
+env:
+  RUNTIME_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  RESOURCES_SHA: 14b80cde0a136b684f316eb7f6a31aeaae0684bf
+  FIRMWARE_SHA: 91cf0c07784441ac114b85a1705737327db2d9f8
+  LITE_SHA: 8bf40b2c3d29014219bb591b66cc27b43afca7a5
+  LITE_STAGER_SHA: 1c2c9565037b2645272b940f54d0354036b83f29
+  LITE_FIXED_SHA: f33415756004cc2865f76a2706e2ab045aa7be7e
+
+jobs:
+  own-guest:
+    name: Source-built own NuttX simulation guest (Linux producer)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out own firmware
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: CrispStrobe/brickwright-spike-prime-fw
+          ref: ${{ env.FIRMWARE_SHA }}
+          path: firmware
+          persist-credentials: false
+      - name: Check out pinned Runtime (platforms, models, state service)
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ env.RUNTIME_SHA }}
+          path: runtime
+          persist-credentials: false
+      - name: Check out Lite package producer
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: CrispStrobe/brickwright-lite
+          ref: ${{ env.LITE_SHA }}
+          path: lite
+          sparse-checkout: scripts
+          persist-credentials: false
+      - name: Pin Infrastructure gitlink
+        working-directory: runtime
+        run: |
+          git submodule update --init --depth 1 src/Infrastructure
+          test "$(git -C src/Infrastructure rev-parse HEAD)" = "$(git ls-tree HEAD src/Infrastructure | awk '{print $3}')"
+      - name: Initialize firmware gitlinks and apply reviewed backports
+        working-directory: firmware
+        run: |
+          git submodule update --init nuttx nuttx-apps
+          python3 tools/apply_nuttx_backports.py
+      - name: Build the pinned tool container
+        working-directory: firmware
+        run: docker build --pull -t nuttx-builder -f docker/Dockerfile.nuttx docker
+      # Only the TI-free simulation profile; the hardware profile is never built.
+      - name: Build own NuttX firmware (simulation profile)
+        working-directory: firmware
+        run: |
+          set -o pipefail
+          make nuttx BOARD_CONFIG=simulation V=1 2>&1 | tee "$RUNNER_TEMP/build.log" | tail -n 20
+      - name: Gate the simulation image and build as TI-free
+        working-directory: firmware
+        run: |
+          python3 tools/check_ti_free_image.py \
+            nuttx/nuttx.bin nuttx/nuttx_user.bin nuttx/nuttx nuttx/nuttx_user.elf \
+            --build-log "$RUNNER_TEMP/build.log" \
+            --build-root nuttx --build-root nuttx-apps --build-root apps \
+            --config nuttx/.config --elf nuttx/nuttx_user.elf
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: Stage the package through the existing Lite producer (compiled models)
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install --no-install-recommends -y -q binutils-arm-none-eabi
+          # The producer only hashes this path into its pins file; the probe
+          # replaces the Runtime with the macOS build and ignores that pin.
+          printf 'placeholder\n' > "$RUNNER_TEMP/runtime-placeholder"
+          # Compiled models: this Runtime already contains the Prime models, so
+          # including models.cs fails (first probe run 40308804034).
+          node lite/scripts/prepare-spike-nuttx-package.mjs \
+            firmware runtime runtime/src/Infrastructure "$RUNNER_TEMP/runtime-placeholder" \
+            /tmp/bwprobe/nuttx --compiled-models
+          ! grep -q models.cs /tmp/bwprobe/nuttx/nuttx.resc
+          cd /tmp/bwprobe/nuttx && find . -type f | sort | xargs shasum -a 256 > ../package-sha256.txt
+          cp ../package-sha256.txt nuttx-package-sha256.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: own-nuttx-package
+          path: /tmp/bwprobe/nuttx
+          if-no-files-found: error
+          retention-days: 14
+
+  renode-macos:
+    uses: ./.github/workflows/macos-spike-renode.yml
+    with:
+      runtime_ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+  timing:
+    name: Timing ${{ matrix.runner }}
+    needs: [own-guest, renode-macos]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Run 40649468110: frozen package ~80x slower on every runner; macos-15 suffices.
+          - {runner: macos-15, rid: osx-arm64}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: renode-spike-macos-${{ matrix.rid }}
+          path: ${{ runner.temp }}/renode
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: own-nuttx-package
+          path: ${{ runner.temp }}/nuttx
+      - name: Check out the Lite stager (frozen package)
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: CrispStrobe/brickwright-lite
+          ref: ${{ env.LITE_STAGER_SHA }}
+          path: lite
+          sparse-checkout: scripts
+          persist-credentials: false
+      - name: Check out the fixed Lite profile code
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: CrispStrobe/brickwright-lite
+          ref: ${{ env.LITE_FIXED_SHA }}
+          path: lite-fixed
+          sparse-checkout: scripts
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: Write probe tools
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/tools"
+          cat > "$RUNNER_TEMP/tools/client.py" <<'PY'
+          import json, socket, sys, time
+          state_port, monitor_port, timeout, out = int(sys.argv[1]), int(sys.argv[2]), float(sys.argv[3]), sys.argv[4]
+          def snapshot(deadline):
+              while time.time() < deadline:
+                  try:
+                      s = socket.create_connection(('127.0.0.1', state_port), timeout=5)
+                  except OSError:
+                      time.sleep(0.5); continue
+                  s.settimeout(60); buf = b''
+                  while b'\n' not in buf:
+                      chunk = s.recv(65536)
+                      if not chunk: break
+                      buf += chunk
+                  s.close()
+                  if b'\n' in buf: return json.loads(buf.split(b'\n', 1)[0])
+              return None
+          def summarize(snap):
+              if snap is None: return None
+              d = snap.get('display') or {}
+              px = d.get('pixels')
+              lit = sum(1 for v in px if v) if isinstance(px, list) else (len(px.strip('0')) if isinstance(px, str) else None)
+              return {'type': snap.get('type'), 'clockNs': snap.get('clockNs'), 'firmware': (snap.get('target') or {}).get('firmware'),
+                      'display': [d.get('width'), d.get('height')], 'litPixels': lit,
+                      'lifecycleKeys': sorted((snap.get('lifecycle') or {}).keys()),
+                      'motors': len(snap.get('motors') or []), 'power': snap.get('power')}
+          def monitor(cmd):
+              s = socket.create_connection(('127.0.0.1', monitor_port), timeout=10)
+              s.settimeout(300 if cmd != 'quit' else 3); s.sendall((cmd + '\n').encode())
+              data = b''
+              try:
+                  while True:
+                      chunk = s.recv(65536)
+                      if not chunk: break
+                      data += chunk
+                      if cmd == 'quit' or data.count(b'(machine-0)') >= 2: break
+              except socket.timeout:
+                  pass
+              s.close(); return data
+          start = time.time()
+          first = snapshot(start + timeout)
+          result = {'firstSnapshotSeconds': round(time.time() - start, 1) if first else None, 'first': summarize(first)}
+          if not first:
+              try: result['monitorOnFailure'] = monitor('mach').decode('utf-8', 'replace')[-6000:]
+              except OSError as e: result['monitorError'] = str(e)
+          if first:
+              try:
+                  monitor('emulation RunFor "4.0"'); time.sleep(2)
+                  result['second'] = summarize(snapshot(time.time() + 120))
+              except OSError as e:
+                  result['secondError'] = str(e)
+          try: monitor('quit')
+          except OSError: pass
+          json.dump(result, open(out, 'w'), indent=2)
+          print(json.dumps(result))
+          sys.exit(0 if first else 1)
+          PY
+          cat > "$RUNNER_TEMP/tools/launcher.c" <<'C'
+          // Minimal sandboxed parent: spawns the bundled Renode child, as the
+          // Tauri app would, and waits for it.
+          #include <spawn.h>
+          #include <stdio.h>
+          #include <stdlib.h>
+          #include <string.h>
+          #include <sys/wait.h>
+          #include <mach-o/dyld.h>
+          #include <libgen.h>
+          extern char **environ;
+          int main(int argc, char **argv) {
+              char self[4096]; uint32_t n = sizeof self;
+              if (_NSGetExecutablePath(self, &n) != 0) return 90;
+              char child[4200]; snprintf(child, sizeof child, "%s/../Resources/renode/renode", dirname(self));
+              argv[0] = child; pid_t pid;
+              int rc = posix_spawn(&pid, child, NULL, NULL, argv, environ);
+              if (rc != 0) { fprintf(stderr, "posix_spawn failed: %s\n", strerror(rc)); return 91; }
+              int status; waitpid(pid, &status, 0);
+              if (WIFSIGNALED(status)) { fprintf(stderr, "child signal %d\n", WTERMSIG(status)); return 128 + WTERMSIG(status); }
+              return WEXITSTATUS(status);
+          }
+          C
+          clang -O2 -o "$RUNNER_TEMP/tools/launcher" "$RUNNER_TEMP/tools/launcher.c"
+      - name: Host facts
+        run: |
+          sw_vers; uname -m; sysctl -n machdep.cpu.brand_string hw.ncpu hw.memsize; uptime
+          sysctl -n kern.hv_vmm_present 2>/dev/null || true
+      - name: Prepare unfrozen and frozen packages
+        run: |
+          set -eu
+          tar -xzf "$RUNNER_TEMP/renode/renode-spike-macos-${{ matrix.rid }}.tar.gz" -C "$RUNNER_TEMP/renode"
+          cat "$RUNNER_TEMP/renode/provenance.json"
+          node lite/scripts/stage-spike-macos-resources.mjs "$RUNNER_TEMP/renode/renode" "$RUNNER_TEMP/nuttx" "$RUNNER_TEMP/staged" > /dev/null
+          ls "$RUNNER_TEMP/staged/resources/nuttx" | head -40
+          diff <(cd "$RUNNER_TEMP/nuttx" && find . -type f | sort) <(cd "$RUNNER_TEMP/staged/resources/nuttx" && find . -type f | sort) || true
+          diff "$RUNNER_TEMP/nuttx/nuttx.resc" "$RUNNER_TEMP/staged/resources/nuttx/nuttx.resc" || true
+      - name: Time the first emulated second
+        run: |
+          set +e -u
+          T="$RUNNER_TEMP"; R="$T/results"; mkdir -p "$R"
+          ent() { f="$T/ent-$1.plist"; shift
+            { echo '<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict>'
+              for k in "$@"; do echo "<key>$k</key><true/>"; done; echo '</dict></plist>'; } > "$f"; echo "$f"; }
+          wall() { python3 - "$1" <<'PY'
+          import re, sys
+          t = {}
+          for line in open(sys.argv[1], errors='replace'):
+              m = re.match(r'(\d\d):(\d\d):(\d\d\.\d+) \[INFO\] machine-0: Machine (started|paused)', line)
+              if m and m.group(4) not in t:
+                  t[m.group(4)] = int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3))
+          print(round(t['paused'] - t['started'], 1) if len(t) == 2 else 'n/a')
+          PY
+          }
+          # variant pkgdir mode(direct|sandbox) extra-env...
+          run() {
+            v=$1; pkg=$2; mode=$3; shift 3; mkdir -p "$R/$v"; id=org.brickwright.timing.$v; c="$HOME/Library/Containers/$id/Data"
+            if [ "$mode" = sandbox ]; then
+              app="$T/apps/$v/SpikeTiming.app"; mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
+              ditto "$T/renode/renode" "$app/Contents/Resources/renode"; ditto "$pkg" "$app/Contents/Resources/nuttx"
+              cp "$T/tools/launcher" "$app/Contents/MacOS/launcher"
+              printf '<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>%s</string><key>CFBundleExecutable</key><string>launcher</string><key>CFBundlePackageType</key><string>APPL</string></dict></plist>' "$id" > "$app/Contents/Info.plist"
+              find "$app/Contents/Resources/renode" -type f ! -path '*/renode/renode' -print0 | while IFS= read -r -d '' f; do file -b "$f" | grep -q '^Mach-O' && codesign --force -s - "$f" >/dev/null 2>&1; done
+              codesign --force -s - --entitlements "$(ent $v-child com.apple.security.app-sandbox com.apple.security.inherit)" "$app/Contents/Resources/renode/renode"
+              codesign --force -s - --identifier $id --entitlements "$(ent $v com.apple.security.app-sandbox com.apple.security.network.server com.apple.security.network.client)" "$app"
+              res="$app/Contents/Resources/nuttx"; exe="$app/Contents/MacOS/launcher"; host="$app/Contents/Resources/renode"
+              envs=(HOME="$c" TMPDIR="$c/tmp/")
+            else
+              res="$pkg"; exe="$T/renode/renode/renode"; host="$T/renode/renode"; envs=()
+            fi
+            # Unfrozen producer package names the Linux producer root; relocate in a copy.
+            if grep -q '/tmp/bwprobe/nuttx' "$res/nuttx.resc" 2>/dev/null; then
+              grep -rIl '/tmp/bwprobe/nuttx' "$res" | while read -r f; do sed -i '' "s#/tmp/bwprobe/nuttx#$res#g" "$f"; done
+            fi
+            stack=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["boot"]["stack"])' "$res/state-config.json")
+            reset=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["boot"]["reset"])' "$res/state-config.json")
+            start=$(date +%s)
+            ( cd "$res" && exec env ${envs[@]+"${envs[@]}"} DOTNET_DefaultStackSize=0x4000000 RENODE_TLIB_DIRECTORY="$host/tlib" \
+                RENODE_SERVER_BIND_ADDRESS=127.0.0.1 "$@" "$exe" --disable-gui -P 39554 \
+                -e "include @$res/nuttx.resc" -e "sysbus LoadELF @$res/nuttx-user.elf" -e "sysbus LoadELF @$res/nuttx-kernel.elf" \
+                -e 'cpu VectorTableOffset 0x08008000' -e "cpu SP $stack" -e "cpu PC $reset" -e 'emulation RunFor "1.0"' \
+                -e "include @$res/scripts/spike-state-server.py" -e "spike_state_start \"127.0.0.1\" 39555 @$res/state-config.json" \
+                > "$R/$v/renode.log" 2>&1 ) & pid=$!
+            python3 "$T/tools/client.py" 39555 39554 900 "$R/$v/client.json" > "$R/$v/client.out" 2>&1; crc=$?
+            for i in $(seq 1 30); do kill -0 $pid 2>/dev/null || break; sleep 1; done
+            kill -0 $pid 2>/dev/null && { kill -TERM $pid; sleep 3; kill -KILL $pid 2>/dev/null; }
+            wait $pid; pkill -f "apps/$v/SpikeTiming.app" 2>/dev/null; sleep 2
+            printf '{"runner":"%s","variant":"%s","clientExit":%s,"runFor1sWallSeconds":"%s","toFirstSnapshotSeconds":"%s","adcWarnings":%s,"logLines":%s}\n' \
+              "${{ matrix.runner }}" "$v" "$crc" "$(wall "$R/$v/renode.log")" "$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("firstSnapshotSeconds"))' "$R/$v/client.json" 2>/dev/null)" \
+              "$(grep -c 'No more samples' "$R/$v/renode.log")" "$(wc -l < "$R/$v/renode.log" | tr -d ' ')" | tee "$R/$v/summary.json"
+            uptime
+          }
+          F="$T/staged/resources/nuttx"
+          # Freeze again with the fixed Lite profile code ($ORIGIN-anchored platform path).
+          mkdir -p "$T/fixed"; node --input-type=module -e "import {freezeResourceProfile} from '$GITHUB_WORKSPACE/lite-fixed/scripts/lib/spike-resource-profile.mjs'; await freezeResourceProfile('nuttx', '$F', '$T/fixed/nuttx', '$T/fixed')"
+          grep LoadPlatformDescription "$F/nuttx.resc" "$T/fixed/nuttx/nuttx.resc"
+          run direct-frozen-old "$F" direct
+          run direct-frozen-fixed "$T/fixed/nuttx" direct
+          run sandbox-frozen-fixed "$T/fixed/nuttx" sandbox
+          cat "$R"/*/summary.json > "$R/all-summaries.jsonl"; cat "$R/all-summaries.jsonl"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: timing-${{ matrix.runner }}
+          path: ${{ runner.temp }}/results
+          retention-days: 14
+
+  linux-timing:
+    name: Timing ubuntu (frozen old vs fixed)
+    needs: own-guest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ env.RUNTIME_SHA }}
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: renode/renode-resources
+          ref: ${{ env.RESOURCES_SHA }}
+          path: lib/resources
+          persist-credentials: false
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: CrispStrobe/brickwright-lite
+          ref: ${{ env.LITE_STAGER_SHA }}
+          path: lite-old
+          sparse-checkout: scripts
+          persist-credentials: false
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: CrispStrobe/brickwright-lite
+          ref: ${{ env.LITE_FIXED_SHA }}
+          path: lite-fixed
+          sparse-checkout: scripts
+          persist-credentials: false
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: 8.0.x
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: Build headless Runtime
+        run: |
+          set -o pipefail
+          ./build.sh --net --no-gui --skip-fetch 2>&1 | tail -n 5
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: own-nuttx-package
+          path: /tmp/bwprobe/nuttx
+      - name: Write probe tools
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/tools"
+          cat > "$RUNNER_TEMP/tools/client.py" <<'PY'
+          import json, socket, sys, time
+          state_port, monitor_port, timeout, out = int(sys.argv[1]), int(sys.argv[2]), float(sys.argv[3]), sys.argv[4]
+          def snapshot(deadline):
+              while time.time() < deadline:
+                  try:
+                      s = socket.create_connection(('127.0.0.1', state_port), timeout=5)
+                  except OSError:
+                      time.sleep(0.5); continue
+                  s.settimeout(60); buf = b''
+                  while b'\n' not in buf:
+                      chunk = s.recv(65536)
+                      if not chunk: break
+                      buf += chunk
+                  s.close()
+                  if b'\n' in buf: return json.loads(buf.split(b'\n', 1)[0])
+              return None
+          def summarize(snap):
+              if snap is None: return None
+              d = snap.get('display') or {}
+              px = d.get('pixels')
+              lit = sum(1 for v in px if v) if isinstance(px, list) else (len(px.strip('0')) if isinstance(px, str) else None)
+              return {'type': snap.get('type'), 'clockNs': snap.get('clockNs'), 'firmware': (snap.get('target') or {}).get('firmware'),
+                      'display': [d.get('width'), d.get('height')], 'litPixels': lit,
+                      'lifecycleKeys': sorted((snap.get('lifecycle') or {}).keys()),
+                      'motors': len(snap.get('motors') or []), 'power': snap.get('power')}
+          def monitor(cmd):
+              s = socket.create_connection(('127.0.0.1', monitor_port), timeout=10)
+              s.settimeout(300 if cmd != 'quit' else 3); s.sendall((cmd + '\n').encode())
+              data = b''
+              try:
+                  while True:
+                      chunk = s.recv(65536)
+                      if not chunk: break
+                      data += chunk
+                      if cmd == 'quit' or data.count(b'(machine-0)') >= 2: break
+              except socket.timeout:
+                  pass
+              s.close(); return data
+          start = time.time()
+          first = snapshot(start + timeout)
+          result = {'firstSnapshotSeconds': round(time.time() - start, 1) if first else None, 'first': summarize(first)}
+          if not first:
+              try: result['monitorOnFailure'] = monitor('mach').decode('utf-8', 'replace')[-6000:]
+              except OSError as e: result['monitorError'] = str(e)
+          if first:
+              try:
+                  monitor('emulation RunFor "4.0"'); time.sleep(2)
+                  result['second'] = summarize(snapshot(time.time() + 120))
+              except OSError as e:
+                  result['secondError'] = str(e)
+          try: monitor('quit')
+          except OSError: pass
+          json.dump(result, open(out, 'w'), indent=2)
+          print(json.dumps(result))
+          sys.exit(0 if first else 1)
+          PY
+      - name: Freeze with old and fixed Lite code and time each
+        run: |
+          set +e -u
+          T="$RUNNER_TEMP"; R="$T/results"; mkdir -p "$R"
+          freeze() { mkdir -p "$T/res-$1"; node --input-type=module -e "import {freezeResourceProfile} from '$GITHUB_WORKSPACE/$2/scripts/lib/spike-resource-profile.mjs'; await freezeResourceProfile('nuttx', '/tmp/bwprobe/nuttx', '$T/res-$1/nuttx', '$T/res-$1')"; grep LoadPlatformDescription "$T/res-$1/nuttx/nuttx.resc"; }
+          freeze old lite-old; freeze fixed lite-fixed
+          run() { v=$1; res=$2; mkdir -p "$R/$v"
+            stack=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["boot"]["stack"])' "$res/state-config.json")
+            reset=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["boot"]["reset"])' "$res/state-config.json")
+            ( cd "$res" && exec "$GITHUB_WORKSPACE/renode" --disable-gui -P 39554 \
+                -e "include @$res/nuttx.resc" -e "sysbus LoadELF @$res/nuttx-user.elf" -e "sysbus LoadELF @$res/nuttx-kernel.elf" \
+                -e 'cpu VectorTableOffset 0x08008000' -e "cpu SP $stack" -e "cpu PC $reset" -e 'emulation RunFor "1.0"' \
+                -e "include @$res/scripts/spike-state-server.py" -e "spike_state_start \"127.0.0.1\" 39555 @$res/state-config.json" \
+                > "$R/$v/renode.log" 2>&1 ) &
+            python3 "$T/tools/client.py" 39555 39554 900 "$R/$v/client.json" > "$R/$v/client.out" 2>&1; crc=$?
+            sleep 5; sudo fuser -k -n tcp 39554 39555 2>/dev/null; sleep 3
+            printf '{"runner":"ubuntu-24.04","variant":"%s","clientExit":%s,"toFirstSnapshotSeconds":"%s","svdDownload":%s}\n' "$v" "$crc" \
+              "$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("firstSnapshotSeconds"))' "$R/$v/client.json" 2>/dev/null)" \
+              "$(grep -c 'Downloading https' "$R/$v/renode.log")" | tee "$R/$v/summary.json"; }
+          run frozen-old "$T/res-old/nuttx"
+          run frozen-fixed "$T/res-fixed/nuttx"
+          cat "$R"/*/summary.json > "$R/all-summaries.jsonl"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: timing-ubuntu
+          path: ${{ runner.temp }}/results
+          retention-days: 14
