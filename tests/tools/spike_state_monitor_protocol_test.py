@@ -116,6 +116,23 @@ class MonitorProtocolTest(unittest.TestCase):
             with self.subTest(change=change), self.assertRaises(ValueError): validate_config(bad)
         validate_config(config())
 
+    def test_instruction_abi_two_requires_verified_own_firmware(self):
+        value = config()
+        value['identity']['imageSha256'] = 'a'*64
+        value.update(programMailbox=0x20021000, programInstructionAbi=2)
+        validate_config(value)
+        for abi in (True, 0, 1, 3, 2.0, '2', None):
+            with self.subTest(abi=abi), self.assertRaises(ValueError):
+                validate_config(dict(value, programInstructionAbi=abi))
+        for change in ('no_hash', 'no_mailbox', 'other_firmware'):
+            bad = dict(value, identity=dict(value['identity']))
+            if change == 'no_hash': bad['identity']['imageSha256'] = None
+            if change == 'no_mailbox': del bad['programMailbox']
+            if change == 'other_firmware': bad['identity']['firmware'] = 'brickwright-arena-demo'
+            with self.subTest(change=change), self.assertRaises(ValueError): validate_config(bad)
+        # Images without the marker keep instruction ABI 1: no key at all.
+        validate_config(config())
+
     def test_storage_marker_requires_full_firmware_and_flash_bounds(self):
         value = config()
         value.update(programMailbox=0x20021000, programStorageAbiAddress=0x08061234)

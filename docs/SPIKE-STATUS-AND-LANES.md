@@ -279,6 +279,16 @@ identity. Present malformed/foreign metadata is rejected before marker access.
 Only own Prime NuttX/transport-none configurations with a program mailbox and
 verified image may declare it. Absent metadata keeps legacy behavior.
 
+Optional `programInstructionAbi` (integer2 only) is the package's discovery of
+the firmware's read-only `g_bw_program_instruction_abi` value2
+(brickwright-spike-prime-fw#56: op 7, a position move without waiting, and op
+8, wait for a motor bitmask). Only own Prime NuttX configurations with a
+program mailbox and verified image may declare it; an absent key means
+instruction ABI1. The snapshot then adds `nuttx-program-instructions/v2` next
+to `nuttx-program/v1`, so a client compiles ops 7/8 only for such an image. It
+is package metadata bound by the manifest, not a live guest read; an image
+without the ops still refuses them at COMMIT.
+
 `nuttx-addressed-distance/v1` is published only after observing an initialized
 version1 program mailbox, a nonzero even publication and a live marker value1.
 Unready workers and unsupported live values do not advertise it. The operation
