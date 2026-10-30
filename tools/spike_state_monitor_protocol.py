@@ -57,6 +57,13 @@ def validate_config(config):
             raise ValueError("addressed sensor capability requires our verified full program firmware")
         import spike_nuttx_mailbox
         spike_nuttx_mailbox.validate_addressed_sensor_capability(config["addressedSensorCapability"], image_hash)
+    if "programInstructionAbi" in config:
+        # Package discovery of g_bw_program_instruction_abi in the verified image
+        # (brickwright-spike-prime-fw#56: ops 7/8); absent means instruction ABI 1.
+        value = config["programInstructionAbi"]
+        if (not isinstance(value, integer_types) or isinstance(value, bool) or value != 2 or
+                "programMailbox" not in config or image_hash is None):
+            raise ValueError("instruction ABI 2 requires our verified full program firmware")
     if "motorPorts" in config:
         value = config["motorPorts"]
         own = firmware == "brickwright-nuttx" and "programMailbox" in config

@@ -143,6 +143,25 @@ class PublicationTests(unittest.TestCase):
                 with self.assertRaises(ValueError) as error: m.observe()
                 self.assertNotIsInstance(error.exception, mailbox.PublicationNotReady)
 
+    def test_instruction_abi_two_is_advertised_only_when_declared(self):
+        m = Memory()
+        self.assertNotIn(mailbox.INSTRUCTIONS_V2_CAPABILITY, m.observe()[1])
+        m.config['programInstructionAbi'] = 2
+        capabilities = m.observe()[1]
+        self.assertEqual(mailbox.INSTRUCTIONS_V2_CAPABILITY, 'nuttx-program-instructions/v2')
+        self.assertIn('nuttx-program-instructions/v2', capabilities)
+        self.assertIn('nuttx-program/v1', capabilities)
+        for value in (1, 3, True, '2', 2.0):
+            m.config['programInstructionAbi'] = value
+            with self.subTest(value=value):
+                self.assertNotIn(mailbox.INSTRUCTIONS_V2_CAPABILITY, m.observe()[1])
+        m.config['programInstructionAbi'] = 2;del m.config['addressedSensorCapability']
+        m.config['identity'] = dict(m.config['identity'], imageSha256=None)
+        self.assertNotIn(mailbox.INSTRUCTIONS_V2_CAPABILITY, m.observe()[1])
+        # No initialized mailbox publication: no program capabilities at all.
+        m = Memory();m.config['programInstructionAbi'] = 2;m.word(60, 0)
+        self.assertEqual(m.observe(), ({}, []))
+
     def test_zero_publication_or_wrong_marker_does_not_admit_support(self):
         m = Memory();m.word(60, 0)
         self.assertEqual(m.observe(), ({}, []))

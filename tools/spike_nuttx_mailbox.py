@@ -49,6 +49,17 @@ def supports_storage(base, address, read_word):
     return int(read_word(address)) == 1
 
 
+INSTRUCTIONS_V2_CAPABILITY = 'nuttx-program-instructions/v2'
+
+
+def supports_instruction_abi_2(config):
+    """Package-declared program ops 7/8, bound to the verified image like motorPorts."""
+    value = config.get('programInstructionAbi')
+    return (isinstance(value, integer_types) and not isinstance(value, bool) and value == 2 and
+            config['identity'].get('firmware') == 'brickwright-nuttx' and
+            config['identity'].get('imageSha256') is not None)
+
+
 def validate_addressed_sensor_capability(metadata, image_hash):
     """Package-bound discovery only; no port attachment or acquisition claim."""
     if (not isinstance(metadata, dict) or
@@ -244,6 +255,8 @@ def observe_program(config, read_word, read_bytes, allow_unavailable=False):
         capabilities.append('nuttx-addressed-distance/v1')
     if config.get('motorPorts') == 6:
         capabilities.append('nuttx-six-motors/v1')
+    if supports_instruction_abi_2(config):
+        capabilities.append(INSTRUCTIONS_V2_CAPABILITY)
     if supports_storage(base, config.get('programStorageAbiAddress'), read_word):
         capabilities.extend(['nuttx-program-storage/v1', 'nuttx-program-storage-deferred/v1'])
         observe('nuttxProgramStorage', lambda: storage_request(base, read_word, read_bytes))
