@@ -34,7 +34,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {runner: macos-14, rid: osx-arm64, hostarch: aarch64}
+          - {runner: macos-15, rid: osx-arm64, hostarch: aarch64}
           # macos-13 is retired; macos-15-intel is the hosted x64 label.
           - {runner: macos-15-intel, rid: osx-x64, hostarch: i386}
     runs-on: ${{ matrix.runner }}
